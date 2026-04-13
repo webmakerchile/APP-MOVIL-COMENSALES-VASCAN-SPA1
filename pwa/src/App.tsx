@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Historial from "./pages/Historial";
 import ValeVisita from "./pages/ValeVisita";
+import InstallPrompt from "./components/InstallPrompt";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -34,6 +35,7 @@ function LoadingScreen() {
 export default function App() {
   return (
     <BrowserRouter>
+      <InstallPrompt />
       <Routes>
         <Route
           path="/login"
