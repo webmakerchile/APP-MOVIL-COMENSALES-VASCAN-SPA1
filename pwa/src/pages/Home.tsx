@@ -11,7 +11,6 @@ import {
   Check,
   RefreshCw,
   QrCode,
-  UserPlus,
   Clock,
   CalendarDays,
 } from "lucide-react";
@@ -255,9 +254,15 @@ export default function Home() {
       showToast("No hay un periodo de inscripción activo. Contacta a tu administrador.", "warning");
       return;
     }
+    // Validate ALL visible days have a selection (new or already registered)
+    const unregistered = sortedMinutas.filter(m => !pedidoByMinuta[m.id] && !selections[m.id]);
+    if (unregistered.length > 0) {
+      showToast(`Debes registrar todos los días del período. Faltan ${unregistered.length} día${unregistered.length > 1 ? "s" : ""}.`, "warning");
+      return;
+    }
     const selArray = Object.values(selections);
     if (selArray.length === 0) {
-      showToast("Selecciona al menos una opción antes de enviar.", "warning");
+      showToast("No hay cambios para guardar.", "warning");
       return;
     }
     submitWeek.mutate(selArray);
@@ -430,6 +435,8 @@ export default function Home() {
                     const options         = getOptions(minuta);
                     const alreadyRegistered = !!pedido;
 
+                    const canModify = periodoActivo;
+
                     return (
                       <div
                         key={minuta.id}
@@ -441,9 +448,9 @@ export default function Home() {
                       >
                         {/* Card header */}
                         <button
-                          onClick={() => !alreadyRegistered && toggleMinuta(minuta.id)}
+                          onClick={() => canModify && toggleMinuta(minuta.id)}
                           className={`w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors ${
-                            !alreadyRegistered ? "active:bg-white/5" : ""
+                            canModify ? "active:bg-white/5" : ""
                           } ${isToday ? "bg-vascan-gold/5" : ""}`}
                           style={{ borderLeft: `4px solid ${st.border}` }}
                         >
@@ -470,7 +477,7 @@ export default function Home() {
                               <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                               {st.label}
                             </span>
-                            {!alreadyRegistered && (
+                            {canModify && (
                               isExpanded
                                 ? <ChevronUp className="w-4 h-4 text-white/30" />
                                 : <ChevronDown className="w-4 h-4 text-white/30" />
@@ -479,7 +486,7 @@ export default function Home() {
                         </button>
 
                         {/* Expanded options */}
-                        {isExpanded && !alreadyRegistered && (
+                        {isExpanded && canModify && (
                           <div className="px-4 pt-3 pb-4 border-t border-white/8 space-y-2">
                             <p className="text-white/50 text-xs font-medium mb-3">Selecciona tu opción:</p>
                             {options.map((opt) => {
@@ -523,13 +530,18 @@ export default function Home() {
                         )}
 
                         {/* Registered info row */}
-                        {alreadyRegistered && (
+                        {alreadyRegistered && !isExpanded && (
                           <div className="px-4 py-2.5 border-t border-white/8">
                             {pedido.opcionSeleccionada === 0 ? (
-                              <p className="text-white/40 text-xs">No asistirás este día</p>
+                              <div className="flex items-center justify-between">
+                                <p className="text-white/40 text-xs">No asistirás este día</p>
+                                {canModify && <p className="text-white/25 text-xs">Toca para cambiar</p>}
+                              </div>
+                            ) : sel ? (
+                              <p className="text-vascan-gold text-xs font-medium">Cambio pendiente de guardar</p>
                             ) : (
                               <button
-                                onClick={() => openQrModal(minuta, pedido)}
+                                onClick={(e) => { e.stopPropagation(); openQrModal(minuta, pedido); }}
                                 className="w-full flex items-center justify-between"
                               >
                                 <p className="text-white/50 text-xs">
@@ -549,18 +561,6 @@ export default function Home() {
                 </div>
               </div>
             ))}
-
-            {/* Vale de visita (interlocutor) */}
-            {user?.role === "interlocutor" && (
-              <button
-                onClick={() => navigate("/vale-visita")}
-                className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl border border-white/10 bg-white/4 hover:bg-white/6 transition-colors text-left"
-              >
-                <UserPlus className="w-5 h-5 text-vascan-gold" />
-                <p className="flex-1 text-white font-medium text-sm">Emitir Vale de Visita</p>
-                <ChevronDown className="w-4 h-4 text-white/30 -rotate-90" />
-              </button>
-            )}
 
             {/* Submit button */}
             {pendingSelections > 0 && (

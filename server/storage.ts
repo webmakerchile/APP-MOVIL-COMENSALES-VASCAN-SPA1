@@ -43,6 +43,7 @@ export interface IStorage {
   getPedidosByUser(userId: string): Promise<Pedido[]>;
   getPedidoByUserAndMinuta(userId: string, minutaId: string): Promise<Pedido | undefined>;
   createPedido(pedido: InsertPedido & { codigoQr?: string }): Promise<Pedido>;
+  updatePedido(id: string, data: Partial<InsertPedido & { codigoQr?: string | null }>): Promise<Pedido | undefined>;
   getPedidosByMinuta(minutaId: string): Promise<Pedido[]>;
   getAllFamilias(): Promise<Familia[]>;
   createFamilia(familia: InsertFamilia): Promise<Familia>;
@@ -166,6 +167,11 @@ export class DatabaseStorage implements IStorage {
 
   async createPedido(insertPedido: InsertPedido & { codigoQr?: string }): Promise<Pedido> {
     const [pedido] = await db.insert(pedidos).values(insertPedido).returning();
+    return pedido;
+  }
+
+  async updatePedido(id: string, data: Partial<InsertPedido & { codigoQr?: string | null }>): Promise<Pedido | undefined> {
+    const [pedido] = await db.update(pedidos).set(data).where(eq(pedidos.id, id)).returning();
     return pedido;
   }
 

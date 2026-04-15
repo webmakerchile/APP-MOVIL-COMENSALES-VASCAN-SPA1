@@ -238,7 +238,7 @@
         { id: 'consolidacion', label: 'Consolidación', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', roles: ['admin', 'interlocutor'] },
         { id: 'usuarios', label: 'Usuarios', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', roles: ['admin'] },
         { id: 'casinos', label: 'Casinos', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', roles: ['admin'] },
-        { id: 'minutas', label: 'Minutas', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', roles: ['admin'] },
+        { id: 'minutas', label: 'Minutas', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', roles: ['admin', 'interlocutor'] },
         { id: 'familias', label: 'Familias', icon: 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z', roles: ['admin'] },
         { id: 'periodos', label: 'Periodos', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', roles: ['admin'] },
         { id: 'carga', label: 'Carga Masiva', icon: 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12', roles: ['admin'] },
@@ -833,7 +833,7 @@
       return presets[found.nombre] || 'bg-white/10 text-white/60 border-white/20';
     }
 
-    function MinutasView() {
+    function MinutasView({ user }) {
       const [casinos, setCasinos] = useState([]);
       const [selectedCasino, setSelectedCasino] = useState('');
       const [filterFamilia, setFilterFamilia] = useState('');
@@ -847,21 +847,27 @@
       const [editItem, setEditItem] = useState(null);
       const [deleteTarget, setDeleteTarget] = useState(null);
       const [toast, setToast] = useState(null);
-      const [form, setForm] = useState({ fecha: '', familia: 'almuerzo', opcion1: '', opcion2: '', opcion3: '', opcion4: '', opcion5: '', casinoIds: [] });
+      const [form, setForm] = useState({ fecha: '', familia: 'almuerzo', opcion1: '', opcion2: '', opcion3: '', opcion4: '', opcion5: '', casinoIds: [], editCasinoId: '' });
 
       useEffect(() => {
         Promise.all([apiFetch('/api/casinos'), apiFetch('/api/familias')]).then(([casinoData, famData]) => {
           setCasinos(casinoData);
           setFamiliasList(famData.filter(f => f.activo));
-          if (casinoData.length > 0) { setSelectedCasino(casinoData[0].id); loadMinutas(casinoData[0].id); }
-          else setLoading(false);
+          if (user?.role === 'interlocutor' && user?.casinoId) {
+            setSelectedCasino(user.casinoId);
+            loadMinutas(user.casinoId);
+          } else {
+            loadMinutas('');
+          }
         });
       }, []);
 
       async function loadMinutas(casinoId) {
         setLoading(true);
         try {
-          const data = await apiFetch(`/api/minutas/${casinoId}?all=true`);
+          const data = casinoId
+            ? await apiFetch(`/api/minutas/${casinoId}?all=true`)
+            : await apiFetch('/api/minutas');
           setMinutasList(data.sort((a, b) => a.fecha.localeCompare(b.fecha)));
         } catch (e) { console.error(e); }
         setLoading(false);
@@ -875,13 +881,14 @@
       function openCreate() {
         setEditItem(null);
         const defaultFamilia = familiasList.length > 0 ? familiasList[0].nombre : 'Almuerzo';
-        setForm({ fecha: new Date().toISOString().split('T')[0], familia: defaultFamilia, opcion1: '', opcion2: '', opcion3: '', opcion4: '', opcion5: '', casinoIds: [selectedCasino] });
+        const defaultCasinoIds = selectedCasino ? [selectedCasino] : casinos.map(c => c.id);
+        setForm({ fecha: new Date().toISOString().split('T')[0], familia: defaultFamilia, opcion1: '', opcion2: '', opcion3: '', opcion4: '', opcion5: '', casinoIds: defaultCasinoIds, editCasinoId: '' });
         setShowModal(true);
       }
 
       function openEdit(m) {
         setEditItem(m);
-        setForm({ fecha: m.fecha, familia: m.familia || 'Almuerzo', opcion1: m.opcion1, opcion2: m.opcion2, opcion3: m.opcion3, opcion4: m.opcion4 || '', opcion5: m.opcion5 || '', casinoIds: [m.casinoId] });
+        setForm({ fecha: m.fecha, familia: m.familia || 'Almuerzo', opcion1: m.opcion1, opcion2: m.opcion2, opcion3: m.opcion3, opcion4: m.opcion4 || '', opcion5: m.opcion5 || '', casinoIds: [m.casinoId], editCasinoId: m.casinoId });
         setShowModal(true);
       }
 
@@ -899,8 +906,9 @@
         e.preventDefault();
         try {
           if (editItem) {
-            const body = { ...form, casinoId: editItem.casinoId, opcion4: form.opcion4 || null, opcion5: form.opcion5 || null };
+            const body = { ...form, casinoId: form.editCasinoId || editItem.casinoId, opcion4: form.opcion4 || null, opcion5: form.opcion5 || null };
             delete body.casinoIds;
+            delete body.editCasinoId;
             await apiFetch(`/api/minutas/${editItem.id}`, { method: 'PUT', body: JSON.stringify(body) });
             setToast({ message: 'Minuta actualizada', type: 'success' });
           } else {
@@ -1007,18 +1015,28 @@
 
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold">Minutas</h1>
-            <button onClick={openCreate} className="bg-vascan-gold hover:bg-vascan-goldDark text-white font-semibold px-5 py-2.5 rounded-xl transition text-sm flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Nueva Minuta
-            </button>
+            {user?.role !== 'interlocutor' && (
+              <button onClick={openCreate} className="bg-vascan-gold hover:bg-vascan-goldDark text-white font-semibold px-5 py-2.5 rounded-xl transition text-sm flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Nueva Minuta
+              </button>
+            )}
           </div>
 
           <div className="bg-vascan-surface rounded-2xl border border-white/10 p-4 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select value={selectedCasino} onChange={e => handleCasinoChange(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-vascan-gold/50 transition text-sm" style={{colorScheme: 'dark'}}>
-                {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
+              {user?.role !== 'interlocutor' ? (
+                <select value={selectedCasino} onChange={e => handleCasinoChange(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-vascan-gold/50 transition text-sm" style={{colorScheme: 'dark'}}>
+                  <option value="">Todos los casinos</option>
+                  {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/60 text-sm">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" /></svg>
+                  {casinos.find(c => c.id === selectedCasino)?.nombre || 'Mi casino'}
+                </div>
+              )}
               <select value={filterFamilia} onChange={e => setFilterFamilia(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-vascan-gold/50 transition text-sm" style={{colorScheme: 'dark'}}>
                 <option value="">Todas las familias</option>
@@ -1084,15 +1102,17 @@
                                     : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                                   }
                                 </button>
-                                <button onClick={() => openClone(m)} title="Clonar" className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-green-400 transition">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                </button>
-                                <button onClick={() => openEdit(m)} title="Editar" className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                </button>
-                                <button onClick={() => setDeleteTarget(m)} title="Eliminar" className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/40 hover:text-red-400 transition">
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
+                                {user?.role !== 'interlocutor' && (<>
+                                  <button onClick={() => openClone(m)} title="Clonar" className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-green-400 transition">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                  </button>
+                                  <button onClick={() => openEdit(m)} title="Editar" className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                  </button>
+                                  <button onClick={() => setDeleteTarget(m)} title="Eliminar" className="p-1.5 rounded-lg hover:bg-red-500/10 text-white/40 hover:text-red-400 transition">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                  </button>
+                                </>)}
                               </div>
                             </div>
                             <div className="space-y-1.5 text-sm">
@@ -1122,6 +1142,15 @@
                   {familiasList.map(f => <option key={f.id} value={f.nombre}>{f.nombre}</option>)}
                 </select>
               </div>
+              {editItem && (
+                <div>
+                  <label className="block text-sm font-medium text-white/60 mb-1.5">Casino destino</label>
+                  <select value={form.editCasinoId} onChange={e => setForm({...form, editCasinoId: e.target.value})}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-vascan-gold/50 transition text-sm" style={{colorScheme: 'dark'}}>
+                    {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </div>
+              )}
               {!editItem && (
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -1207,34 +1236,47 @@
     }
 
     // ── Consolidación ──
-    function ConsolidacionView() {
+    function ConsolidacionView({ user }) {
+      const [allCasinos, setAllCasinos] = useState([]);
       const [casinos, setCasinos] = useState([]);
       const [selectedCasino, setSelectedCasino] = useState('');
-      const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+      const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0]);
+      const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
       const [report, setReport] = useState(null);
       const [loading, setLoading] = useState(false);
       const [downloading, setDownloading] = useState(false);
       const [loadingCasinos, setLoadingCasinos] = useState(true);
       const [weekReport, setWeekReport] = useState(null);
-      const [loadingWeek, setLoadingWeek] = useState(false);
 
       useEffect(() => {
         apiFetch('/api/casinos').then(data => {
-          setCasinos(data);
-          if (data.length > 0) setSelectedCasino(data[0].id);
+          setAllCasinos(data);
+          // Interlocutor: filter to their assigned casino only
+          if (user?.role === 'interlocutor' && user?.casinoId) {
+            const mine = data.filter(c => c.id === user.casinoId);
+            setCasinos(mine);
+            setSelectedCasino(user.casinoId);
+          } else {
+            setCasinos(data);
+            setSelectedCasino('all');
+          }
           setLoadingCasinos(false);
         }).catch(() => setLoadingCasinos(false));
       }, []);
 
       async function handleSearch() {
-        if (!selectedCasino || !selectedDate) return;
+        if (!dateFrom) return;
         setLoading(true);
         setReport(null);
         setWeekReport(null);
         try {
+          const casinoParam = selectedCasino || 'all';
+          const dateToParam = dateTo || dateFrom;
           const [dayData, weekData] = await Promise.all([
-            apiFetch(`/api/reportes/consolidacion?casinoId=${selectedCasino}&fecha=${selectedDate}`),
-            apiFetch(`/api/reportes/consolidacion-semanal?casinoId=${selectedCasino}&fecha=${selectedDate}`).catch(() => null),
+            apiFetch(`/api/reportes/consolidacion?casinoId=${casinoParam}&fecha=${dateFrom}&fechaHasta=${dateToParam}`),
+            (casinoParam !== 'all' && dateFrom === dateToParam)
+              ? apiFetch(`/api/reportes/consolidacion-semanal?casinoId=${casinoParam}&fecha=${dateFrom}`).catch(() => null)
+              : Promise.resolve(null),
           ]);
           setReport(dayData);
           setWeekReport(weekData);
@@ -1243,10 +1285,10 @@
       }
 
       async function downloadExcel() {
-        if (!selectedCasino || !selectedDate) return;
+        if (!selectedCasino || !dateFrom) return;
         setDownloading(true);
         try {
-          const resp = await fetch(`/api/reportes/programacion-semanal?casinoId=${selectedCasino}&fecha=${selectedDate}`, { credentials: 'include' });
+          const resp = await fetch(`/api/reportes/programacion-semanal?casinoId=${selectedCasino}&fecha=${dateFrom}`, { credentials: 'include' });
           if (!resp.ok) throw new Error('Error al descargar');
           const blob = await resp.blob();
           const url = URL.createObjectURL(blob);
@@ -1267,19 +1309,30 @@
         <div className="fade-in">
           <h1 className="text-2xl font-bold mb-6">Consolidación / Programación</h1>
           <div className="bg-vascan-surface rounded-2xl border border-white/10 p-6 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-              <SelectField label="Casino" value={selectedCasino} onChange={setSelectedCasino}
-                options={casinos.map(c => ({ value: c.id, label: c.nombre }))} />
-              <InputField label="Fecha (cualquier día de la semana)" value={selectedDate} onChange={setSelectedDate} type="date" />
-              <button onClick={handleSearch} disabled={loading}
-                className="bg-vascan-gold hover:bg-vascan-goldDark text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 text-sm">
-                {loading ? 'Consultando...' : 'Consultar'}
-              </button>
-              <button onClick={downloadExcel} disabled={downloading || !selectedCasino}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 text-sm flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                {downloading ? 'Generando...' : 'Descargar Excel Semanal'}
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1.5">Casino</label>
+                <select value={selectedCasino} onChange={e => setSelectedCasino(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-vascan-gold/50 transition text-sm" style={{colorScheme: 'dark'}}>
+                  {user?.role !== 'interlocutor' && <option value="all">Todos los casinos</option>}
+                  {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+              <InputField label="Fecha desde" value={dateFrom} onChange={v => { setDateFrom(v); if (v > dateTo) setDateTo(v); }} type="date" />
+              <InputField label="Fecha hasta" value={dateTo} onChange={v => setDateTo(v < dateFrom ? dateFrom : v)} type="date" />
+              <div className="flex gap-2">
+                <button onClick={handleSearch} disabled={loading}
+                  className="flex-1 bg-vascan-gold hover:bg-vascan-goldDark text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 text-sm">
+                  {loading ? 'Consultando...' : 'Consultar'}
+                </button>
+                {selectedCasino && selectedCasino !== 'all' && (
+                  <button onClick={downloadExcel} disabled={downloading}
+                    className="px-3 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition disabled:opacity-50 text-sm flex items-center justify-center gap-1" title="Descargar Excel Semanal">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    {downloading ? '...' : 'XLS'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1287,8 +1340,35 @@
             <div className="bg-vascan-surface rounded-2xl border border-white/10 overflow-hidden fade-in">
               <div className="p-5 border-b border-white/10">
                 <h2 className="font-semibold text-lg">Resumen de Producción</h2>
-                <p className="text-white/50 text-sm mt-0.5">{report.casinoNombre} — {report.fecha}</p>
+                <p className="text-white/50 text-sm mt-0.5">
+                  {report.casinoNombre} — {report.fecha}{report.fechaHasta && report.fechaHasta !== report.fecha ? ` al ${report.fechaHasta}` : ''}
+                </p>
               </div>
+              {report.dailyRows && report.dailyRows.length > 0 && (
+                <div className="p-4 border-b border-white/10 overflow-x-auto">
+                  <p className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2">Desglose por día</p>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-white/40 text-xs border-b border-white/5">
+                        <th className="text-left pb-2 pr-4">Fecha</th>
+                        <th className="text-left pb-2 pr-4">Casino</th>
+                        <th className="text-right pb-2 pr-4">Comensales</th>
+                        <th className="text-right pb-2">No asisten</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.dailyRows.map((row, i) => (
+                        <tr key={i} className="border-b border-white/5 hover:bg-white/[0.02]">
+                          <td className="py-1.5 pr-4 font-mono text-xs text-white/60">{row.fecha}</td>
+                          <td className="py-1.5 pr-4 text-white/80">{row.casinoNombre}</td>
+                          <td className="py-1.5 pr-4 text-right font-semibold">{row.total}</td>
+                          <td className="py-1.5 text-right text-orange-400">{row.noAsiste > 0 ? row.noAsiste : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               {!report.minuta ? (
                 <div className="p-8 text-center text-white/40">No hay minuta registrada para esta fecha</div>
               ) : (
@@ -1535,14 +1615,14 @@
     }
 
     // ── Periodos (Horarios de inscripción) ──
-    function PeriodosView() {
+    function PeriodosView({ user }) {
       const [periodos, setPeriodos] = useState([]);
       const [casinos, setCasinos] = useState([]);
       const [selectedCasino, setSelectedCasino] = useState('');
       const [loading, setLoading] = useState(true);
       const [showModal, setShowModal] = useState(false);
       const [editing, setEditing] = useState(null);
-      const [form, setForm] = useState({ nombre: '', casinoId: '', fechaInicio: '', fechaFin: '' });
+      const [form, setForm] = useState({ nombre: '', casinoId: '', casinoIds: [], fechaInicio: '', fechaFin: '' });
       const [toast, setToast] = useState(null);
 
       useEffect(() => {
@@ -1552,7 +1632,6 @@
         ]).then(([p, c]) => {
           setPeriodos(p);
           setCasinos(c);
-          if (c.length > 0) setSelectedCasino(c[0].id);
         }).finally(() => setLoading(false));
       }, []);
 
@@ -1564,7 +1643,7 @@
 
       function openCreate() {
         setEditing(null);
-        setForm({ nombre: '', casinoId: selectedCasino, fechaInicio: '', fechaFin: '' });
+        setForm({ nombre: '', casinoId: '', casinoIds: casinos.map(c => c.id), fechaInicio: '', fechaFin: '' });
         setShowModal(true);
       }
 
@@ -1576,23 +1655,33 @@
           const pad = n => String(n).padStart(2, '0');
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
         };
-        setForm({ nombre: p.nombre, casinoId: p.casinoId, fechaInicio: toLocal(fi), fechaFin: toLocal(ff) });
+        setForm({ nombre: p.nombre, casinoId: p.casinoId, casinoIds: [p.casinoId], fechaInicio: toLocal(fi), fechaFin: toLocal(ff) });
         setShowModal(true);
       }
 
+      function toggleCasinoInPeriodo(id) {
+        setForm(f => ({ ...f, casinoIds: f.casinoIds.includes(id) ? f.casinoIds.filter(x => x !== id) : [...f.casinoIds, id] }));
+      }
+
       async function handleSave() {
-        if (!form.nombre || !form.casinoId || !form.fechaInicio || !form.fechaFin) {
-          setToast({ message: 'Todos los campos son obligatorios', type: 'error' }); return;
+        if (!form.nombre || !form.fechaInicio || !form.fechaFin) {
+          setToast({ message: 'Nombre y fechas son obligatorios', type: 'error' }); return;
         }
         try {
           if (editing) {
             await apiFetch(`/api/periodos/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin }) });
             setToast({ message: 'Periodo actualizado', type: 'success' });
+            setShowModal(false); refresh();
           } else {
-            await apiFetch('/api/periodos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-            setToast({ message: 'Periodo creado', type: 'success' });
+            if (form.casinoIds.length === 0) {
+              setToast({ message: 'Seleccione al menos un casino', type: 'error' }); return;
+            }
+            for (const cId of form.casinoIds) {
+              await apiFetch('/api/periodos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, casinoId: cId, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin }) });
+            }
+            setToast({ message: `Periodo creado en ${form.casinoIds.length} casino(s)`, type: 'success' });
+            setShowModal(false); refresh();
           }
-          setShowModal(false); refresh();
         } catch (e) {
           setToast({ message: e.message || 'Error al guardar', type: 'error' });
         }
@@ -1707,32 +1796,54 @@
 
           {showModal && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-              <div className="bg-vascan-surface border border-white/10 rounded-2xl w-full max-w-lg p-6">
+              <div className="bg-vascan-surface border border-white/10 rounded-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-xl font-bold text-white mb-5">{editing ? 'Editar Periodo' : 'Nuevo Periodo'}</h2>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-white/60 mb-1">Nombre</label>
                     <input value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Ej: Inscripción Almuerzo Lunes"
-                      className="w-full bg-vascan-dark border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" />
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" />
                   </div>
-                  {!editing && (
+                  {!editing && casinos.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-sm font-medium text-white/60">Casinos</label>
+                        <button type="button" onClick={() => {
+                          const allIds = casinos.map(c => c.id);
+                          const allSel = allIds.every(id => form.casinoIds.includes(id));
+                          setForm({...form, casinoIds: allSel ? [] : allIds});
+                        }} className="text-xs font-medium text-vascan-gold hover:text-vascan-gold/80 transition px-2 py-0.5 rounded-lg bg-vascan-gold/10">
+                          {casinos.every(c => form.casinoIds.includes(c.id)) ? 'Ninguno' : 'Todos'}
+                        </button>
+                      </div>
+                      <div className="space-y-2 max-h-36 overflow-y-auto bg-white/5 rounded-xl p-3 border border-white/10">
+                        {casinos.map(c => (
+                          <label key={c.id} className="flex items-center gap-3 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1.5 transition">
+                            <input type="checkbox" checked={form.casinoIds.includes(c.id)} onChange={() => toggleCasinoInPeriodo(c.id)}
+                              className="w-4 h-4 rounded accent-amber-500" />
+                            <span className="text-sm text-white/80">{c.nombre}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {editing && (
                     <div>
                       <label className="block text-sm font-medium text-white/60 mb-1">Casino</label>
-                      <select value={form.casinoId} onChange={e => setForm({...form, casinoId: e.target.value})}
-                        className="w-full bg-vascan-dark border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" style={{colorScheme: 'dark'}}>
-                        {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                      </select>
+                      <p className="text-white/50 text-sm px-4 py-2.5 bg-white/5 rounded-xl border border-white/10">
+                        {casinos.find(c => c.id === form.casinoId)?.nombre || 'Casino asignado'}
+                      </p>
                     </div>
                   )}
                   <div>
                     <label className="block text-sm font-medium text-white/60 mb-1">Fecha y hora de inicio</label>
                     <input type="datetime-local" value={form.fechaInicio} onChange={e => setForm({...form, fechaInicio: e.target.value})}
-                      className="w-full bg-vascan-dark border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" />
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" style={{colorScheme: 'dark'}} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-white/60 mb-1">Fecha y hora de fin</label>
                     <input type="datetime-local" value={form.fechaFin} onChange={e => setForm({...form, fechaFin: e.target.value})}
-                      className="w-full bg-vascan-dark border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" />
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" style={{colorScheme: 'dark'}} />
                   </div>
                 </div>
                 <div className="flex gap-3 mt-6">
@@ -1922,7 +2033,7 @@
         <div className="flex min-h-screen">
           <Sidebar active={view} onNav={setView} onLogout={handleLogout} user={user} />
           <main className="flex-1 p-8 overflow-y-auto">
-            <CurrentView key={view} />
+            <CurrentView key={view} user={user} />
           </main>
         </div>
       );

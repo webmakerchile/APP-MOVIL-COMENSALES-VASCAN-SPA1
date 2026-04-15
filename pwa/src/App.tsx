@@ -4,7 +4,6 @@ import { useAuth } from "./lib/auth-context";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Historial from "./pages/Historial";
-import ValeVisita from "./pages/ValeVisita";
 import InstallPrompt from "./components/InstallPrompt";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -58,14 +57,6 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Historial />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/vale-visita"
-          element={
-            <ProtectedRoute>
-              <ValeVisita />
             </ProtectedRoute>
           }
         />

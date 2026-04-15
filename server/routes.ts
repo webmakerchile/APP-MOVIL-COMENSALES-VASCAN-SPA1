@@ -1041,7 +1041,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!minutaId) continue;
 
         const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
-        if (existing) continue;
 
         const minuta = await storage.getMinuta(minutaId);
         if (!minuta) continue;
@@ -1049,6 +1048,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let opcion = opcionSeleccionada || 1;
         const selTipo = tipo || "seleccion";
         if (selTipo === "no_asiste") opcion = 0;
+
+        if (existing) {
+          const updated = await storage.updatePedido(existing.id, {
+            opcionSeleccionada: opcion,
+            tipo: selTipo,
+            codigoQr: selTipo === "no_asiste" ? null : (existing.codigoQr || `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`),
+          });
+          if (updated) results.push(updated);
+          continue;
+        }
 
         const codigoQr = selTipo === "no_asiste" ? null : `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const pedido = await storage.createPedido({
@@ -1132,53 +1141,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── Consolidación / Reportes ──
   app.get("/api/reportes/consolidacion", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { casinoId, fecha } = req.query;
+      const { casinoId, fecha, fechaHasta } = req.query;
       if (!casinoId || !fecha) {
         return res.status(400).json({ message: "casinoId y fecha son requeridos" });
       }
 
-      const casino = await storage.getCasino(casinoId as string);
-      if (!casino) {
+      const isAllCasinos = (casinoId as string) === "all";
+      const hasRange = !!(fechaHasta && fechaHasta !== fecha);
+
+      // Build list of dates when range is given
+      const fechasToProcess: string[] = [];
+      if (hasRange) {
+        const start = new Date((fecha as string) + "T12:00:00");
+        const end = new Date((fechaHasta as string) + "T12:00:00");
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          fechasToProcess.push(d.toISOString().split("T")[0]);
+        }
+      } else {
+        fechasToProcess.push(fecha as string);
+      }
+
+      // Resolve casinos
+      const casinosList = isAllCasinos
+        ? await storage.getCasinos()
+        : [await storage.getCasino(casinoId as string)].filter(Boolean) as any[];
+
+      if (!isAllCasinos && casinosList.length === 0) {
         return res.status(404).json({ message: "Casino no encontrado" });
       }
 
-      const minutasList = await storage.getMinutasByCasino(casinoId as string);
-      const minuta = minutasList.find((m) => m.fecha === fecha);
+      // Aggregate across casinos + dates
+      const opcionMap: Record<number, { descripcion: string; cantidad: number }> = {};
+      let totalPedidos = 0;
+      let totalNoAsiste = 0;
+      let totalVisitas = 0;
+      const visitasList: { nombreVisita: string | null; codigoQr: string | null }[] = [];
+      const dailyRows: { fecha: string; casinoNombre: string; total: number; noAsiste: number }[] = [];
 
-      if (!minuta) {
-        return res.json({ casinoNombre: casino.nombre, fecha, minuta: null, opciones: [], totalPedidos: 0 });
+      for (const casino of casinosList) {
+        const allMinutasCasino = await storage.getAllMinutasByCasino(casino.id);
+        for (const f of fechasToProcess) {
+          const minuta = allMinutasCasino.find((m) => m.fecha === f);
+          if (!minuta) continue;
+          const pedidosForMinuta = await storage.getPedidosByMinuta(minuta.id);
+          const selPedidos = pedidosForMinuta.filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
+          const noAsPedidos = pedidosForMinuta.filter(p => p.tipo === "no_asiste");
+          const visPedidos = pedidosForMinuta.filter(p => p.tipo === "visita");
+          totalPedidos += selPedidos.length;
+          totalNoAsiste += noAsPedidos.length;
+          totalVisitas += visPedidos.length;
+          visPedidos.forEach(v => visitasList.push({ nombreVisita: v.nombreVisita || null, codigoQr: v.codigoQr || null }));
+          dailyRows.push({ fecha: f, casinoNombre: casino.nombre, total: selPedidos.length, noAsiste: noAsPedidos.length });
+          const allOptions: (string | null)[] = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
+          for (let i = 0; i < allOptions.length; i++) {
+            if (!allOptions[i]) continue;
+            const num = i + 1;
+            if (!opcionMap[num]) opcionMap[num] = { descripcion: allOptions[i]!, cantidad: 0 };
+            opcionMap[num].cantidad += selPedidos.filter(p => p.opcionSeleccionada === num).length;
+          }
+        }
       }
 
-      const pedidosForMinuta = await storage.getPedidosByMinuta(minuta.id);
-      const seleccionPedidos = pedidosForMinuta.filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
-      const noAsistePedidos = pedidosForMinuta.filter(p => p.tipo === "no_asiste");
-      const visitaPedidos = pedidosForMinuta.filter(p => p.tipo === "visita");
-      const totalPedidos = seleccionPedidos.length;
-
-      const opciones = [];
-      const allOptions: (string | null)[] = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
-
-      for (let i = 0; i < allOptions.length; i++) {
-        if (!allOptions[i]) continue;
-        const num = i + 1;
-        const count = seleccionPedidos.filter((p) => p.opcionSeleccionada === num).length;
-        opciones.push({
-          numero: num,
-          descripcion: allOptions[i],
-          cantidad: count,
-          porcentaje: totalPedidos > 0 ? Math.round((count / totalPedidos) * 100) : 0,
-        });
-      }
+      const opciones = Object.entries(opcionMap).map(([num, v]) => ({
+        numero: parseInt(num),
+        descripcion: v.descripcion,
+        cantidad: v.cantidad,
+        porcentaje: totalPedidos > 0 ? Math.round((v.cantidad / totalPedidos) * 100) : 0,
+      }));
 
       return res.json({
-        casinoNombre: casino.nombre,
+        casinoNombre: isAllCasinos ? "Todos los casinos" : casinosList[0]?.nombre,
         fecha,
-        minuta: { id: minuta.id, familia: minuta.familia, opcion1: minuta.opcion1, opcion2: minuta.opcion2, opcion3: minuta.opcion3, opcion4: minuta.opcion4, opcion5: minuta.opcion5 },
+        fechaHasta: fechaHasta || null,
+        minuta: opciones.length > 0 ? { resumen: true } : null,
         opciones,
         totalPedidos,
-        totalNoAsiste: noAsistePedidos.length,
-        totalVisitas: visitaPedidos.length,
-        visitas: visitaPedidos.map(v => ({ nombreVisita: v.nombreVisita, codigoQr: v.codigoQr })),
+        totalNoAsiste,
+        totalVisitas,
+        visitas: visitasList,
+        dailyRows: hasRange ? dailyRows : undefined,
       });
     } catch (error) {
       console.error("Consolidacion error:", error);
