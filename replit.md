@@ -1,7 +1,9 @@
-# Sistema de Inscripción de Comensales - Vascan SPA
+# Sistema de Inscripción de Comensales - BuenaMezcla
 
 ## Overview
 Casino/cafeteria meal management system for enterprise dining. Workers register their daily meal preferences through a mobile app, generating digital vouchers (QR codes) for meal pickup. Admins manage menus, users, and casinos via a web panel.
+
+Brand: **BuenaMezcla** (rebranded from Vascan SPA). Logo at `pwa/public/logo.png`, `web/src/logo.png`, `public/logo.png`.
 
 ## Architecture
 - **Backend**: Express.js + TypeScript on port 5000
@@ -73,7 +75,7 @@ Casino/cafeteria meal management system for enterprise dining. Workers register 
 - `GET /api/minutas` - List all minutas
 - `GET /api/minutas/:casinoId` - Get minutas for a casino
 - `POST /api/minutas` - Create minuta (supports `casinoIds` array for multi-casino)
-- `PUT /api/minutas/:id` - Update minuta
+- `PUT /api/minutas/:id` - Update minuta (accepts `replicateToCasinoIds: string[]` to mirror changes to matching minutas in other casinos)
 - `DELETE /api/minutas/:id` - Soft-delete (deactivate) minuta
 - `POST /api/minutas/:id/clonar` - Clone minuta to new date/casinos
 
@@ -97,7 +99,11 @@ Casino/cafeteria meal management system for enterprise dining. Workers register 
 
 ### Reports
 - `GET /api/reportes/dashboard` - Dashboard stats (inscripciones, no_asiste, visitas counts)
-- `GET /api/reportes/consolidacion?casinoId=X&fecha=Y` - Consolidation report with no_asiste/visita breakdown
+- `GET /api/reportes/consolidacion?casinoId=X&fecha=Y[&fechaHasta=Z]` - Consolidation report with no_asiste/visita breakdown
+- `GET /api/reportes/inscripcion-detalle?fechaDesde&fechaHasta&casinoId` - Excel: día inscripción / comensal / casino / opción / día servicio
+- `GET /api/reportes/consumo-detalle?fechaDesde&fechaHasta&casinoId` - Excel: hora vale / comensal / casino / opción / día servicio (createdAt = impresión vale)
+- `GET /api/reportes/minutas-detalle?mes=YYYY-MM&casinoId` - Excel: minutas detalle del mes
+- Interlocutor scope: helper `scopedCasinoId()` forces casinoId to user's own when role=interlocutor
 
 ### Other
 - `POST /api/usuarios/upload` - Bulk user upload from Excel

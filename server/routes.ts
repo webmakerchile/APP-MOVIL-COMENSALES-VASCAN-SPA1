@@ -492,7 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const casinoMinutas = await storage.getAllMinutasByCasino(id);
-      const allUsers = await storage.getUsers();
+      const allUsers = await storage.getAllUsers();
       const usersInCasino = allUsers.filter(u => u.casinoId === id);
       const hasHistory = casinoMinutas.length > 0 || usersInCasino.length > 0;
       return res.json({ hasHistory, minutas: casinoMinutas.length, usuarios: usersInCasino.length });
@@ -507,7 +507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const force = req.query.force === "true";
 
       const casinoMinutas = await storage.getAllMinutasByCasino(id);
-      const allUsers = await storage.getUsers();
+      const allUsers = await storage.getAllUsers();
       const usersInCasino = allUsers.filter(u => u.casinoId === id);
       const hasHistory = casinoMinutas.length > 0 || usersInCasino.length > 0;
 
@@ -535,7 +535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const allCasinos = await storage.getCasinos();
       const activeCasinos = allCasinos.filter(c => c.activo);
-      const allUsers = await storage.getUsers();
+      const allUsers = await storage.getAllUsers();
       const allPedidos = await storage.getAllPedidos();
       const allMinutas = await storage.getAllMinutas();
 
@@ -686,7 +686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/minutas/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { casinoId, fecha, familia, opcion1, opcion2, opcion3, opcion4, opcion5, activo } = req.body;
+      const { casinoId, fecha, familia, opcion1, opcion2, opcion3, opcion4, opcion5, activo, replicateToCasinoIds } = req.body;
       const updateData: any = {};
       if (casinoId !== undefined) updateData.casinoId = casinoId;
       if (fecha !== undefined) updateData.fecha = fecha;
@@ -701,6 +701,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const minuta = await storage.updateMinuta(id, updateData);
       if (!minuta) {
         return res.status(404).json({ message: "Minuta no encontrada" });
+      }
+
+      // Replicate same content to other casinos (create or update by fecha)
+      if (Array.isArray(replicateToCasinoIds) && replicateToCasinoIds.length > 0) {
+        const targetFecha = fecha !== undefined ? fecha : minuta.fecha;
+        for (const cid of replicateToCasinoIds) {
+          if (!cid || cid === minuta.casinoId) continue;
+          const existing = await storage.getMinutasByCasino(cid);
+          const match = existing.find(m => m.fecha === targetFecha);
+          const payload: any = {
+            familia: minuta.familia,
+            opcion1: minuta.opcion1,
+            opcion2: minuta.opcion2,
+            opcion3: minuta.opcion3,
+            opcion4: minuta.opcion4,
+            opcion5: minuta.opcion5,
+            activo: minuta.activo,
+          };
+          if (match) {
+            await storage.updateMinuta(match.id, payload);
+          } else {
+            await storage.createMinuta({
+              casinoId: cid,
+              fecha: targetFecha,
+              ...payload,
+            } as any);
+          }
+        }
       }
       return res.json(minuta);
     } catch (error) {
@@ -1252,7 +1280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allMinutas = await storage.getAllMinutasByCasino(casinoId as string);
       const weekMinutas = weekDates.map(f => allMinutas.find(m => m.fecha === f) || null);
 
-      const allUsers = await storage.getUsers();
+      const allUsers = await storage.getAllUsers();
       const casinoUsers = allUsers.filter(u => u.casinoId === casinoId && u.role === "comensal" && u.activo);
 
       const allPedidos = await storage.getAllPedidos();
@@ -1321,7 +1349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allMinutas = await storage.getAllMinutasByCasino(casinoId as string);
       const weekMinutas = weekDates.map(fecha => allMinutas.find(m => m.fecha === fecha) || null);
 
-      const allUsers = await storage.getUsers();
+      const allUsers = await storage.getAllUsers();
       const casinoUsers = allUsers
         .filter(u => u.casinoId === casinoId && u.role === "comensal" && u.activo)
         .sort((a, b) => `${a.apellido} ${a.nombre}`.localeCompare(`${b.apellido} ${b.nombre}`));
@@ -1923,6 +1951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             cell.fill = EX.goldLightFill as any;
             cell.alignment = EX.center;
             cell.border = EX.borderThin;
+            cell.numFmt = "@"; // Force TEXT format so Excel does not auto-convert ISO date strings
           });
           currentRow++;
 
@@ -2023,25 +2052,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No se recibió archivo" });
       }
 
-      const workbook = XLSX.readFile(req.file.path);
+      const workbook = XLSX.readFile(req.file.path, { cellDates: true });
       let created = 0;
       let skipped = 0;
       let errors = 0;
       const errorDetails: { sheet: string; row: number; error: string }[] = [];
 
+      // Helper: convert any cell value (Date, string, number serial) to YYYY-MM-DD
+      const toIsoDate = (v: any): string | null => {
+        if (v == null || v === "") return null;
+        if (v instanceof Date && !isNaN(v.getTime())) {
+          const y = v.getFullYear();
+          const m = String(v.getMonth() + 1).padStart(2, "0");
+          const d = String(v.getDate()).padStart(2, "0");
+          return `${y}-${m}-${d}`;
+        }
+        const s = String(v).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        // Excel serial number
+        const n = Number(s);
+        if (!isNaN(n) && n > 25569 && n < 60000) {
+          const ms = (n - 25569) * 86400 * 1000;
+          const d = new Date(ms);
+          const y = d.getUTCFullYear();
+          const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+          const dd = String(d.getUTCDate()).padStart(2, "0");
+          return `${y}-${mo}-${dd}`;
+        }
+        // Try DD/MM/YYYY or DD-MM-YYYY
+        const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (m) {
+          return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+        }
+        return null;
+      };
+
       for (const sheetName of workbook.SheetNames) {
         if (sheetName === "Instrucciones") continue;
         const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { header: 1 }) as any[][];
+        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { header: 1, raw: true }) as any[][];
 
         let casinoId = "";
         for (const row of rows) {
-          if (row[0] === "ID Casino:" && row[1]) {
+          if (row && row[0] && String(row[0]).trim() === "ID Casino:" && row[1]) {
             casinoId = String(row[1]).trim();
             break;
           }
         }
-        if (!casinoId) continue;
+        if (!casinoId) {
+          errorDetails.push({ sheet: sheetName, row: 0, error: `No se encontró "ID Casino:" en la hoja. Use la plantilla descargada.` });
+          errors++;
+          continue;
+        }
 
         const casino = await storage.getCasino(casinoId);
         if (!casino) {
@@ -2052,24 +2114,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
-          if (!row || !row[1] || row[1] !== "FECHA") continue;
+          if (!row || !row[1] || String(row[1]).trim() !== "FECHA") continue;
 
-          const fechas = [row[2], row[3], row[4], row[5], row[6]].filter(Boolean).map(f => String(f).trim());
+          const fechas = [row[2], row[3], row[4], row[5], row[6]].map(toIsoDate);
 
           for (let dayIdx = 0; dayIdx < fechas.length; dayIdx++) {
             const fecha = fechas[dayIdx];
-            if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) continue;
+            if (!fecha) continue;
 
             try {
               const opciones: string[] = [];
               for (let optRow = 1; optRow <= 5; optRow++) {
                 const optionRow = rows[i + optRow];
-                if (optionRow && optionRow[dayIdx + 2]) {
-                  opciones.push(String(optionRow[dayIdx + 2]).trim());
-                }
+                const cell = optionRow ? optionRow[dayIdx + 2] : null;
+                const txt = cell != null ? String(cell).trim() : "";
+                if (txt) opciones.push(txt);
               }
 
-              if (opciones.length < 3) continue;
+              if (opciones.length < 3) {
+                errorDetails.push({ sheet: sheetName, row: i + 1, error: `Fecha ${fecha}: se requieren al menos 3 opciones (encontradas: ${opciones.length})` });
+                errors++;
+                continue;
+              }
 
               const existingMinutas = await storage.getMinutasByCasino(casinoId);
               const existing = existingMinutas.find(m => m.fecha === fecha);
@@ -2098,6 +2164,263 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Upload minutas error:", error);
       return res.status(500).json({ message: "Error al procesar el archivo" });
+    }
+  });
+
+  // ── Reportes Detallados (3 nuevos, descarga Excel) ──
+  // Helper común
+  function buildHeader(ws: any, title: string) {
+    ws.mergeCells("A1:F1");
+    ws.getCell("A1").value = title;
+    ws.getCell("A1").font = EX.fontTitle;
+    ws.getCell("A1").fill = EX.darkFill as any;
+    ws.getCell("A1").alignment = EX.center;
+    ws.getRow(1).height = 30;
+    ws.mergeCells("A2:F2");
+    ws.getCell("A2").value = "BUENAMEZCLA — Sistema de Comensales";
+    ws.getCell("A2").font = EX.fontSubGold;
+    ws.getCell("A2").fill = EX.navyFill as any;
+    ws.getCell("A2").alignment = EX.center;
+  }
+
+  // 1) Reporte de Inscripción x rango: día inscripción / comensal / casino / opción / día servicio
+  // Helper: enforce interlocutor casino scope (returns effective casinoId or null for "all admins-only")
+  function scopedCasinoId(req: Request, requested: string | undefined): string | undefined | null {
+    const sUser = (req.session as any).user;
+    if (sUser?.role === "interlocutor") {
+      // interlocutor is locked to their own casino regardless of what they requested
+      return sUser.casinoId || null;
+    }
+    return requested;
+  }
+
+  app.get("/api/reportes/inscripcion-detalle", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { fechaDesde, fechaHasta } = req.query as any;
+      const casinoId = scopedCasinoId(req, req.query.casinoId as string);
+      if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
+
+      const allPedidos = await storage.getAllPedidos();
+      const allMinutas = await storage.getAllMinutas();
+      const allUsers = await storage.getAllUsers();
+      const allCasinos = await storage.getCasinos();
+      const minutaById = new Map(allMinutas.map(m => [m.id, m]));
+      const userById = new Map(allUsers.map(u => [u.id, u]));
+      const casinoById = new Map(allCasinos.map(c => [c.id, c]));
+
+      const start = new Date(fechaDesde + "T00:00:00");
+      const end = new Date(fechaHasta + "T23:59:59");
+
+      const filtered = allPedidos.filter(p => {
+        const created = p.createdAt ? new Date(p.createdAt) : null;
+        if (!created || created < start || created > end) return false;
+        if (casinoId && casinoId !== "all") {
+          const m = minutaById.get(p.minutaId);
+          if (!m || m.casinoId !== casinoId) return false;
+        }
+        return true;
+      });
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "BuenaMezcla";
+      const ws = wb.addWorksheet("Inscripciones", { properties: { tabColor: { argb: "FFD4A843" } } });
+      ws.columns = [
+        { header: "Día Inscripción", key: "fechaInsc", width: 22 },
+        { header: "Comensal (RUT - Nombre)", key: "comensal", width: 38 },
+        { header: "Casino", key: "casino", width: 26 },
+        { header: "Tipo", key: "tipo", width: 14 },
+        { header: "Opción", key: "opcion", width: 36 },
+        { header: "Día Servicio", key: "fechaServ", width: 16 },
+      ];
+      buildHeader(ws, "INSCRIPCIONES POR RANGO DE FECHAS");
+      const headerRow = ws.getRow(4);
+      headerRow.values = ["Día Inscripción", "Comensal", "Casino", "Tipo", "Opción", "Día Servicio"];
+      headerRow.height = 26;
+      headerRow.eachCell(c => { c.font = EX.fontHeader; c.fill = EX.headerBlueFill as any; c.alignment = EX.center; c.border = EX.borderGold; });
+
+      const sorted = filtered.sort((a, b) => new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime());
+      sorted.forEach((p, idx) => {
+        const m = minutaById.get(p.minutaId);
+        const u = userById.get(p.userId);
+        const c = m ? casinoById.get(m.casinoId) : null;
+        const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
+        const opcionTexto = p.tipo === "no_asiste" ? "(no asiste)" : (opciones[p.opcionSeleccionada - 1] || `Opción ${p.opcionSeleccionada}`);
+        const tipoLabel = p.tipo === "visita" ? `Visita: ${p.nombreVisita || ""}` : (p.tipo === "no_asiste" ? "No asiste" : "Selección");
+        const created = p.createdAt ? new Date(p.createdAt) : null;
+        const fechaInscStr = created
+          ? `${created.toLocaleDateString("es-CL")} ${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`
+          : "—";
+        const r = ws.addRow({
+          fechaInsc: fechaInscStr,
+          comensal: u ? `${u.rut} — ${u.nombre} ${u.apellido}` : "—",
+          casino: c?.nombre || "—",
+          tipo: tipoLabel,
+          opcion: opcionTexto,
+          fechaServ: m?.fecha || "—",
+        });
+        const isEven = idx % 2 === 0;
+        r.eachCell(cell => { cell.font = EX.fontNormal; cell.fill = (isEven ? EX.whiteFill : EX.grayFill) as any; cell.border = EX.borderThin; cell.alignment = EX.left; });
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=Inscripciones_${fechaDesde}_a_${fechaHasta}.xlsx`);
+      return res.send(Buffer.from(buf as ArrayBuffer));
+    } catch (error) {
+      console.error("Inscripcion detalle error:", error);
+      return res.status(500).json({ message: "Error al generar reporte" });
+    }
+  });
+
+  // 2) Reporte de Consumo x rango (proxy: createdAt del pedido = impresión vale)
+  app.get("/api/reportes/consumo-detalle", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { fechaDesde, fechaHasta } = req.query as any;
+      const casinoId = scopedCasinoId(req, req.query.casinoId as string);
+      if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
+
+      const allPedidos = await storage.getAllPedidos();
+      const allMinutas = await storage.getAllMinutas();
+      const allUsers = await storage.getAllUsers();
+      const allCasinos = await storage.getCasinos();
+      const minutaById = new Map(allMinutas.map(m => [m.id, m]));
+      const userById = new Map(allUsers.map(u => [u.id, u]));
+      const casinoById = new Map(allCasinos.map(c => [c.id, c]));
+
+      const start = new Date(fechaDesde + "T00:00:00");
+      const end = new Date(fechaHasta + "T23:59:59");
+
+      const filtered = allPedidos.filter(p => {
+        if (p.tipo === "no_asiste") return false;
+        const m = minutaById.get(p.minutaId);
+        if (!m) return false;
+        const fechaServ = new Date(m.fecha + "T12:00:00");
+        if (fechaServ < start || fechaServ > end) return false;
+        if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return false;
+        return true;
+      });
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "BuenaMezcla";
+      const ws = wb.addWorksheet("Consumo", { properties: { tabColor: { argb: "FFD4A843" } } });
+      ws.columns = [
+        { header: "Fecha y hora vale", key: "fechaConsumo", width: 22 },
+        { header: "Comensal", key: "comensal", width: 38 },
+        { header: "Casino", key: "casino", width: 26 },
+        { header: "Opción", key: "opcion", width: 36 },
+        { header: "Día Servicio", key: "fechaServ", width: 16 },
+        { header: "Código QR", key: "qr", width: 28 },
+      ];
+      buildHeader(ws, "CONSUMO POR RANGO DE FECHAS");
+      const headerRow = ws.getRow(4);
+      headerRow.values = ["Fecha y hora vale", "Comensal", "Casino", "Opción", "Día Servicio", "Código QR"];
+      headerRow.height = 26;
+      headerRow.eachCell(c => { c.font = EX.fontHeader; c.fill = EX.headerBlueFill as any; c.alignment = EX.center; c.border = EX.borderGold; });
+
+      const sorted = filtered.sort((a, b) => {
+        const ma = minutaById.get(a.minutaId)!;
+        const mb = minutaById.get(b.minutaId)!;
+        return ma.fecha.localeCompare(mb.fecha);
+      });
+      sorted.forEach((p, idx) => {
+        const m = minutaById.get(p.minutaId);
+        const u = userById.get(p.userId);
+        const c = m ? casinoById.get(m.casinoId) : null;
+        const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
+        const opcionTexto = opciones[p.opcionSeleccionada - 1] || `Opción ${p.opcionSeleccionada}`;
+        const created = p.createdAt ? new Date(p.createdAt) : null;
+        const fechaConsumoStr = created
+          ? `${created.toLocaleDateString("es-CL")} ${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`
+          : "—";
+        const comensalLabel = p.tipo === "visita"
+          ? `VISITA — ${p.nombreVisita || ""}`
+          : (u ? `${u.rut} — ${u.nombre} ${u.apellido}` : "—");
+        const r = ws.addRow({
+          fechaConsumo: fechaConsumoStr,
+          comensal: comensalLabel,
+          casino: c?.nombre || "—",
+          opcion: opcionTexto,
+          fechaServ: m?.fecha || "—",
+          qr: p.codigoQr || "—",
+        });
+        const isEven = idx % 2 === 0;
+        r.eachCell(cell => { cell.font = EX.fontNormal; cell.fill = (isEven ? EX.whiteFill : EX.grayFill) as any; cell.border = EX.borderThin; cell.alignment = EX.left; });
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=Consumo_${fechaDesde}_a_${fechaHasta}.xlsx`);
+      return res.send(Buffer.from(buf as ArrayBuffer));
+    } catch (error) {
+      console.error("Consumo detalle error:", error);
+      return res.status(500).json({ message: "Error al generar reporte" });
+    }
+  });
+
+  // 3) Reporte minutas detalle del mes
+  app.get("/api/reportes/minutas-detalle", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { mes } = req.query as any; // mes = YYYY-MM
+      const casinoId = scopedCasinoId(req, req.query.casinoId as string);
+      if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return res.status(400).json({ message: "mes requerido (YYYY-MM)" });
+
+      const allMinutas = await storage.getAllMinutas();
+      const allCasinos = await storage.getCasinos();
+      const casinoById = new Map(allCasinos.map(c => [c.id, c]));
+
+      const filtered = allMinutas.filter(m => {
+        if (!m.fecha.startsWith(mes)) return false;
+        if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return false;
+        return true;
+      }).sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "BuenaMezcla";
+      const ws = wb.addWorksheet("Minutas del mes", { properties: { tabColor: { argb: "FFD4A843" } } });
+      ws.columns = [
+        { header: "Día Servicio", key: "fecha", width: 14 },
+        { header: "Casino", key: "casino", width: 26 },
+        { header: "Familia", key: "familia", width: 16 },
+        { header: "Opción N°", key: "num", width: 12 },
+        { header: "Preparación", key: "prep", width: 60 },
+      ];
+      buildHeader(ws, `MINUTAS DETALLE DEL MES — ${mes}`);
+      const headerRow = ws.getRow(4);
+      headerRow.values = ["Día Servicio", "Casino", "Familia", "Opción N°", "Preparación"];
+      headerRow.height = 26;
+      headerRow.eachCell(c => { c.font = EX.fontHeader; c.fill = EX.headerBlueFill as any; c.alignment = EX.center; c.border = EX.borderGold; });
+
+      let idx = 0;
+      filtered.forEach(m => {
+        const opts = [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5];
+        const c = casinoById.get(m.casinoId);
+        opts.forEach((op, i) => {
+          if (!op) return;
+          const r = ws.addRow({
+            fecha: m.fecha,
+            casino: c?.nombre || "—",
+            familia: m.familia || "—",
+            num: i + 1,
+            prep: op,
+          });
+          const isEven = idx % 2 === 0;
+          r.eachCell((cell, col) => {
+            cell.font = EX.fontNormal;
+            cell.fill = (isEven ? EX.whiteFill : EX.grayFill) as any;
+            cell.border = EX.borderThin;
+            cell.alignment = col === 4 ? EX.center : EX.left;
+          });
+          idx++;
+        });
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=Minutas_${mes}.xlsx`);
+      return res.send(Buffer.from(buf as ArrayBuffer));
+    } catch (error) {
+      console.error("Minutas detalle error:", error);
+      return res.status(500).json({ message: "Error al generar reporte" });
     }
   });
 

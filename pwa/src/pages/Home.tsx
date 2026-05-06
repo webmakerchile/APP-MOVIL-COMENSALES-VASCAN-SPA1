@@ -152,7 +152,7 @@ export default function Home() {
     enabled: !!user?.casinoId,
   });
 
-  const { data: periodoData } = useQuery<{ activo: boolean; periodo: unknown }>({
+  const { data: periodoData } = useQuery<{ activo: boolean; periodo: { fechaInicio: string; fechaFin: string } | null }>({
     queryKey: ["/api/periodo-activo", user?.casinoId ?? "none"],
     enabled: !!user?.casinoId,
   });
@@ -250,14 +250,21 @@ export default function Home() {
   }
 
   function handleSubmitWeek() {
-    if (!periodoActivo) {
+    if (!periodoActivo || !periodoData?.periodo) {
       showToast("No hay un periodo de inscripción activo. Contacta a tu administrador.", "warning");
       return;
     }
-    // Validate ALL visible days have a selection (new or already registered)
-    const unregistered = sortedMinutas.filter(m => !pedidoByMinuta[m.id] && !selections[m.id]);
+    // Validate ALL days within the ACTIVE PERIOD have a selection (new or already registered)
+    const pStart = new Date(periodoData.periodo.fechaInicio);
+    const pEnd = new Date(periodoData.periodo.fechaFin);
+    const startCheck = pStart < today ? today : pStart;
+    const minutasEnPeriodo = (minutas ?? []).filter(m => {
+      const d = parseDate(m.fecha);
+      return d >= startCheck && d <= pEnd;
+    });
+    const unregistered = minutasEnPeriodo.filter(m => !pedidoByMinuta[m.id] && !selections[m.id]);
     if (unregistered.length > 0) {
-      showToast(`Debes registrar todos los días del período. Faltan ${unregistered.length} día${unregistered.length > 1 ? "s" : ""}.`, "warning");
+      showToast(`Debes inscribir TODOS los días del período activo. Faltan ${unregistered.length} día${unregistered.length > 1 ? "s" : ""}.`, "warning");
       return;
     }
     const selArray = Object.values(selections);
@@ -315,8 +322,8 @@ export default function Home() {
       {/* ── Header ── */}
       <header className="flex-shrink-0 flex items-center justify-between px-5 pt-12 pb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-vascan-gold/15 border border-vascan-gold/20 flex items-center justify-center">
-            <span className="text-vascan-gold font-bold text-sm">V</span>
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-vascan-bg flex items-center justify-center">
+            <img src="/logo.png" alt="BuenaMezcla" className="w-full h-full object-cover" />
           </div>
           <div>
             <p className="text-white font-semibold text-base leading-tight">Hola, {user?.nombre}</p>
