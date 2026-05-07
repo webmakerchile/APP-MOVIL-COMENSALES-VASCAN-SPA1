@@ -16,6 +16,9 @@ set "LOGDIR=%APP%\logs"
 set "LOG=%LOGDIR%\updater.log"
 set "BACKUP=%APP%\..\app-backup"
 set "PORT=5000"
+REM Always invoke NSSM via absolute path; PATH may not include it under
+REM the scheduled-task service account.
+set "NSSM=%APP%\nssm\nssm.exe"
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 
 if not exist "%MARKER%" (
@@ -66,21 +69,24 @@ xcopy "%APP%\totem" "%BACKUP%\totem\" /e /i /q /y >nul
 copy "%APP%\version.txt" "%BACKUP%\version.txt" >nul 2>&1
 
 echo [%date% %time%] Detener servicio… >> "%LOG%"
-nssm stop BuenaMezclaTotem >> "%LOG%" 2>&1
+"%NSSM%" stop BuenaMezclaTotem >> "%LOG%" 2>&1
 
 echo [%date% %time%] Instalando %VER%… >> "%LOG%"
 "%INSTALLER%" /SILENT /SUPPRESSMSGBOXES /NORESTART >> "%LOG%" 2>&1
 set "INSTALL_RC=%ERRORLEVEL%"
 
 echo [%date% %time%] Reiniciar servicio… >> "%LOG%"
-nssm start BuenaMezclaTotem >> "%LOG%" 2>&1
+"%NSSM%" start BuenaMezclaTotem >> "%LOG%" 2>&1
 
 REM Esperar hasta 60s a que el server responda
 set /a TRIES=0
 :WAIT_HEALTH
 set /a TRIES+=1
 timeout /t 3 /nobreak >nul
-powershell -NoProfile -Command "try{$r=Invoke-WebRequest -Uri 'http://127.0.0.1:%PORT%/api/auth/me' -UseBasicParsing -TimeoutSec 2; exit 0}catch{exit 1}" >nul 2>&1
+REM Healthcheck: el server está sano si responde con 200 (raíz) o 401 (auth/me
+REM sin sesión). Sólo consideramos fallo cuando ni siquiera el socket TCP
+REM responde dentro del timeout.
+powershell -NoProfile -Command "try{Invoke-WebRequest -Uri 'http://127.0.0.1:%PORT%/api/auth/me' -UseBasicParsing -TimeoutSec 3 | Out-Null; exit 0}catch{ if($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -ge 200){exit 0} else {exit 1} }" >nul 2>&1
 if not errorlevel 1 (
   echo [%date% %time%] Update %VER% OK. >> "%LOG%"
   del "%MARKER%"
@@ -92,13 +98,13 @@ if %TRIES% LSS 20 goto WAIT_HEALTH
 
 REM === ROLLBACK ===
 echo [%date% %time%] Healthcheck FALLO tras update %VER%. ROLLBACK. >> "%LOG%"
-nssm stop BuenaMezclaTotem >> "%LOG%" 2>&1
+"%NSSM%" stop BuenaMezclaTotem >> "%LOG%" 2>&1
 xcopy "%BACKUP%\node" "%APP%\node\" /e /i /q /y >nul
 xcopy "%BACKUP%\server" "%APP%\server\" /e /i /q /y >nul
 xcopy "%BACKUP%\pwa" "%APP%\pwa\" /e /i /q /y >nul
 xcopy "%BACKUP%\totem" "%APP%\totem\" /e /i /q /y >nul
 copy "%BACKUP%\version.txt" "%APP%\version.txt" >nul 2>&1
-nssm start BuenaMezclaTotem >> "%LOG%" 2>&1
+"%NSSM%" start BuenaMezclaTotem >> "%LOG%" 2>&1
 del "%MARKER%"
 del "%INSTALLER%"
 rmdir /s /q "%BACKUP%"
