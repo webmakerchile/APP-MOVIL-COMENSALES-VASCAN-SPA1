@@ -1,0 +1,283 @@
+// Cloud-side sync API used by remote totems.
+// Authentication: each totem holds an `X-Totem-Id` + `X-Totem-Secret` pair
+// (the secret is bcrypt-hashed in the DB). On every request we look up the
+// totem, compare the hash, and reject if invalid.
+//
+// Endpoints (mounted under /api/totem):
+//   POST /register       — first-time registration with admin token
+//   POST /heartbeat      — keepalive + status report
+//   GET  /pull?since=ms  — returns master data changed since `since`
+//                          (scoped to the totem's casino)
+//   POST /push           — accepts an array of pedido upserts
+//   GET  /version/latest — returns latest published release (for self-update)
+import type { Express, Request, Response, NextFunction } from "express";
+import bcrypt from "bcryptjs";
+import { db } from "./db";
+import { totems, totemReleases, users, casinos, minutas, familias, periodos, pedidos, type Totem } from "@shared/schema";
+import { storage } from "./storage";
+import { eq, and, gt, sql } from "drizzle-orm";
+
+interface AuthedTotemRequest extends Request {
+  totem?: Totem;
+}
+
+async function requireTotem(req: AuthedTotemRequest, res: Response, next: NextFunction) {
+  const id = req.header("x-totem-id");
+  const secret = req.header("x-totem-secret");
+  if (!id || !secret) return res.status(401).json({ message: "Faltan credenciales del tótem" });
+  const [t] = await db.select().from(totems).where(eq(totems.id, id));
+  if (!t || !t.activo) return res.status(401).json({ message: "Tótem no autorizado" });
+  const ok = await bcrypt.compare(secret, t.secretHash);
+  if (!ok) return res.status(401).json({ message: "Credenciales inválidas" });
+  req.totem = t;
+  next();
+}
+
+// Registration uses a one-time bootstrap token. Tokens are stored hashed
+// in-memory with a 1h expiry. They self-destruct on first successful use so
+// they cannot be replayed.
+type TokenRec = { hash: string; expiresAt: number; createdBy: string };
+const bootstrapTokens: TokenRec[] = [];
+
+export function issueBootstrapToken(createdBy: string): string {
+  const buf = require("crypto").randomBytes(24).toString("base64url");
+  const hash = require("crypto").createHash("sha256").update(buf).digest("hex");
+  // Purge expired
+  const now = Date.now();
+  for (let i = bootstrapTokens.length - 1; i >= 0; i--) {
+    if (bootstrapTokens[i].expiresAt < now) bootstrapTokens.splice(i, 1);
+  }
+  bootstrapTokens.push({ hash, expiresAt: now + 60 * 60 * 1000, createdBy });
+  return buf;
+}
+
+function consumeBootstrapToken(token: string): boolean {
+  const hash = require("crypto").createHash("sha256").update(token).digest("hex");
+  const now = Date.now();
+  const idx = bootstrapTokens.findIndex(t => t.hash === hash && t.expiresAt > now);
+  if (idx < 0) {
+    // Allow env-var token as fallback (no auto-revoke)
+    return !!process.env.TOTEM_BOOTSTRAP_TOKEN && token === process.env.TOTEM_BOOTSTRAP_TOKEN;
+  }
+  bootstrapTokens.splice(idx, 1); // single-use
+  return true;
+}
+
+async function requireBootstrapToken(req: Request, res: Response, next: NextFunction) {
+  const token = req.header("x-bootstrap-token");
+  if (!token || !consumeBootstrapToken(token)) {
+    return res.status(401).json({ message: "Token de instalación inválido o expirado" });
+  }
+  next();
+}
+
+export function registerSyncRoutes(app: Express) {
+  // ── Register a new totem ────────────────────────────────────────────────
+  // Body: { nombre, casinoId, hostname?, ipLocal?, version? }
+  // Response: { totemId, secret } — the secret is shown ONCE.
+  app.post("/api/totem/register", requireBootstrapToken, async (req: Request, res: Response) => {
+    try {
+      const { nombre, casinoId, hostname, ipLocal, version } = req.body;
+      if (!nombre || !casinoId) {
+        return res.status(400).json({ message: "Faltan campos: nombre, casinoId" });
+      }
+      const casino = await storage.getCasino(casinoId);
+      if (!casino) return res.status(404).json({ message: "Casino no existe" });
+
+      const secret = generateSecret(48);
+      const secretHash = await bcrypt.hash(secret, 10);
+      const ipPublica = (req.ip || req.socket.remoteAddress || "").replace("::ffff:", "");
+
+      const [t] = await db.insert(totems).values({
+        nombre,
+        casinoId,
+        secretHash,
+        hostname,
+        ipLocal,
+        ipPublica,
+        version,
+        ultimaConexion: new Date(),
+        estado: "online",
+      }).returning();
+
+      return res.status(201).json({
+        totemId: t.id,
+        secret,
+        casino: { id: casino.id, nombre: casino.nombre },
+      });
+    } catch (err) {
+      console.error("totem register error", err);
+      return res.status(500).json({ message: "Error al registrar tótem" });
+    }
+  });
+
+  // ── Heartbeat ───────────────────────────────────────────────────────────
+  app.post("/api/totem/heartbeat", requireTotem, async (req: AuthedTotemRequest, res: Response) => {
+    try {
+      const t = req.totem!;
+      const { version, pedidosPendientes, ipLocal, hostname } = req.body || {};
+      const ipPublica = (req.ip || req.socket.remoteAddress || "").replace("::ffff:", "");
+      await db.update(totems).set({
+        ultimaConexion: new Date(),
+        version: version ?? t.version,
+        pedidosPendientes: typeof pedidosPendientes === "number" ? pedidosPendientes : t.pedidosPendientes,
+        ipPublica,
+        ipLocal: ipLocal ?? t.ipLocal,
+        hostname: hostname ?? t.hostname,
+        estado: "online",
+      }).where(eq(totems.id, t.id));
+      return res.json({ ok: true, serverTime: Date.now() });
+    } catch (err) {
+      console.error("heartbeat error", err);
+      return res.status(500).json({ message: "Error en heartbeat" });
+    }
+  });
+
+  // ── Pull master data ────────────────────────────────────────────────────
+  // Returns rows from each table where updatedAt > since, scoped to the
+  // totem's casino where applicable. Tombstones (deletedAt set) are included
+  // so the client can mirror deletions.
+  app.get("/api/totem/pull", requireTotem, async (req: AuthedTotemRequest, res: Response) => {
+    try {
+      const t = req.totem!;
+      const since = new Date(parseInt((req.query.since as string) || "0", 10));
+      const limit = Math.min(parseInt((req.query.limit as string) || "5000", 10), 10000);
+
+      // Scope: the totem's own casino + global tables (familias).
+      const casinoFilter = (col: any) => eq(col, t.casinoId);
+
+      const [casinosRows, familiasRows, usersRows, minutasRows, periodosRows] = await Promise.all([
+        db.select().from(casinos).where(and(gt(casinos.updatedAt, since), eq(casinos.id, t.casinoId))).limit(limit),
+        db.select().from(familias).where(gt(familias.updatedAt, since)).limit(limit),
+        db.select().from(users).where(and(gt(users.updatedAt, since), casinoFilter(users.casinoId))).limit(limit),
+        db.select().from(minutas).where(and(gt(minutas.updatedAt, since), casinoFilter(minutas.casinoId))).limit(limit),
+        db.select().from(periodos).where(and(gt(periodos.updatedAt, since), casinoFilter(periodos.casinoId))).limit(limit),
+      ]);
+
+      // Update last sync marker
+      await db.update(totems).set({ ultimoSync: new Date() }).where(eq(totems.id, t.id));
+
+      // Compute the high-water mark from the rows actually returned so the
+      // client advances its cursor only past data it has seen. Avoids the
+      // "skip changes committed during pull window" race when paginating.
+      const allRows = [...casinosRows, ...familiasRows, ...usersRows, ...minutasRows, ...periodosRows];
+      const maxUpdatedAt = allRows.reduce((m, r: any) => {
+        const ts = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
+        return ts > m ? ts : m;
+      }, since.getTime());
+
+      return res.json({
+        serverTime: Date.now(),
+        since: since.getTime(),
+        // Client should set its next cursor to this exact value, NOT serverTime.
+        nextCursor: maxUpdatedAt,
+        data: {
+          casinos:  casinosRows,
+          familias: familiasRows,
+          users:    usersRows,
+          minutas:  minutasRows,
+          periodos: periodosRows,
+        },
+      });
+    } catch (err) {
+      console.error("pull error", err);
+      return res.status(500).json({ message: "Error al sincronizar pull" });
+    }
+  });
+
+  // ── Push pedidos generated locally on the totem ─────────────────────────
+  // Body: { pedidos: [{ id, userId, minutaId, opcionSeleccionada, tipo, nombreVisita?, codigoQr?, createdAt(ms), origenTotemId }] }
+  // Returns: { accepted: [ids], rejected: [{id, reason}] }
+  app.post("/api/totem/push", requireTotem, async (req: AuthedTotemRequest, res: Response) => {
+    try {
+      const t = req.totem!;
+      const incoming: any[] = Array.isArray(req.body?.pedidos) ? req.body.pedidos : [];
+      const accepted: string[] = [];
+      const rejected: { id: string; reason: string }[] = [];
+
+      for (const p of incoming) {
+        try {
+          if (!p.id || !p.userId || !p.minutaId) {
+            rejected.push({ id: p.id ?? "?", reason: "Faltan campos requeridos" });
+            continue;
+          }
+          // Validate references exist and belong to this casino (defence in depth)
+          const [m] = await db.select().from(minutas).where(eq(minutas.id, p.minutaId));
+          if (!m) { rejected.push({ id: p.id, reason: "Minuta no existe" }); continue; }
+          if (m.casinoId !== t.casinoId) { rejected.push({ id: p.id, reason: "Minuta de otro casino" }); continue; }
+          const [u] = await db.select().from(users).where(eq(users.id, p.userId));
+          if (!u) { rejected.push({ id: p.id, reason: "Usuario no existe" }); continue; }
+
+          const payload: any = {
+            id: p.id,
+            userId: p.userId,
+            minutaId: p.minutaId,
+            opcionSeleccionada: p.opcionSeleccionada ?? 0,
+            tipo: p.tipo || "seleccion",
+            nombreVisita: p.nombreVisita ?? null,
+            codigoQr: p.codigoQr ?? null,
+            createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+            origenTotemId: t.id,
+            updatedAt: new Date(),
+            syncVersion: Date.now(),
+          };
+
+          await db.insert(pedidos).values(payload).onConflictDoUpdate({
+            target: pedidos.id,
+            set: {
+              opcionSeleccionada: payload.opcionSeleccionada,
+              tipo: payload.tipo,
+              nombreVisita: payload.nombreVisita,
+              codigoQr: payload.codigoQr,
+              updatedAt: payload.updatedAt,
+              syncVersion: payload.syncVersion,
+              origenTotemId: t.id,
+            },
+          });
+          accepted.push(p.id);
+        } catch (e: any) {
+          rejected.push({ id: p.id ?? "?", reason: e?.message || "error" });
+        }
+      }
+
+      // Update pending counter (server-side hint; client also tracks locally)
+      const remaining = Math.max(0, (t.pedidosPendientes ?? 0) - accepted.length);
+      await db.update(totems).set({
+        pedidosPendientes: remaining,
+        ultimoSync: new Date(),
+        ultimaConexion: new Date(),
+      }).where(eq(totems.id, t.id));
+
+      return res.json({ accepted, rejected, serverTime: Date.now() });
+    } catch (err) {
+      console.error("push error", err);
+      return res.status(500).json({ message: "Error al sincronizar push" });
+    }
+  });
+
+  // ── Latest release info (for auto-update) ───────────────────────────────
+  app.get("/api/totem/version/latest", requireTotem, async (_req, res) => {
+    try {
+      const [r] = await db.select().from(totemReleases)
+        .where(eq(totemReleases.publicada, true))
+        .orderBy(sql`created_at DESC`)
+        .limit(1);
+      if (!r) return res.json({ version: null });
+      return res.json({ version: r.version, url: r.url, sha256: r.sha256, obligatoria: r.obligatoria, notas: r.notas });
+    } catch (err) {
+      console.error("version latest error", err);
+      return res.status(500).json({ message: "Error al consultar versión" });
+    }
+  });
+
+  // ── Fleet view (admin-only) ─────────────────────────────────────────────
+  // Mounted in routes.ts since it needs the requireAdmin middleware there.
+}
+
+function generateSecret(len = 48) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let out = "";
+  const bytes = require("crypto").randomBytes(len);
+  for (let i = 0; i < len; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}

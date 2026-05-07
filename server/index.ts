@@ -87,14 +87,25 @@ function setupRequestLogging(app: express.Application) {
       return originalResJson.apply(res, [bodyJson, ...args]);
     };
 
+    // Routes whose response bodies contain secrets (bootstrap tokens, totem
+    // secrets, session credentials). Never log their bodies.
+    const SENSITIVE = [
+      "/api/totems/bootstrap-token",
+      "/api/totem/register",
+      "/api/auth/login",
+    ];
+
     res.on("finish", () => {
       if (!path.startsWith("/api")) return;
 
       const duration = Date.now() - start;
 
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      const isSensitive = SENSITIVE.some(p => path.startsWith(p));
+      if (capturedJsonResponse && !isSensitive) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      } else if (isSensitive) {
+        logLine += ` :: [redacted]`;
       }
 
       if (logLine.length > 80) {

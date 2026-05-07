@@ -241,6 +241,7 @@
         { id: 'familias', label: 'Familias', icon: 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z', roles: ['admin'] },
         { id: 'periodos', label: 'Periodos', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', roles: ['admin'] },
         { id: 'carga', label: 'Carga Masiva', icon: 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12', roles: ['admin'] },
+        { id: 'totems', label: 'Tótems', icon: 'M9 17v-2a4 4 0 014-4h6m0 0l-3-3m3 3l-3 3M7 7h.01M7 3h5a2 2 0 012 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z', roles: ['admin'] },
       ];
       const items = allItems.filter(item => item.roles.includes(user?.role || 'admin'));
 
@@ -2086,6 +2087,7 @@
         familias: FamiliasView,
         periodos: PeriodosView,
         carga: CargaMasivaView,
+        totems: TotemsView,
       };
 
       const CurrentView = views[view] || DashboardView;
@@ -2096,6 +2098,210 @@
           <main className="flex-1 p-8 overflow-y-auto">
             <CurrentView key={view} user={user} />
           </main>
+        </div>
+      );
+    }
+
+    // ── Tótems (Fleet) ──
+    function TotemsView() {
+      const [totems, setTotems] = useState([]);
+      const [casinos, setCasinos] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [token, setToken] = useState(null);
+      const [showInstaller, setShowInstaller] = useState(false);
+      const [releases, setReleases] = useState([]);
+      const [showRelease, setShowRelease] = useState(false);
+      const [releaseForm, setReleaseForm] = useState({ version: '', url: '', sha256: '', notas: '', obligatoria: false, publicada: true });
+
+      function load() {
+        setLoading(true);
+        Promise.all([
+          apiFetch('/api/totems'),
+          apiFetch('/api/casinos/all'),
+          apiFetch('/api/totem-releases').catch(() => []),
+        ]).then(([t, c, r]) => { setTotems(t); setCasinos(c); setReleases(r); })
+          .finally(() => setLoading(false));
+      }
+      useEffect(() => { load(); const i = setInterval(load, 30000); return () => clearInterval(i); }, []);
+
+      function casinoNombre(id) { return (casinos.find(c => c.id === id) || {}).nombre || '—'; }
+      function fmtDate(d) { if (!d) return '—'; const dt = new Date(d); return dt.toLocaleString('es-CL'); }
+      function ageMin(d) { if (!d) return '∞'; return Math.floor((Date.now() - new Date(d).getTime()) / 60000); }
+
+      function badgeFor(estado) {
+        const map = {
+          online: 'bg-green-500/20 text-green-400',
+          intermitente: 'bg-yellow-500/20 text-yellow-400',
+          offline: 'bg-red-500/20 text-red-400',
+        };
+        return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[estado] || map.offline}`}>{estado}</span>;
+      }
+
+      async function generateToken() {
+        const r = await apiFetch('/api/totems/bootstrap-token', { method: 'POST' });
+        setToken(r.token);
+        setShowInstaller(true);
+      }
+
+      async function toggleActivo(t) {
+        await apiFetch(`/api/totems/${t.id}`, { method: 'PUT', body: JSON.stringify({ activo: !t.activo }) });
+        load();
+      }
+      async function deleteTotem(t) {
+        if (!confirm(`¿Eliminar tótem "${t.nombre}"? Sus pedidos sincronizados se mantendrán.`)) return;
+        await apiFetch(`/api/totems/${t.id}`, { method: 'DELETE' });
+        load();
+      }
+
+      async function createRelease(e) {
+        e.preventDefault();
+        try {
+          await apiFetch('/api/totem-releases', { method: 'POST', body: JSON.stringify(releaseForm) });
+          setReleaseForm({ version: '', url: '', sha256: '', notas: '', obligatoria: false, publicada: true });
+          setShowRelease(false);
+          load();
+        } catch (err) { alert(err.message || 'Error'); }
+      }
+      async function togglePublish(r) {
+        await apiFetch(`/api/totem-releases/${r.id}`, { method: 'PUT', body: JSON.stringify({ publicada: !r.publicada }) });
+        load();
+      }
+
+      if (loading) return <LoadingSpinner />;
+
+      return (
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold">Tótems</h1>
+              <p className="text-sm text-white/60 mt-1">Estaciones offline en cada casino. Sincronizan automáticamente con la nube.</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowRelease(true)} className="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-sm font-medium">Nueva versión</button>
+              <button onClick={generateToken} className="px-4 py-2 bg-vascan-gold text-vascan-bg hover:bg-vascan-gold/90 rounded-xl text-sm font-bold">+ Instalar nuevo tótem</button>
+            </div>
+          </div>
+
+          <div className="bg-vascan-surface border border-white/10 rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-white/5 text-white/60">
+                <tr>
+                  <th className="text-left px-4 py-3">Nombre</th>
+                  <th className="text-left px-4 py-3">Casino</th>
+                  <th className="text-left px-4 py-3">Estado</th>
+                  <th className="text-left px-4 py-3">Última conexión</th>
+                  <th className="text-left px-4 py-3">Pendientes</th>
+                  <th className="text-left px-4 py-3">Versión</th>
+                  <th className="text-left px-4 py-3">IP</th>
+                  <th className="text-left px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {totems.length === 0 && (
+                  <tr><td colSpan={8} className="px-4 py-12 text-center text-white/40">No hay tótems registrados todavía. Generá un token e instalá el primero.</td></tr>
+                )}
+                {totems.map(t => (
+                  <tr key={t.id} className="border-t border-white/5">
+                    <td className="px-4 py-3 font-medium">
+                      {t.nombre}
+                      {!t.activo && <span className="ml-2 text-xs text-white/40">(inactivo)</span>}
+                    </td>
+                    <td className="px-4 py-3 text-white/70">{casinoNombre(t.casinoId)}</td>
+                    <td className="px-4 py-3">{badgeFor(t.estado)}</td>
+                    <td className="px-4 py-3 text-white/60">
+                      {fmtDate(t.ultimaConexion)}
+                      <div className="text-xs text-white/40">hace {ageMin(t.ultimaConexion)} min</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={t.pedidosPendientes > 0 ? 'text-yellow-400 font-bold' : 'text-white/40'}>{t.pedidosPendientes ?? 0}</span>
+                    </td>
+                    <td className="px-4 py-3 text-white/60">{t.version || '—'}</td>
+                    <td className="px-4 py-3 text-white/60 text-xs">
+                      <div>pub: {t.ipPublica || '—'}</div>
+                      <div>local: {t.ipLocal || '—'}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button onClick={() => toggleActivo(t)} className="text-xs text-vascan-gold hover:underline mr-3">{t.activo ? 'Desactivar' : 'Activar'}</button>
+                      <button onClick={() => deleteTotem(t)} className="text-xs text-red-400 hover:underline">Eliminar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-8">
+            <h2 className="text-lg font-bold mb-3">Versiones publicadas</h2>
+            <div className="bg-vascan-surface border border-white/10 rounded-2xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-white/5 text-white/60">
+                  <tr>
+                    <th className="text-left px-4 py-3">Versión</th>
+                    <th className="text-left px-4 py-3">URL</th>
+                    <th className="text-left px-4 py-3">Publicada</th>
+                    <th className="text-left px-4 py-3">Obligatoria</th>
+                    <th className="text-left px-4 py-3">Notas</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {releases.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-white/40">Sin versiones publicadas</td></tr>}
+                  {releases.map(r => (
+                    <tr key={r.id} className="border-t border-white/5">
+                      <td className="px-4 py-3 font-mono">{r.version}</td>
+                      <td className="px-4 py-3 text-white/60 text-xs truncate max-w-xs"><a href={r.url} target="_blank" className="hover:text-vascan-gold">{r.url}</a></td>
+                      <td className="px-4 py-3">{r.publicada ? '✓' : '—'}</td>
+                      <td className="px-4 py-3">{r.obligatoria ? '✓' : '—'}</td>
+                      <td className="px-4 py-3 text-white/60 text-xs">{r.notas || '—'}</td>
+                      <td className="px-4 py-3 text-right"><button onClick={() => togglePublish(r)} className="text-xs text-vascan-gold hover:underline">{r.publicada ? 'Despublicar' : 'Publicar'}</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {showInstaller && token && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setShowInstaller(false)}>
+              <div className="bg-vascan-surface border border-white/10 rounded-2xl p-6 max-w-2xl w-full" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold mb-2">Instalar nuevo tótem</h3>
+                <p className="text-sm text-white/60 mb-4">Token de instalación de un solo uso. Válido hasta el próximo reinicio del servidor.</p>
+                <div className="bg-vascan-bg border border-white/10 rounded-xl p-4 mb-4">
+                  <div className="text-xs text-white/40 mb-1">Token</div>
+                  <code className="text-vascan-gold text-sm break-all">{token}</code>
+                </div>
+                <div className="text-sm text-white/70 space-y-2">
+                  <p><strong>1.</strong> Descargá el instalador <code className="bg-vascan-bg px-1 rounded">BuenaMezclaTotem-Setup.exe</code> en el PC del comedor.</p>
+                  <p><strong>2.</strong> Durante la instalación, ingresá:</p>
+                  <ul className="ml-4 space-y-1 text-white/60 text-xs">
+                    <li>• URL Cloud: <code className="text-vascan-gold">{location.origin}</code></li>
+                    <li>• Token: el de arriba</li>
+                    <li>• Casino al que pertenece</li>
+                  </ul>
+                  <p><strong>3.</strong> El instalador registra el tótem y lo arranca como servicio Windows en modo kiosk.</p>
+                </div>
+                <button onClick={() => setShowInstaller(false)} className="mt-4 px-4 py-2 bg-vascan-gold text-vascan-bg rounded-xl text-sm font-bold">Listo</button>
+              </div>
+            </div>
+          )}
+
+          {showRelease && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setShowRelease(false)}>
+              <form onSubmit={createRelease} className="bg-vascan-surface border border-white/10 rounded-2xl p-6 max-w-lg w-full space-y-3" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold">Nueva versión del tótem</h3>
+                <div><label className="text-xs text-white/60">Versión (ej. 1.2.0)</label><input required className="w-full px-3 py-2 bg-vascan-bg border border-white/10 rounded-lg" value={releaseForm.version} onChange={e => setReleaseForm({...releaseForm, version: e.target.value})} /></div>
+                <div><label className="text-xs text-white/60">URL del instalador (.exe)</label><input required className="w-full px-3 py-2 bg-vascan-bg border border-white/10 rounded-lg" value={releaseForm.url} onChange={e => setReleaseForm({...releaseForm, url: e.target.value})} /></div>
+                <div><label className="text-xs text-white/60">SHA-256 del instalador</label><input required className="w-full px-3 py-2 bg-vascan-bg border border-white/10 rounded-lg font-mono text-xs" value={releaseForm.sha256} onChange={e => setReleaseForm({...releaseForm, sha256: e.target.value})} /></div>
+                <div><label className="text-xs text-white/60">Notas</label><textarea className="w-full px-3 py-2 bg-vascan-bg border border-white/10 rounded-lg" rows={2} value={releaseForm.notas} onChange={e => setReleaseForm({...releaseForm, notas: e.target.value})} /></div>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={releaseForm.obligatoria} onChange={e => setReleaseForm({...releaseForm, obligatoria: e.target.checked})} /> Obligatoria</label>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={releaseForm.publicada} onChange={e => setReleaseForm({...releaseForm, publicada: e.target.checked})} /> Publicar inmediatamente</label>
+                <div className="flex gap-2 pt-2">
+                  <button type="button" onClick={() => setShowRelease(false)} className="flex-1 px-4 py-2 bg-white/5 rounded-xl text-sm">Cancelar</button>
+                  <button type="submit" className="flex-1 px-4 py-2 bg-vascan-gold text-vascan-bg rounded-xl text-sm font-bold">Crear</button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       );
     }

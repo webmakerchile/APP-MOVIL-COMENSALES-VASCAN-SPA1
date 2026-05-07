@@ -10,8 +10,10 @@ import * as path from "path";
 import * as fs from "fs";
 import { storage } from "./storage";
 import { pool, db } from "./db";
-import { loginSchema, insertUserSchema, insertMinutaSchema, insertPedidoSchema, insertCasinoSchema, pedidos as pedidosTable } from "@shared/schema";
+import { loginSchema, insertUserSchema, insertMinutaSchema, insertPedidoSchema, insertCasinoSchema, pedidos as pedidosTable, totems as totemsTable, totemReleases as totemReleasesTable } from "@shared/schema";
 import { generateDailyReport } from "./cron";
+import { registerSyncRoutes, issueBootstrapToken } from "./sync-cloud";
+import { eq as eqOp, sql as sqlOp } from "drizzle-orm";
 
 const PgSession = connectPgSimple(session);
 const upload = multer({ dest: "/tmp/uploads/" });
@@ -229,13 +231,14 @@ async function autoSeed() {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // In totem mode there is no Postgres pool, fall back to in-memory session
+  // store. The totem only has one logged-in operator at a time so memory is fine.
+  const sessionStore = pool
+    ? new PgSession({ pool, tableName: "session", createTableIfMissing: true })
+    : new (session as any).MemoryStore();
   app.use(
     session({
-      store: new PgSession({
-        pool,
-        tableName: "session",
-        createTableIfMissing: true,
-      }),
+      store: sessionStore,
       secret: process.env.SESSION_SECRET || "vascan-dev-fallback-secret",
       resave: false,
       saveUninitialized: false,
@@ -2432,6 +2435,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Seed error:", error);
       return res.status(500).json({ message: "Error al crear datos de prueba" });
+    }
+  });
+
+  // ── Sync API for tótems ───────────────────────────────────────────────
+  registerSyncRoutes(app);
+
+  // Strict admin gate: fleet management is dangerous (mints bootstrap tokens,
+  // publishes auto-update releases) so we exclude `interlocutor`.
+  function requireAdminStrict(req: Request, res: Response, next: Function) {
+    const userId = (req.session as any).userId;
+    if (!userId) return res.status(401).json({ message: "No autenticado" });
+    storage.getUser(userId).then(u => {
+      if (!u || u.role !== "admin") return res.status(403).json({ message: "Solo administradores" });
+      (req as any).currentUser = u;
+      next();
+    }).catch(() => res.status(500).json({ message: "Error de autenticación" }));
+  }
+
+  // ── Fleet management (admin only) ─────────────────────────────────────
+  app.get("/api/totems", requireAdminStrict, async (_req, res) => {
+    try {
+      const list = await db.select().from(totemsTable);
+      const now = Date.now();
+      const enriched = list.map((t: any) => {
+        const last = t.ultimaConexion ? new Date(t.ultimaConexion).getTime() : 0;
+        const ageMs = now - last;
+        let estado = "offline";
+        if (last && ageMs < 2 * 60 * 1000) estado = "online";
+        else if (last && ageMs < 10 * 60 * 1000) estado = "intermitente";
+        return { ...t, estado, secretHash: undefined };
+      });
+      res.json(enriched);
+    } catch (err) {
+      console.error("list totems error", err);
+      res.status(500).json({ message: "Error al listar tótems" });
+    }
+  });
+
+  app.put("/api/totems/:id", requireAdminStrict, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { nombre, notas, activo } = req.body;
+      const updateData: any = {};
+      if (nombre !== undefined) updateData.nombre = nombre;
+      if (notas !== undefined) updateData.notas = notas;
+      if (activo !== undefined) updateData.activo = activo;
+      const [updated] = await db.update(totemsTable).set(updateData).where(eqOp(totemsTable.id, id)).returning();
+      if (!updated) return res.status(404).json({ message: "No encontrado" });
+      res.json({ ...updated, secretHash: undefined });
+    } catch (err) {
+      res.status(500).json({ message: "Error al actualizar tótem" });
+    }
+  });
+
+  app.delete("/api/totems/:id", requireAdminStrict, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await db.delete(totemsTable).where(eqOp(totemsTable.id, id));
+      res.json({ message: "Tótem eliminado" });
+    } catch (err) {
+      res.status(500).json({ message: "Error al eliminar tótem" });
+    }
+  });
+
+  // Bootstrap-token endpoints: admin generates a one-shot token used by the
+  // installer on the totem PC during /api/totem/register.
+  app.post("/api/totems/bootstrap-token", requireAdminStrict, async (req, res) => {
+    try {
+      const u = (req as any).currentUser;
+      const token = issueBootstrapToken(u?.rut || "admin");
+      res.json({ token, expiresInfo: "Válido por 1 hora. Se invalida al usarse (single-use)." });
+    } catch (err) {
+      res.status(500).json({ message: "Error al generar token" });
+    }
+  });
+
+  // Releases CRUD (publish new totem versions for auto-update)
+  app.get("/api/totem-releases", requireAdminStrict, async (_req, res) => {
+    try {
+      const list = await db.select().from(totemReleasesTable).orderBy(sqlOp`created_at DESC`);
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ message: "Error al listar versiones" });
+    }
+  });
+
+  app.post("/api/totem-releases", requireAdminStrict, async (req, res) => {
+    try {
+      const { version, url, sha256, notas, obligatoria, publicada } = req.body;
+      if (!version || !url || !sha256) return res.status(400).json({ message: "Faltan campos" });
+      const [r] = await db.insert(totemReleasesTable).values({
+        version, url, sha256,
+        notas: notas ?? null,
+        obligatoria: !!obligatoria,
+        publicada: publicada !== false,
+      }).returning();
+      res.status(201).json(r);
+    } catch (err: any) {
+      if (err?.code === "23505") return res.status(409).json({ message: "Versión duplicada" });
+      res.status(500).json({ message: "Error al crear versión" });
+    }
+  });
+
+  app.put("/api/totem-releases/:id", requireAdminStrict, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { publicada, obligatoria, notas, url, sha256 } = req.body;
+      const upd: any = {};
+      if (publicada !== undefined) upd.publicada = publicada;
+      if (obligatoria !== undefined) upd.obligatoria = obligatoria;
+      if (notas !== undefined) upd.notas = notas;
+      if (url !== undefined) upd.url = url;
+      if (sha256 !== undefined) upd.sha256 = sha256;
+      const [r] = await db.update(totemReleasesTable).set(upd).where(eqOp(totemReleasesTable.id, id)).returning();
+      if (!r) return res.status(404).json({ message: "No encontrado" });
+      res.json(r);
+    } catch (err) {
+      res.status(500).json({ message: "Error al actualizar versión" });
     }
   });
 
