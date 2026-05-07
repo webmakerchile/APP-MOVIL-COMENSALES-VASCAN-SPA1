@@ -18,6 +18,16 @@ export const userRoleEnum = pgEnum("user_role", [
   "interlocutor",
 ]);
 
+// Sync helper columns shared by all syncable tables.
+// updatedAt: last modification timestamp (used as sync cursor).
+// deletedAt: tombstone marker (null = alive).
+// syncVersion: monotonic ms counter, bumped on every write (used for ordering).
+const syncCols = {
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+  syncVersion: integer("sync_version").notNull().default(0),
+};
+
 export const users = pgTable("users", {
   id: varchar("id")
     .primaryKey()
@@ -31,6 +41,7 @@ export const users = pgTable("users", {
   casinoId: varchar("casino_id").references(() => casinos.id),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  ...syncCols,
 });
 
 export const casinos = pgTable("casinos", {
@@ -42,6 +53,7 @@ export const casinos = pgTable("casinos", {
   comensalesDiarios: integer("comensales_diarios").notNull().default(0),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  ...syncCols,
 });
 
 export const familias = pgTable("familias", {
@@ -52,6 +64,7 @@ export const familias = pgTable("familias", {
   color: text("color").notNull().default("#D4A843"),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  ...syncCols,
 });
 
 export const minutas = pgTable("minutas", {
@@ -70,6 +83,7 @@ export const minutas = pgTable("minutas", {
   opcion5: text("opcion_5"),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  ...syncCols,
 });
 
 export const periodos = pgTable("periodos", {
@@ -84,6 +98,7 @@ export const periodos = pgTable("periodos", {
   fechaFin: timestamp("fecha_fin").notNull(),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  ...syncCols,
 });
 
 export const pedidos = pgTable("pedidos", {
@@ -103,9 +118,46 @@ export const pedidos = pgTable("pedidos", {
     .notNull()
     .default(false),
   codigoQr: text("codigo_qr"),
+  origenTotemId: varchar("origen_totem_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  ...syncCols,
+});
+
+// ── Fleet management (cloud-only) ──────────────────────────────────────────
+export const totems = pgTable("totems", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  nombre: text("nombre").notNull(),
+  casinoId: varchar("casino_id").notNull().references(() => casinos.id),
+  secretHash: text("secret_hash").notNull(),
+  version: text("version"),
+  ipPublica: text("ip_publica"),
+  ipLocal: text("ip_local"),
+  hostname: text("hostname"),
+  ultimaConexion: timestamp("ultima_conexion"),
+  ultimoSync: timestamp("ultimo_sync"),
+  pedidosPendientes: integer("pedidos_pendientes").notNull().default(0),
+  estado: text("estado").notNull().default("offline"),
+  notas: text("notas"),
+  activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const totemReleases = pgTable("totem_releases", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  version: text("version").notNull().unique(),
+  url: text("url").notNull(),
+  sha256: text("sha256").notNull(),
+  notas: text("notas"),
+  obligatoria: boolean("obligatoria").notNull().default(false),
+  publicada: boolean("publicada").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ── Schemas / types ────────────────────────────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).pick({
   rut: true,
   password: true,
@@ -171,3 +223,9 @@ export type Pedido = typeof pedidos.$inferSelect;
 export type InsertPedido = z.infer<typeof insertPedidoSchema>;
 export type Periodo = typeof periodos.$inferSelect;
 export type InsertPeriodo = z.infer<typeof insertPeriodoSchema>;
+export type Totem = typeof totems.$inferSelect;
+export type TotemRelease = typeof totemReleases.$inferSelect;
+
+// List of syncable tables in canonical order (master-first; pedidos last because of FKs)
+export const SYNC_TABLES = ["casinos", "familias", "users", "minutas", "periodos", "pedidos"] as const;
+export type SyncTable = (typeof SYNC_TABLES)[number];
