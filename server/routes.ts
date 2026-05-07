@@ -251,14 +251,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }),
   );
 
-  await autoSeed();
-  await ensureSuperAdmin();
+  // Seed/super-admin solo en cloud. Un tótem nunca debe crear datos sintéticos
+  // ni un super-admin global; sus datos llegan exclusivamente vía sync-pull.
+  if (process.env.DB_MODE !== "totem") {
+    await autoSeed();
+    await ensureSuperAdmin();
+  }
 
   // ── Admin Panel ──
-  app.get("/admin", (_req: Request, res: Response) => {
-    const filePath = path.resolve(process.cwd(), "web", "src", "admin.html");
-    res.sendFile(filePath);
-  });
+  // En modo tótem el panel admin no se expone: el tótem es un kiosko, la
+  // administración solo ocurre en la nube y baja por sync.
+  if (process.env.DB_MODE !== "totem") {
+    app.get("/admin", (_req: Request, res: Response) => {
+      const filePath = path.resolve(process.cwd(), "web", "src", "admin.html");
+      res.sendFile(filePath);
+    });
+  } else {
+    app.get("/admin", (_req: Request, res: Response) => {
+      res.status(403).send("Panel administrativo no disponible en tótem. Use el panel cloud.");
+    });
+  }
+
+  // Bloqueo central: en modo tótem, todas las mutaciones administrativas
+  // (POST/PUT/DELETE sobre catálogos) se rechazan. El tótem es read-only para
+  // catálogos; solo puede crear pedidos. Esto garantiza el "casino lock":
+  // no se pueden crear/editar usuarios, casinos, minutas, periodos ni familias
+  // localmente — siempre vienen del cloud filtrados por su casinoId asignado.
+  if (process.env.DB_MODE === "totem") {
+    const TOTEM_READONLY_PREFIXES = [
+      "/api/usuarios",
+      "/api/casinos",
+      "/api/minutas",
+      "/api/familias",
+      "/api/periodos",
+      "/api/totems",
+      "/api/totem-releases",
+      "/api/plantillas",
+      "/api/dashboard",
+      "/api/reportes",
+    ];
+    app.use((req: Request, res: Response, next) => {
+      if (req.method === "GET") return next();
+      // Permitir explícitamente: pedidos (incluido visita/semanal), auth, sync, seed, login.
+      if (req.path.startsWith("/api/pedidos")) return next();
+      if (req.path.startsWith("/api/auth")) return next();
+      if (req.path.startsWith("/api/totem/")) return next(); // sync endpoints
+      if (TOTEM_READONLY_PREFIXES.some(p => req.path.startsWith(p))) {
+        return res.status(403).json({ message: "Operación no permitida en tótem (use panel cloud)" });
+      }
+      next();
+    });
+  }
 
   // ── Auth Routes ──
   app.post("/api/auth/login", async (req: Request, res: Response) => {

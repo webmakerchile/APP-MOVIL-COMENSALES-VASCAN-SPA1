@@ -4,6 +4,7 @@ import {
   text,
   varchar,
   integer,
+  bigint,
   date,
   timestamp,
   boolean,
@@ -25,7 +26,7 @@ export const userRoleEnum = pgEnum("user_role", [
 const syncCols = {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),
-  syncVersion: integer("sync_version").notNull().default(0),
+  syncVersion: bigint("sync_version", { mode: "number" }).notNull().default(0),
 };
 
 export const users = pgTable("users", {

@@ -104,7 +104,9 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users);
   }
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(touch(insertUser)).returning();
+    const v: any = touch(insertUser);
+    if (!v.id) v.id = require("crypto").randomUUID();
+    const [user] = await db.insert(users).values(v).returning();
     return user;
   }
   async updateUser(id: string, data: Partial<InsertUser & { activo?: boolean }>): Promise<User | undefined> {
@@ -129,7 +131,9 @@ export class DatabaseStorage implements IStorage {
     return casino;
   }
   async createCasino(insertCasino: InsertCasino): Promise<Casino> {
-    const [casino] = await db.insert(casinos).values(touch(insertCasino)).returning();
+    const v: any = touch(insertCasino);
+    if (!v.id) v.id = require("crypto").randomUUID();
+    const [casino] = await db.insert(casinos).values(v).returning();
     return casino;
   }
   async updateCasino(id: string, data: Partial<InsertCasino & { activo?: boolean }>): Promise<Casino | undefined> {
@@ -160,7 +164,9 @@ export class DatabaseStorage implements IStorage {
     return minuta;
   }
   async createMinuta(insertMinuta: InsertMinuta): Promise<Minuta> {
-    const [minuta] = await db.insert(minutas).values(touch(insertMinuta)).returning();
+    const v: any = touch(insertMinuta);
+    if (!v.id) v.id = require("crypto").randomUUID();
+    const [minuta] = await db.insert(minutas).values(v).returning();
     return minuta;
   }
   async updateMinuta(id: string, data: Partial<InsertMinuta & { activo?: boolean }>): Promise<Minuta | undefined> {
@@ -240,7 +246,9 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(familias);
   }
   async createFamilia(insertFamilia: InsertFamilia): Promise<Familia> {
-    const [familia] = await db.insert(familias).values(touch(insertFamilia)).returning();
+    const v: any = touch(insertFamilia);
+    if (!v.id) v.id = require("crypto").randomUUID();
+    const [familia] = await db.insert(familias).values(v).returning();
     return familia;
   }
   async updateFamilia(id: string, data: Partial<InsertFamilia & { activo?: boolean }>): Promise<Familia | undefined> {
@@ -264,7 +272,9 @@ export class DatabaseStorage implements IStorage {
     return periodo;
   }
   async createPeriodo(insertPeriodo: InsertPeriodo): Promise<Periodo> {
-    const [periodo] = await db.insert(periodos).values(touch(insertPeriodo)).returning();
+    const v: any = touch(insertPeriodo);
+    if (!v.id) v.id = require("crypto").randomUUID();
+    const [periodo] = await db.insert(periodos).values(v).returning();
     return periodo;
   }
   async updatePeriodo(id: string, data: Partial<InsertPeriodo & { activo?: boolean }>): Promise<Periodo | undefined> {
