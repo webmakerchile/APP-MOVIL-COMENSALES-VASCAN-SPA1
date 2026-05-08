@@ -1608,15 +1608,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const errorDetails: { row: number; error: string }[] = [];
 
       for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
+        // Normalize all keys to uppercase for case-insensitive matching
+        const rawRow = rows[i];
+        const row: Record<string, any> = {};
+        for (const k of Object.keys(rawRow)) row[k.toUpperCase().trim()] = rawRow[k];
         const rowNum = i + 2;
         try {
-          const rut = String(row["RUT"] || row["rut"] || "").trim();
-          const nombre = String(row["Nombre"] || row["nombre"] || "").trim();
-          const apellido = String(row["Apellido"] || row["apellido"] || "").trim();
-          const telefonoRaw = String(row["Telefono"] || row["telefono"] || row["Teléfono"] || row["TELEFONO"] || row["Celular"] || row["celular"] || "").trim();
-          const rolRaw = String(row["Rol"] || row["rol"] || row["ROL"] || "comensal").trim().toLowerCase();
-          const casinoRaw = String(row["Casino_ID"] || row["casino_id"] || row["CasinoID"] || row["CASINO"] || row["Casino"] || "").trim();
+          const rut = String(row["RUT"] || "").trim();
+          const nombre = String(row["NOMBRE"] || "").trim();
+          const apellido = String(row["APELLIDO"] || "").trim();
+          const telefonoRaw = String(row["TELEFONO"] || row["CELULAR"] || row["TELÉFONO"] || "").trim();
+          const rolRaw = String(row["ROL"] || "comensal").trim().toLowerCase();
+          const casinoRaw = String(row["CASINO_ID"] || row["CASINOID"] || row["CASINO"] || "").trim();
 
           if (!rut || !nombre) {
             errorDetails.push({ row: rowNum, error: "RUT o Nombre vacío" });
