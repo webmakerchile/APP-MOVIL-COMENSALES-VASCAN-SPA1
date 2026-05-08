@@ -1,0 +1,222 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> type C:\BuenaMezcla\logs\service.err.log
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+
+added 64 packages in 27s
+PS C:\Windows\system32>
+PS C:\Windows\system32> schtasks /Run /TN "BuenaMezclaTotem"
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+PS C:\Windows\system32> type C:\BuenaMezcla\logs\service.err.log
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'drizzle-zod'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at shared/schema.ts (C:\BuenaMezcla\totem\runtime.js:60:26)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/storage.ts (C:\BuenaMezcla\totem\runtime.js:603:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3430:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+    at Module.load (node:internal/modules/cjs/loader:1288:32) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+PS C:\Windows\system32>

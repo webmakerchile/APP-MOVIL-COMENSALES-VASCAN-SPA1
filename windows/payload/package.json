@@ -4,20 +4,6 @@
   "private": true,
   "main": "totem/runtime.js",
   "dependencies": {
-    "better-sqlite3": "^12.9.0",
-    "connect-pg-simple": "^10.0.0",
-    "drizzle-orm": "^0.39.3",
-    "exceljs": "^4.4.0",
-    "express": "^5.0.1",
-    "express-session": "^1.19.0",
-    "bcryptjs": "^3.0.3",
-    "memorystore": "^1.6.7",
-    "pg": "^8.13.1",
-    "qrcode": "^1.5.4",
-    "ws": "^8.18.0",
-    "xlsx": "^0.18.5",
-    "multer": "^1.4.5-lts.1",
-    "node-cron": "^3.0.3",
-    "twilio": "^5.10.4"
+    "better-sqlite3": "^12.9.0"
   }
 }

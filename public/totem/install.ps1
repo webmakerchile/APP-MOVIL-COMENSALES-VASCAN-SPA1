@@ -81,8 +81,8 @@ if (-not (Test-Path $nodeExe)) {
 $nodeVer = & $nodeExe --version 2>&1
 Write-Host "Node listo: $nodeVer"
 
-# ── npm install (--ignore-scripts: no compila nada nativo) ──
-Step "4/8 Instalando paquetes JS (1-2 minutos)"
+# ── npm install solo better-sqlite3 (solo su JS wrapper, sin compilar) ──
+Step "4/8 Instalando paquete SQLite (~10 segundos)"
 $npmCmd = "$InstallDir\node\npm.cmd"
 Push-Location $InstallDir
 $npmOut = & $npmCmd install --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=warn 2>&1
@@ -92,7 +92,7 @@ if ($npmRc -ne 0) {
   Write-Host ($npmOut | Out-String) -ForegroundColor Yellow
   Fail "npm install fallo (codigo $npmRc). Revisa la salida de arriba."
 }
-Write-Host "Paquetes instalados."
+Write-Host "Paquete instalado."
 
 # ── Prebuild nativo de better-sqlite3 para Windows ──
 Step "4b/8 Bajando modulo nativo SQLite para Windows (~2MB)"
