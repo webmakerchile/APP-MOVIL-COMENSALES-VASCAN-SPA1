@@ -2,7 +2,7 @@
 REM Launches Chrome (or Edge as fallback) in kiosk mode pointing at the local totem server.
 REM Waits for the local server to come up first.
 
-set "URL=http://127.0.0.1:5000"
+set "URL=http://127.0.0.1:5000/kiosk"
 set "PROFILE=%LOCALAPPDATA%\BuenaMezclaTotem\ChromeProfile"
 mkdir "%PROFILE%" >nul 2>&1
 

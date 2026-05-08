@@ -4,6 +4,7 @@ import { useAuth } from "./lib/auth-context";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Historial from "./pages/Historial";
+import Kiosk from "./pages/Kiosk";
 import InstallPrompt from "./components/InstallPrompt";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,10 @@ export default function App() {
     <BrowserRouter>
       <InstallPrompt />
       <Routes>
+        {/* Kiosk: vista táctil dedicada para el tótem físico. No usa el
+            AuthProvider global porque mantiene su propio ciclo (login →
+            selección → vale → auto-logout) optimizado para uso compartido. */}
+        <Route path="/kiosk" element={<Kiosk />} />
         <Route
           path="/login"
           element={
