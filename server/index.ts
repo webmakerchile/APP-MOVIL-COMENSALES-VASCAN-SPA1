@@ -193,9 +193,19 @@ function configureExpoAndLanding(app: express.Application) {
     // Serve PWA static assets (JS, CSS, icons, sw.js, manifest.json)
     app.use(express.static(pwaDist));
 
-    // SPA fallback: any non-API, non-admin route → index.html
+    // Static public/ assets (totem bundle, install scripts, case studies, etc.)
+    // MUST be mounted BEFORE the SPA fallback or those URLs return index.html.
+    app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
+    app.use(express.static(path.resolve(process.cwd(), "public")));
+    app.use(express.static(path.resolve(process.cwd(), "static-build")));
+
+    // SPA fallback: any non-API, non-admin, non-totem-asset route → index.html
     app.use((req: Request, res: Response, next: NextFunction) => {
-      if (req.path.startsWith("/api") || req.path.startsWith("/admin")) {
+      if (
+        req.path.startsWith("/api") ||
+        req.path.startsWith("/admin") ||
+        req.path.startsWith("/totem/")
+      ) {
         return next();
       }
       res.sendFile(pwaBuild);
