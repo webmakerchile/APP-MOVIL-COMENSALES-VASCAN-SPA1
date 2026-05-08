@@ -1,0 +1,94 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> type C:\BuenaMezcla\logs\service.err.log
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
+node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'connect-pg-simple'
+Require stack:
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at server/routes.ts (C:\BuenaMezcla\totem\runtime.js:3423:40)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at server/index.ts (C:\BuenaMezcla\totem\runtime.js:3635:5)
+    at __init (C:\BuenaMezcla\totem\runtime.js:9:56)
+    at Object.<anonymous> (C:\BuenaMezcla\totem\runtime.js:3669:1)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\BuenaMezcla\\totem\\runtime.js' ]
+}
+
+Node.js v20.18.0
