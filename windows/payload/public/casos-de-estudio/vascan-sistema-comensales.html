@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vascan SPA — Sistema de Inscripción de Comensales | WebMakerChile</title>
+  <meta name="description" content="Caso de estudio: Desarrollo del sistema de gestión de comensales y minutas para Vascan SPA por WebMakerChile.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #020617;
+      --surface: rgba(15,23,42,.6);
+      --border: rgba(255,255,255,.06);
+      --orange: #E86A30;
+      --orange-light: #F57C00;
+      --green-light: #4A7C34;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --text3: #64748b;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    h1, h2, h3, h4, h5, h6 { font-family: 'Space Grotesk', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+    .section { padding: 100px 0; }
+    .section-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 12px;
+    }
+    .section-title { font-size: 36px; font-weight: 700; margin-bottom: 20px; line-height: 1.2; }
+    .section-desc { font-size: 17px; color: var(--text2); max-width: 640px; line-height: 1.7; }
+
+    .glass {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .fade-up {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+    }
+    .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ═══ HERO ═══ */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      padding: 80px 24px;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(232,106,48,.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--orange);
+      border: 1px solid rgba(232,106,48,.25);
+      background: rgba(232,106,48,.08);
+      margin-bottom: 28px;
+    }
+    .hero-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); }
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+    .hero h1 .highlight {
+      background: linear-gradient(135deg, var(--orange), var(--orange-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero .hero-sub { font-size: 18px; color: var(--text2); max-width: 560px; margin: 0 auto 48px; line-height: 1.7; }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      max-width: 700px;
+      margin: 0 auto 48px;
+    }
+    .hero-metric {
+      padding: 20px 12px;
+    }
+    .hero-metric .metric-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 36px;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1;
+    }
+    .hero-metric .metric-value .unit { font-size: 18px; color: var(--orange); }
+    .hero-metric .metric-label {
+      font-size: 12px;
+      color: var(--text3);
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      color: #fff;
+      background: linear-gradient(135deg, var(--orange), var(--orange-light));
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+    .hero-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(232,106,48,.35); }
+
+    /* ═══ ABOUT ═══ */
+    .about-grid { display: grid; grid-template-columns: 1fr 380px; gap: 40px; align-items: start; }
+    .about-text p { color: var(--text2); font-size: 16px; line-height: 1.8; margin-bottom: 16px; }
+    .about-card { padding: 32px; }
+    .about-card .card-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .about-card .card-row:last-child { border-bottom: none; }
+    .about-card .card-label { font-size: 14px; color: var(--text3); }
+    .about-card .card-value { font-size: 14px; font-weight: 600; color: var(--text); text-align: right; }
+
+    /* ═══ CHALLENGE ═══ */
+    .challenge-list { list-style: none; margin-top: 36px; }
+    .challenge-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .challenge-list li:last-child { border-bottom: none; }
+    .challenge-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .challenge-list h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .challenge-list p { font-size: 14px; color: var(--text2); line-height: 1.6; }
+
+    /* ═══ FEATURES ═══ */
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; }
+    .feature-card {
+      padding: 28px;
+      cursor: pointer;
+      transition: border-color 0.3s, transform 0.2s;
+    }
+    .feature-card:hover { border-color: rgba(232,106,48,.3); transform: translateY(-2px); }
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(232,106,48,.1);
+      border: 1px solid rgba(232,106,48,.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      margin-bottom: 16px;
+    }
+    .feature-card h4 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .feature-card .feature-desc { font-size: 14px; color: var(--text2); line-height: 1.6; }
+    .feature-detail {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease-out, margin-top 0.3s;
+      margin-top: 0;
+    }
+    .feature-card.expanded .feature-detail {
+      max-height: 200px;
+      margin-top: 14px;
+    }
+    .feature-detail p {
+      font-size: 13px;
+      color: var(--text3);
+      line-height: 1.6;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .feature-toggle {
+      font-size: 12px;
+      color: var(--orange);
+      margin-top: 12px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    /* ═══ ARCHITECTURE ═══ */
+    .arch-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-top: 48px;
+      flex-wrap: wrap;
+    }
+    .arch-layer {
+      padding: 28px 32px;
+      text-align: center;
+      min-width: 180px;
+      flex: 1;
+    }
+    .arch-layer .arch-icon { font-size: 32px; margin-bottom: 10px; }
+    .arch-layer h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .arch-layer p { font-size: 12px; color: var(--text3); }
+    .arch-arrow {
+      font-size: 24px;
+      color: var(--orange);
+      padding: 0 8px;
+      flex-shrink: 0;
+    }
+
+    /* ═══ TIMELINE ═══ */
+    .timeline { margin-top: 48px; position: relative; padding-left: 40px; }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--orange), rgba(232,106,48,.1));
+    }
+    .timeline-item { position: relative; padding-bottom: 40px; }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .timeline-dot {
+      position: absolute;
+      left: -33px;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 0 0 16px rgba(232,106,48,.4);
+    }
+    .timeline-date {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--orange);
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+    .timeline-item h4 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .timeline-item p { font-size: 14px; color: var(--text2); line-height: 1.6; }
+
+    /* ═══ STACK ═══ */
+    .stack-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 40px; }
+    .stack-item { padding: 24px 16px; text-align: center; transition: border-color 0.3s; }
+    .stack-item:hover { border-color: rgba(232,106,48,.3); }
+    .stack-emoji { font-size: 32px; margin-bottom: 10px; }
+    .stack-item h4 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    .stack-item p { font-size: 12px; color: var(--text3); }
+
+    /* ═══ RESULTS ═══ */
+    .results-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; }
+    .result-card { padding: 28px; text-align: center; }
+    .result-card .result-before { font-size: 13px; color: var(--text3); margin-bottom: 4px; }
+    .result-card .result-arrow { font-size: 20px; margin: 8px 0; color: var(--orange); }
+    .result-card .result-after {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .result-card .result-label { font-size: 13px; color: var(--text2); margin-top: 8px; }
+    .result-card .result-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 10px;
+      background: rgba(74,124,52,.15);
+      color: #6DBF4A;
+      border: 1px solid rgba(74,124,52,.25);
+    }
+
+    /* ═══ TESTIMONIAL ═══ */
+    .testimonial-section { text-align: center; }
+    .testimonial-card {
+      padding: 48px;
+      max-width: 720px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .testimonial-card::before {
+      content: '"';
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 120px;
+      color: rgba(232,106,48,.15);
+      position: absolute;
+      top: -10px;
+      left: 24px;
+      line-height: 1;
+    }
+    .testimonial-card blockquote {
+      font-size: 18px;
+      line-height: 1.8;
+      color: var(--text);
+      font-style: italic;
+      margin-bottom: 24px;
+      position: relative;
+      z-index: 1;
+    }
+    .testimonial-author { font-size: 14px; font-weight: 600; }
+    .testimonial-role { font-size: 13px; color: var(--text3); }
+
+    /* ═══ CTA ═══ */
+    .cta-section {
+      text-align: center;
+      padding: 100px 24px;
+    }
+    .cta-card {
+      padding: 64px 40px;
+      max-width: 680px;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at center, rgba(232,106,48,.06) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .cta-card h2 { font-size: 32px; font-weight: 700; margin-bottom: 12px; position: relative; }
+    .cta-card p { font-size: 16px; color: var(--text2); margin-bottom: 36px; position: relative; }
+    .cta-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; position: relative; }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      color: #fff;
+      background: linear-gradient(135deg, var(--orange), var(--orange-light));
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: none;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(232,106,48,.35); }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .btn-secondary:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.15); }
+
+    /* ═══ FOOTER ═══ */
+    footer {
+      text-align: center;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+    }
+    footer p { font-size: 13px; color: var(--text3); }
+    footer a { color: var(--orange); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ═══ RESPONSIVE ═══ */
+    @media (max-width: 768px) {
+      .section { padding: 64px 0; }
+      .section-title { font-size: 28px; }
+      .hero-metrics { grid-template-columns: repeat(2, 1fr); }
+      .hero-metric .metric-value { font-size: 28px; }
+      .about-grid { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+      .arch-diagram { flex-direction: column; }
+      .arch-arrow { transform: rotate(90deg); padding: 8px 0; }
+      .stack-grid { grid-template-columns: repeat(2, 1fr); }
+      .results-grid { grid-template-columns: 1fr; }
+      .cta-card { padding: 40px 24px; }
+      .testimonial-card { padding: 32px 20px; }
+    }
+    @media (max-width: 480px) {
+      .hero-metrics { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .section-title { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════ HERO ═══════════════ -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge"><span class="dot"></span> Caso de Estudio</div>
+      <h1>Sistema de Inscripción<br>de <span class="highlight">Comensales</span></h1>
+      <p class="hero-sub">Plataforma integral de gestión de casinos y minutas para Vascan SPA. App móvil con autenticación por RUT, vouchers QR y panel de administración con carga masiva Excel.</p>
+
+      <div class="hero-metrics">
+        <div class="hero-metric glass fade-up">
+          <div class="metric-value"><span class="counter" data-target="2">0</span><span class="unit">+</span></div>
+          <div class="metric-label">Casinos</div>
+        </div>
+        <div class="hero-metric glass fade-up">
+          <div class="metric-value"><span class="counter" data-target="6">0</span></div>
+          <div class="metric-label">Módulos</div>
+        </div>
+        <div class="hero-metric glass fade-up">
+          <div class="metric-value"><span class="counter" data-target="4">0</span></div>
+          <div class="metric-label">Opciones/Menú</div>
+        </div>
+        <div class="hero-metric glass fade-up">
+          <div class="metric-value"><span class="counter" data-target="100">0</span><span class="unit">%</span></div>
+          <div class="metric-label">Digital</div>
+        </div>
+      </div>
+
+      <a href="#sobre" class="hero-cta">Explorar el proyecto ↓</a>
+    </div>
+  </section>
+
+  <!-- ═══════════════ ABOUT ═══════════════ -->
+  <section id="sobre" class="section">
+    <div class="container">
+      <div class="about-grid">
+        <div class="about-text fade-up">
+          <div class="section-label">Sobre el Proyecto</div>
+          <h2 class="section-title">Digitalización completa del servicio de alimentación empresarial</h2>
+          <p>Vascan SPA opera casinos de alimentación (cafeterías) para empresas industriales en Chile. Necesitaban una plataforma moderna que reemplazara sus procesos manuales de inscripción de comensales, gestión de minutas y control de producción.</p>
+          <p>Desarrollamos un ecosistema completo: una app móvil donde los trabajadores seleccionan su menú diario mediante autenticación por RUT chileno y reciben un voucher QR; y un panel de administración web para gestionar usuarios, casinos, minutas y reportes de producción con carga masiva vía Excel.</p>
+          <p>El sistema diferencia tres roles: <strong>comensales</strong> (eligen 1 opción por minuta), <strong>interlocutores</strong> (pueden pedir múltiples pedidos, siempre opción 1) y <strong>administradores</strong> (gestión completa del sistema).</p>
+        </div>
+        <div class="about-card glass fade-up">
+          <div class="card-row">
+            <span class="card-label">Cliente</span>
+            <span class="card-value">Vascan SPA</span>
+          </div>
+          <div class="card-row">
+            <span class="card-label">Industria</span>
+            <span class="card-value">Alimentación Empresarial</span>
+          </div>
+          <div class="card-row">
+            <span class="card-label">Tipo</span>
+            <span class="card-value">App Móvil + Panel Web</span>
+          </div>
+          <div class="card-row">
+            <span class="card-label">Duración</span>
+            <span class="card-value">4 semanas</span>
+          </div>
+          <div class="card-row">
+            <span class="card-label">Equipo</span>
+            <span class="card-value">WebMakerChile</span>
+          </div>
+          <div class="card-row">
+            <span class="card-label">País</span>
+            <span class="card-value">Chile 🇨🇱</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ CHALLENGE ═══════════════ -->
+  <section class="section" style="padding-top:40px;">
+    <div class="container">
+      <div class="fade-up">
+        <div class="section-label">El Desafío</div>
+        <h2 class="section-title">Problemas que enfrentaba el cliente</h2>
+        <p class="section-desc">Vascan SPA dependía de procesos manuales que generaban errores, desperdicios y falta de control sobre la producción diaria de alimentos.</p>
+      </div>
+      <ul class="challenge-list">
+        <li class="fade-up">
+          <div class="challenge-icon">📋</div>
+          <div>
+            <h4>Inscripción manual en papel</h4>
+            <p>Los trabajadores registraban sus preferencias de menú en listas de papel, causando errores de lectura, duplicados y pérdida de información.</p>
+          </div>
+        </li>
+        <li class="fade-up">
+          <div class="challenge-icon">📊</div>
+          <div>
+            <h4>Sin control de producción en tiempo real</h4>
+            <p>No existía un sistema centralizado para saber cuántas porciones de cada opción preparar, generando sobreproducción o faltantes.</p>
+          </div>
+        </li>
+        <li class="fade-up">
+          <div class="challenge-icon">🔄</div>
+          <div>
+            <h4>Gestión de minutas desorganizada</h4>
+            <p>Las minutas semanales se comunicaban por WhatsApp o carteleras físicas, sin un registro digital trazable ni histórico accesible.</p>
+          </div>
+        </li>
+        <li class="fade-up">
+          <div class="challenge-icon">👥</div>
+          <div>
+            <h4>Registro manual de comensales</h4>
+            <p>Dar de alta o baja a trabajadores requería gestión manual sin estandarización, con datos dispersos entre hojas de cálculo y documentos.</p>
+          </div>
+        </li>
+        <li class="fade-up">
+          <div class="challenge-icon">🏢</div>
+          <div>
+            <h4>Múltiples casinos sin visibilidad unificada</h4>
+            <p>Con casinos en diferentes ubicaciones (Santiago, Rancagua), era imposible tener una vista consolidada de la operación total.</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══════════════ FEATURES ═══════════════ -->
+  <section class="section">
+    <div class="container">
+      <div class="fade-up">
+        <div class="section-label">Funcionalidades Principales</div>
+        <h2 class="section-title">Soluciones implementadas</h2>
+        <p class="section-desc">Cada módulo fue diseñado para resolver un problema específico del cliente, con foco en usabilidad móvil y eficiencia operacional.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card glass fade-up" onclick="this.classList.toggle('expanded')">
+          <div class="feature-icon">📱</div>
+          <h4>App Móvil con RUT</h4>
+          <p class="feature-desc">Autenticación nativa por RUT chileno con validación de dígito verificador.</p>
+          <div class="feature-toggle">+ Ver detalle</div>
+          <div class="feature-detail">
+            <p>Los comensales ingresan con su RUT y contraseña. El sistema valida el formato del RUT chileno incluyendo dígito verificador. Cada comensal ve las minutas disponibles para su casino asignado y puede elegir su opción preferida.</p>
+          </div>
+        </div>
+        <div class="feature-card glass fade-up" onclick="this.classList.toggle('expanded')">
+          <div class="feature-icon">🎟️</div>
+          <h4>Voucher QR</h4>
+          <p class="feature-desc">Generación automática de voucher con código QR tras la inscripción.</p>
+          <div class="feature-toggle">+ Ver detalle</div>
+          <div class="feature-detail">
+            <p>Al seleccionar una opción del menú, se genera un voucher digital con código QR único que incluye los datos del comensal, la opción elegida, fecha y casino. Este voucher se presenta en el punto de servicio para control.</p>
+          </div>
+        </div>
+        <div class="feature-card glass fade-up" onclick="this.classList.toggle('expanded')">
+          <div class="feature-icon">📊</div>
+          <h4>Panel de Administración</h4>
+          <p class="feature-desc">Dashboard completo con CRUD de usuarios, casinos, minutas y consolidación.</p>
+          <div class="feature-toggle">+ Ver detalle</div>
+          <div class="feature-detail">
+            <p>Panel web responsive con 6 módulos: Dashboard general, gestión de usuarios con búsqueda, casinos con activación/desactivación, minutas por casino y fecha, consolidación de producción, y carga masiva con plantillas Excel.</p>
+          </div>
+        </div>
+        <div class="feature-card glass fade-up" onclick="this.classList.toggle('expanded')">
+          <div class="feature-icon">📄</div>
+          <h4>Plantillas Excel Profesionales</h4>
+          <p class="feature-desc">Templates con formato corporativo, menús desplegables y validación de datos.</p>
+          <div class="feature-toggle">+ Ver detalle</div>
+          <div class="feature-detail">
+            <p>Plantillas generadas con ExcelJS: colores corporativos, dropdowns funcionales para roles y casinos, hojas de referencia con UUIDs, y soporte para carga masiva de hasta cientos de usuarios y minutas de 4 semanas por casino.</p>
+          </div>
+        </div>
+        <div class="feature-card glass fade-up" onclick="this.classList.toggle('expanded')">
+          <div class="feature-icon">👥</div>
+          <h4>Sistema de Roles</h4>
+          <p class="feature-desc">Tres roles diferenciados: comensal, interlocutor y administrador.</p>
+          <div class="feature-toggle">+ Ver detalle</div>
+          <div class="feature-detail">
+            <p>Comensales eligen 1 opción por minuta. Interlocutores pueden realizar múltiples pedidos siempre forzados a opción 1. Administradores tienen acceso completo al panel con CRUD total y reportes. Super admin oculto para gestión de plataforma.</p>
+          </div>
+        </div>
+        <div class="feature-card glass fade-up" onclick="this.classList.toggle('expanded')">
+          <div class="feature-icon">📈</div>
+          <h4>Reportes de Producción</h4>
+          <p class="feature-desc">Consolidación por casino con desglose de opciones, cantidades y porcentajes.</p>
+          <div class="feature-toggle">+ Ver detalle</div>
+          <div class="feature-detail">
+            <p>Vista de consolidación que muestra por casino y fecha: total de pedidos, desglose por cada opción de menú, cantidades absolutas y porcentajes. Permite planificar la producción de alimentos con precisión y reducir desperdicios.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ ARCHITECTURE ═══════════════ -->
+  <section class="section" style="padding-top:40px;">
+    <div class="container">
+      <div class="fade-up">
+        <div class="section-label">Arquitectura Técnica</div>
+        <h2 class="section-title">Capas del sistema</h2>
+        <p class="section-desc">Arquitectura cliente-servidor moderna con separación clara de responsabilidades y comunicación RESTful.</p>
+      </div>
+      <div class="arch-diagram fade-up">
+        <div class="arch-layer glass">
+          <div class="arch-icon">📱</div>
+          <h4>Frontend Móvil</h4>
+          <p>React Native + Expo</p>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-layer glass">
+          <div class="arch-icon">🌐</div>
+          <h4>API REST</h4>
+          <p>Express + TypeScript</p>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-layer glass">
+          <div class="arch-icon">⚙️</div>
+          <h4>Backend</h4>
+          <p>Node.js + Sesiones</p>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-layer glass">
+          <div class="arch-icon">🗄️</div>
+          <h4>Base de Datos</h4>
+          <p>PostgreSQL + Drizzle ORM</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ TIMELINE ═══════════════ -->
+  <section class="section">
+    <div class="container">
+      <div class="fade-up">
+        <div class="section-label">Proceso de Desarrollo</div>
+        <h2 class="section-title">Fases del proyecto</h2>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item fade-up">
+          <div class="timeline-dot"></div>
+          <div class="timeline-date">SEMANA 1</div>
+          <h4>Diseño y Arquitectura</h4>
+          <p>Definición de esquema de base de datos, modelo de roles, diseño del sistema de autenticación por RUT y estructura de la API RESTful.</p>
+        </div>
+        <div class="timeline-item fade-up">
+          <div class="timeline-dot"></div>
+          <div class="timeline-date">SEMANA 2</div>
+          <h4>Backend + Panel Admin</h4>
+          <p>Implementación del servidor Express con TypeScript, CRUD completo de usuarios/casinos/minutas, sistema de sesiones seguras y panel de administración con Tailwind CSS.</p>
+        </div>
+        <div class="timeline-item fade-up">
+          <div class="timeline-dot"></div>
+          <div class="timeline-date">SEMANA 3</div>
+          <h4>App Móvil + Integración</h4>
+          <p>Desarrollo de la app React Native con Expo: login por RUT, visualización de minutas, selección de opciones, generación de voucher QR y sistema de roles diferenciados.</p>
+        </div>
+        <div class="timeline-item fade-up">
+          <div class="timeline-dot"></div>
+          <div class="timeline-date">SEMANA 4</div>
+          <h4>Excel + QA + Deploy</h4>
+          <p>Implementación de plantillas Excel profesionales con ExcelJS, carga masiva con validaciones, reportes de consolidación, testing integral y deploy a producción.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ STACK ═══════════════ -->
+  <section class="section" style="padding-top:40px;">
+    <div class="container">
+      <div class="fade-up">
+        <div class="section-label">Stack Tecnológico</div>
+        <h2 class="section-title">Tecnologías utilizadas</h2>
+      </div>
+      <div class="stack-grid">
+        <div class="stack-item glass fade-up">
+          <div class="stack-emoji">⚛️</div>
+          <h4>React Native</h4>
+          <p>App móvil</p>
+        </div>
+        <div class="stack-item glass fade-up">
+          <div class="stack-emoji">📦</div>
+          <h4>Expo SDK 54</h4>
+          <p>Framework móvil</p>
+        </div>
+        <div class="stack-item glass fade-up">
+          <div class="stack-emoji">🟦</div>
+          <h4>TypeScript</h4>
+          <p>Tipado estático</p>
+        </div>
+        <div class="stack-item glass fade-up">
+          <div class="stack-emoji">🚂</div>
+          <h4>Express.js</h4>
+          <p>API REST</p>
+        </div>
+        <div class="stack-item glass fade-up">
+          <div class="stack-emoji">🐘</div>
+          <h4>PostgreSQL</h4>
+          <p>Base de datos</p>
+        </div>
+        <div class="stack-item glass fade-up">
+          <div class="stack-emoji">💧</div>
+          <h4>Drizzle ORM</h4>
+          <p>Queries tipadas</p>
+        </div>
+        <div class="stack-item glass fade-up">
+          <div class="stack-emoji">📊</div>
+          <h4>ExcelJS</h4>
+          <p>Plantillas Excel</p>
+        </div>
+        <div class="stack-item glass fade-up">
+          <div class="stack-emoji">🎨</div>
+          <h4>Tailwind CSS</h4>
+          <p>Panel admin</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ RESULTS ═══════════════ -->
+  <section class="section">
+    <div class="container">
+      <div class="fade-up">
+        <div class="section-label">Resultados</div>
+        <h2 class="section-title">Impacto medible del proyecto</h2>
+        <p class="section-desc">La digitalización completa transformó la operación diaria de los casinos de Vascan SPA.</p>
+      </div>
+      <div class="results-grid">
+        <div class="result-card glass fade-up">
+          <div class="result-before">Antes: Listas en papel</div>
+          <div class="result-arrow">↓</div>
+          <div class="result-after">100%</div>
+          <div class="result-label">Inscripción digital</div>
+          <div class="result-badge">Eliminación total del papel</div>
+        </div>
+        <div class="result-card glass fade-up">
+          <div class="result-before">Antes: ~30 min manuales</div>
+          <div class="result-arrow">↓</div>
+          <div class="result-after">2 min</div>
+          <div class="result-label">Consolidación de pedidos</div>
+          <div class="result-badge">93% más rápido</div>
+        </div>
+        <div class="result-card glass fade-up">
+          <div class="result-before">Antes: Conteo estimado</div>
+          <div class="result-arrow">↓</div>
+          <div class="result-after">0%</div>
+          <div class="result-label">Margen de error en producción</div>
+          <div class="result-badge">Producción exacta</div>
+        </div>
+        <div class="result-card glass fade-up">
+          <div class="result-before">Antes: Excel dispersos</div>
+          <div class="result-arrow">↓</div>
+          <div class="result-after">1</div>
+          <div class="result-label">Plataforma centralizada</div>
+          <div class="result-badge">Todo en un lugar</div>
+        </div>
+        <div class="result-card glass fade-up">
+          <div class="result-before">Antes: Sin trazabilidad</div>
+          <div class="result-arrow">↓</div>
+          <div class="result-after">QR</div>
+          <div class="result-label">Voucher trazable por comensal</div>
+          <div class="result-badge">Control total</div>
+        </div>
+        <div class="result-card glass fade-up">
+          <div class="result-before">Antes: 1 casino a la vez</div>
+          <div class="result-arrow">↓</div>
+          <div class="result-after">N</div>
+          <div class="result-label">Casinos gestionados simultáneamente</div>
+          <div class="result-badge">Escalable</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ TESTIMONIAL ═══════════════ -->
+  <section class="section testimonial-section" style="padding-top:40px;">
+    <div class="container">
+      <div class="fade-up">
+        <div class="section-label">Testimonio</div>
+      </div>
+      <div class="testimonial-card glass fade-up">
+        <blockquote>
+          "El sistema transformó completamente nuestra operación. Antes perdíamos tiempo valioso contando pedidos a mano y estimando producción. Ahora los trabajadores eligen su menú desde el celular y nosotros sabemos exactamente cuánto producir. La carga masiva por Excel nos ahorra horas de trabajo administrativo cada semana."
+        </blockquote>
+        <div class="testimonial-author">Equipo Vascan SPA</div>
+        <div class="testimonial-role">Gestión de Casinos de Alimentación</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ CTA ═══════════════ -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-card glass fade-up">
+        <h2>¿Tienes un proyecto similar?</h2>
+        <p>Desarrollamos soluciones digitales a medida para empresas que necesitan optimizar sus operaciones.</p>
+        <div class="cta-buttons">
+          <a href="https://webmakerchile.cl" class="btn-primary" target="_blank">
+            Solicitar cotización →
+          </a>
+          <a href="https://wa.me/56912345678?text=Hola%2C%20vi%20el%20caso%20de%20estudio%20de%20Vascan%20y%20me%20interesa%20un%20proyecto%20similar" class="btn-secondary" target="_blank">
+            💬 WhatsApp
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ FOOTER ═══════════════ -->
+  <footer>
+    <p><a href="https://webmakerchile.cl" target="_blank">WebMakerChile</a> &copy; 2026 &mdash; Desarrollo de software a medida</p>
+  </footer>
+
+  <!-- ═══════════════ SCRIPTS ═══════════════ -->
+  <script>
+    (function() {
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+
+            var counters = entry.target.querySelectorAll('.counter');
+            counters.forEach(function(counter) {
+              if (counter.dataset.counted) return;
+              counter.dataset.counted = 'true';
+              var target = parseInt(counter.dataset.target);
+              var duration = 1500;
+              var start = 0;
+              var startTime = null;
+
+              function animate(timestamp) {
+                if (!startTime) startTime = timestamp;
+                var progress = Math.min((timestamp - startTime) / duration, 1);
+                var eased = 1 - Math.pow(1 - progress, 3);
+                counter.textContent = Math.floor(eased * target);
+                if (progress < 1) {
+                  requestAnimationFrame(animate);
+                } else {
+                  counter.textContent = target;
+                }
+              }
+              requestAnimationFrame(animate);
+            });
+
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.15 });
+
+      document.querySelectorAll('.fade-up').forEach(function(el) {
+        observer.observe(el);
+      });
+    })();
+  </script>
+</body>
+</html>
