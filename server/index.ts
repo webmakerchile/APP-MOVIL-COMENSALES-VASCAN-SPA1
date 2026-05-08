@@ -190,8 +190,22 @@ function configureExpoAndLanding(app: express.Application) {
   if (pwaBuildExists) {
     log("Serving PWA from pwa/dist");
 
-    // Serve PWA static assets (JS, CSS, icons, sw.js, manifest.json)
-    app.use(express.static(pwaDist));
+    // Serve PWA static assets (JS, CSS, icons — hashed filenames can be cached long-term)
+    // HTML, sw.js and manifest.json must never be cached so users always get the latest version
+    const noCacheFiles = new Set(["index.html", "sw.js", "manifest.json", "manifest.webmanifest"]);
+    app.use(express.static(pwaDist, {
+      setHeaders(res, filePath) {
+        const base = path.basename(filePath);
+        if (noCacheFiles.has(base) || filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        } else {
+          // Hashed assets (index-abc123.js) can be cached for 1 year
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    }));
 
     // Static public/ assets (totem bundle, install scripts, case studies, etc.)
     // MUST be mounted BEFORE the SPA fallback or those URLs return index.html.
@@ -208,6 +222,9 @@ function configureExpoAndLanding(app: express.Application) {
       ) {
         return next();
       }
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(pwaBuild);
     });
     return;

@@ -263,6 +263,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // administración solo ocurre en la nube y baja por sync.
   if (process.env.DB_MODE !== "totem") {
     app.get("/admin", (_req: Request, res: Response) => {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       const filePath = path.resolve(process.cwd(), "web", "src", "admin.html");
       res.sendFile(filePath);
     });
