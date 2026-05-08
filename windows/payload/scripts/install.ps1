@@ -1,104 +1,107 @@
 # ==============================================================
-#  BuenaMezcla Tótem — Instalador OFFLINE (PowerShell)
+#  BuenaMezcla Tótem — Instalador OFFLINE (one-shot)
 # ==============================================================
-#  Instala el tótem en C:\BuenaMezcla con:
-#    - Node.js portable (descarga si no lo encuentra)
-#    - Servidor Express + SQLite local
-#    - Sync worker hacia la nube (cuando hay internet)
-#    - Tarea programada para arrancar al inicio del PC
-#    - Chrome en modo kiosko al iniciar sesión
+#  Descarga el bundle desde la nube, instala Node, registra el
+#  tótem y deja todo arrancando solo.
 #
 #  USO (en PowerShell como Administrador):
 #    Set-ExecutionPolicy -Scope Process Bypass
-#    .\install.ps1 -Cloud https://vascan.replit.app `
-#                  -Casino <UUID-CASINO> `
-#                  -Token <BOOTSTRAP-TOKEN> `
-#                  -Nombre "Totem Comedor 1"
+#    iwr https://vascan.replit.app/totem/install.ps1 -UseBasicParsing | iex
+#
+#  O bien, con parámetros directos (sin prompt):
+#    & ([scriptblock]::Create((iwr https://vascan.replit.app/totem/install.ps1 -UseBasicParsing).Content)) `
+#       -Casino "<UUID>" -Token "<BOOTSTRAP>" -Nombre "Totem Comedor 1"
 # ==============================================================
 
 param(
-  [Parameter(Mandatory=$true)] [string] $Cloud,
-  [Parameter(Mandatory=$true)] [string] $Casino,
-  [Parameter(Mandatory=$true)] [string] $Token,
-  [string] $Nombre = "Totem-$($env:COMPUTERNAME)",
+  [string] $Cloud      = "https://vascan.replit.app",
+  [string] $Token      = "",
+  [string] $Nombre     = "",
   [string] $InstallDir = "C:\BuenaMezcla"
 )
 
 $ErrorActionPreference = "Stop"
+function Step($m) { Write-Host ""; Write-Host "==> $m" -ForegroundColor Cyan }
 
-function Write-Step([string]$msg) {
-  Write-Host ""
-  Write-Host "==> $msg" -ForegroundColor Cyan
-}
-
-# Verifica admin
+# ── Admin ──
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-  Write-Host "ERROR: Debes correr este script como Administrador." -ForegroundColor Red
+  Write-Host "ERROR: Abre PowerShell como Administrador." -ForegroundColor Red
   exit 1
 }
 
-Write-Step "1/7 Preparando carpetas en $InstallDir"
+# ── Pedir datos faltantes ──
+if (-not $Token)  { $Token  = Read-Host "Token de bootstrap (del panel admin → Totems → + Instalar nuevo totem)" }
+if (-not $Nombre) {
+  $def = "Totem-$($env:COMPUTERNAME)"
+  $r = Read-Host "Nombre del totem [$def]"
+  if ($r) { $Nombre = $r } else { $Nombre = $def }
+}
+
+Step "1/8 Preparando carpetas en $InstallDir"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallDir\totem-data" | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallDir\logs"       | Out-Null
 
-# ── Copia los archivos del bundle (todo lo que está junto al script) ──
-$src = Split-Path -Parent $MyInvocation.MyCommand.Path
-$src = Split-Path -Parent $src   # subir de scripts\ al root del bundle
-Write-Host "Copiando bundle desde $src ..."
-Copy-Item -Recurse -Force "$src\server"  "$InstallDir\"
-Copy-Item -Recurse -Force "$src\totem"   "$InstallDir\"
-Copy-Item -Recurse -Force "$src\shared"  "$InstallDir\"
-Copy-Item -Recurse -Force "$src\pwa"     "$InstallDir\"
-Copy-Item -Recurse -Force "$src\public"  "$InstallDir\"
-Copy-Item        -Force  "$src\package.json" "$InstallDir\"
-Copy-Item -Recurse -Force "$src\scripts" "$InstallDir\"
+# ── Bajar y extraer bundle ──
+Step "2/8 Descargando bundle desde $Cloud"
+$bundleUrl = "$Cloud/totem/totem-bundle.tar.gz"
+$bundleTmp = "$env:TEMP\totem-bundle.tar.gz"
+Invoke-WebRequest -Uri $bundleUrl -OutFile $bundleTmp -UseBasicParsing
+Write-Host "Extrayendo..."
+tar -xzf $bundleTmp -C $InstallDir
+Remove-Item $bundleTmp -Force
 
 # ── Node.js portable ──
-Write-Step "2/7 Verificando Node.js"
+Step "3/8 Verificando Node.js"
 $nodeExe = "$InstallDir\node\node.exe"
 if (-not (Test-Path $nodeExe)) {
   Write-Host "Descargando Node.js 20 portable (~30MB)..."
   $nodeUrl = "https://nodejs.org/dist/v20.18.0/node-v20.18.0-win-x64.zip"
   $tmp = "$env:TEMP\node-portable.zip"
   Invoke-WebRequest -Uri $nodeUrl -OutFile $tmp -UseBasicParsing
-  Expand-Archive -Path $tmp -DestinationPath "$env:TEMP\node-extract" -Force
-  $extracted = Get-ChildItem "$env:TEMP\node-extract" -Directory | Select-Object -First 1
+  $extractDir = "$env:TEMP\node-extract"
+  Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue
+  Expand-Archive -Path $tmp -DestinationPath $extractDir -Force
+  $extracted = Get-ChildItem $extractDir -Directory | Select-Object -First 1
   Move-Item $extracted.FullName "$InstallDir\node"
   Remove-Item $tmp -Force
-  Remove-Item "$env:TEMP\node-extract" -Recurse -Force
+  Remove-Item $extractDir -Recurse -Force
 }
 $nodeVer = & $nodeExe --version
 Write-Host "Node listo: $nodeVer"
 
-# ── npm install (baja better-sqlite3 prebuild para Windows) ──
-Write-Step "3/7 Instalando dependencias nativas (puede tardar 2-3 min)"
+# ── npm install (better-sqlite3 con prebuild para Win) ──
+Step "4/8 Instalando dependencias (puede tardar 2-4 minutos)"
 Push-Location $InstallDir
 $npmCmd = "$InstallDir\node\npm.cmd"
 & $npmCmd install --omit=dev --no-audit --no-fund --loglevel=error
-if ($LASTEXITCODE -ne 0) {
-  Pop-Location
-  Write-Host "ERROR: npm install falló." -ForegroundColor Red
+$rc = $LASTEXITCODE
+Pop-Location
+if ($rc -ne 0) {
+  Write-Host "ERROR: npm install fallo." -ForegroundColor Red
   exit 2
 }
-Pop-Location
 
 # ── Registro contra la nube ──
-Write-Step "4/7 Registrando este tótem en la nube ($Cloud)"
-$env:DB_MODE = "totem"
+Step "5/8 Registrando este totem en la nube"
+$env:DB_MODE     = "totem"
 $env:TOTEM_DB_PATH = "$InstallDir\totem-data\totem.db"
-$env:CLOUD_URL = $Cloud
+$env:CLOUD_URL   = $Cloud
 $registerLog = "$InstallDir\logs\register.log"
+Push-Location $InstallDir
 & $nodeExe "$InstallDir\totem\register.js" `
-  --nombre $Nombre --casino $Casino --token $Token --cloud $Cloud `
-  *>&1 | Tee-Object -FilePath $registerLog
-if ($LASTEXITCODE -ne 0) {
-  Write-Host "ERROR: Registro falló. Revisa $registerLog" -ForegroundColor Red
+    --nombre $Nombre --token $Token --cloud $Cloud `
+    *>&1 | Tee-Object -FilePath $registerLog
+$rc = $LASTEXITCODE
+Pop-Location
+if ($rc -ne 0) {
+  Write-Host "ERROR: Registro fallo. Revisa $registerLog" -ForegroundColor Red
+  Get-Content $registerLog | Select-Object -Last 20
   exit 3
 }
 
-# ── Script de arranque del servicio ──
-Write-Step "5/7 Creando script de arranque"
+# ── Script de servicio ──
+Step "6/8 Creando script de arranque"
 $serviceCmd = "$InstallDir\scripts\run-totem.cmd"
 @"
 @echo off
@@ -107,16 +110,16 @@ set TOTEM_DB_PATH=$InstallDir\totem-data\totem.db
 set CLOUD_URL=$Cloud
 set PORT=5000
 set NODE_ENV=production
+cd /d "$InstallDir"
 "$InstallDir\node\node.exe" "$InstallDir\totem\runtime.js" >> "$InstallDir\logs\service.out.log" 2>> "$InstallDir\logs\service.err.log"
 "@ | Set-Content -Encoding ASCII $serviceCmd
 
-# ── Tarea programada: servicio al arranque del PC ──
-Write-Step "6/7 Registrando tarea programada del servicio"
+# ── Tarea: servicio al arrancar el PC ──
+Step "7/8 Registrando tareas programadas"
 schtasks /Delete /TN "BuenaMezclaTotem" /F 2>$null | Out-Null
 schtasks /Create /TN "BuenaMezclaTotem" /TR "`"$serviceCmd`"" /SC ONSTART /RU "SYSTEM" /RL HIGHEST /F | Out-Null
 
 # ── Chrome kiosko al iniciar sesión ──
-Write-Step "7/7 Configurando Chrome en modo kiosko"
 $kioskCmd = "$InstallDir\scripts\start-kiosk.cmd"
 @"
 @echo off
@@ -145,23 +148,25 @@ if exist "%CHROME%" (
 schtasks /Delete /TN "BuenaMezclaTotemKiosk" /F 2>$null | Out-Null
 schtasks /Create /TN "BuenaMezclaTotemKiosk" /TR "`"$kioskCmd`"" /SC ONLOGON /RL HIGHEST /F | Out-Null
 
-# Lanza ahora ambos
-Write-Step "Iniciando servicio y kiosko"
+# ── Lanzar ahora ──
+Step "8/8 Iniciando servicio y abriendo kiosko"
 schtasks /Run /TN "BuenaMezclaTotem" | Out-Null
-Start-Sleep -Seconds 8
+Start-Sleep -Seconds 10
 Start-Process -FilePath $kioskCmd
 
 Write-Host ""
-Write-Host "================================================" -ForegroundColor Green
+Write-Host "=================================================" -ForegroundColor Green
 Write-Host " INSTALACION COMPLETADA"                          -ForegroundColor Green
-Write-Host "================================================" -ForegroundColor Green
-Write-Host ""
-Write-Host " - Tótem:    $Nombre"
-Write-Host " - Carpeta:  $InstallDir"
-Write-Host " - Datos:    $InstallDir\totem-data\totem.db (PERSISTENTE)"
-Write-Host " - Logs:     $InstallDir\logs\"
-Write-Host " - URL:      http://127.0.0.1:5000/kiosk"
+Write-Host "=================================================" -ForegroundColor Green
+Write-Host " Totem:    $Nombre"
+Write-Host " Carpeta:  $InstallDir"
+Write-Host " Datos:    $InstallDir\totem-data\totem.db (PERSISTENTE)"
+Write-Host " Logs:     $InstallDir\logs\"
+Write-Host " URL:      http://127.0.0.1:5000/kiosk"
 Write-Host ""
 Write-Host " El servicio arrancara solo al encender el PC."
 Write-Host " Chrome kiosko se abrira al iniciar sesion."
+Write-Host ""
+Write-Host " Funciona SIN INTERNET. Sincroniza con la nube"
+Write-Host " automaticamente cuando hay conexion."
 Write-Host ""

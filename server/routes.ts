@@ -2547,8 +2547,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/totems/bootstrap-token", requireAdminStrict, async (req, res) => {
     try {
       const u = (req as any).currentUser;
-      const token = issueBootstrapToken(u?.rut || "admin");
-      res.json({ token, expiresInfo: "Válido por 1 hora. Se invalida al usarse (single-use)." });
+      const { casinoId } = req.body as { casinoId?: string };
+      if (!casinoId) return res.status(400).json({ message: "casinoId requerido" });
+      const casino = await storage.getCasino(casinoId);
+      if (!casino) return res.status(404).json({ message: "Casino no existe" });
+      const token = issueBootstrapToken(u?.rut || "admin", casinoId);
+      res.json({
+        token,
+        casino: { id: casino.id, nombre: casino.nombre },
+        expiresInfo: "Válido por 1 hora. Se invalida al usarse (single-use).",
+      });
     } catch (err) {
       res.status(500).json({ message: "Error al generar token" });
     }

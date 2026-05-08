@@ -36,10 +36,10 @@ async function requireTotem(req: AuthedTotemRequest, res: Response, next: NextFu
 // Registration uses a one-time bootstrap token. Tokens are stored hashed
 // in-memory with a 1h expiry. They self-destruct on first successful use so
 // they cannot be replayed.
-type TokenRec = { hash: string; expiresAt: number; createdBy: string };
+type TokenRec = { hash: string; expiresAt: number; createdBy: string; casinoId: string };
 const bootstrapTokens: TokenRec[] = [];
 
-export function issueBootstrapToken(createdBy: string): string {
+export function issueBootstrapToken(createdBy: string, casinoId: string): string {
   const buf = require("crypto").randomBytes(24).toString("base64url");
   const hash = require("crypto").createHash("sha256").update(buf).digest("hex");
   // Purge expired
@@ -47,27 +47,34 @@ export function issueBootstrapToken(createdBy: string): string {
   for (let i = bootstrapTokens.length - 1; i >= 0; i--) {
     if (bootstrapTokens[i].expiresAt < now) bootstrapTokens.splice(i, 1);
   }
-  bootstrapTokens.push({ hash, expiresAt: now + 60 * 60 * 1000, createdBy });
+  bootstrapTokens.push({ hash, expiresAt: now + 60 * 60 * 1000, createdBy, casinoId });
   return buf;
 }
 
-function consumeBootstrapToken(token: string): boolean {
+function consumeBootstrapToken(token: string): { valid: boolean; casinoId?: string } {
   const hash = require("crypto").createHash("sha256").update(token).digest("hex");
   const now = Date.now();
   const idx = bootstrapTokens.findIndex(t => t.hash === hash && t.expiresAt > now);
   if (idx < 0) {
-    // Allow env-var token as fallback (no auto-revoke)
-    return !!process.env.TOTEM_BOOTSTRAP_TOKEN && token === process.env.TOTEM_BOOTSTRAP_TOKEN;
+    // Allow env-var token as fallback (no auto-revoke, no casinoId — body must supply it)
+    if (!!process.env.TOTEM_BOOTSTRAP_TOKEN && token === process.env.TOTEM_BOOTSTRAP_TOKEN) {
+      return { valid: true };
+    }
+    return { valid: false };
   }
+  const { casinoId } = bootstrapTokens[idx];
   bootstrapTokens.splice(idx, 1); // single-use
-  return true;
+  return { valid: true, casinoId };
 }
 
 async function requireBootstrapToken(req: Request, res: Response, next: NextFunction) {
   const token = req.header("x-bootstrap-token");
-  if (!token || !consumeBootstrapToken(token)) {
+  if (!token) return res.status(401).json({ message: "Token de instalación requerido" });
+  const result = consumeBootstrapToken(token);
+  if (!result.valid) {
     return res.status(401).json({ message: "Token de instalación inválido o expirado" });
   }
+  (req as any).bootstrapCasinoId = result.casinoId;
   next();
 }
 
@@ -77,7 +84,9 @@ export function registerSyncRoutes(app: Express) {
   // Response: { totemId, secret } — the secret is shown ONCE.
   app.post("/api/totem/register", requireBootstrapToken, async (req: Request, res: Response) => {
     try {
-      const { nombre, casinoId, hostname, ipLocal, version } = req.body;
+      const { nombre, hostname, ipLocal, version } = req.body;
+      // casinoId comes from the bootstrap token (preferred) or body fallback
+      const casinoId: string = (req as any).bootstrapCasinoId || req.body.casinoId;
       if (!nombre || !casinoId) {
         return res.status(400).json({ message: "Faltan campos: nombre, casinoId" });
       }

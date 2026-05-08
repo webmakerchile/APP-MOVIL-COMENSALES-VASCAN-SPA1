@@ -15,7 +15,6 @@
 
 param(
   [string] $Cloud      = "https://vascan.replit.app",
-  [string] $Casino     = "",
   [string] $Token      = "",
   [string] $Nombre     = "",
   [string] $InstallDir = "C:\BuenaMezcla"
@@ -31,8 +30,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 # ── Pedir datos faltantes ──
-if (-not $Casino) { $Casino = Read-Host "UUID del casino" }
-if (-not $Token)  { $Token  = Read-Host "Token de bootstrap (del panel admin)" }
+if (-not $Token)  { $Token  = Read-Host "Token de bootstrap (del panel admin → Totems → + Instalar nuevo totem)" }
 if (-not $Nombre) {
   $def = "Totem-$($env:COMPUTERNAME)"
   $r = Read-Host "Nombre del totem [$def]"
@@ -92,7 +90,7 @@ $env:CLOUD_URL   = $Cloud
 $registerLog = "$InstallDir\logs\register.log"
 Push-Location $InstallDir
 & $nodeExe "$InstallDir\totem\register.js" `
-    --nombre $Nombre --casino $Casino --token $Token --cloud $Cloud `
+    --nombre $Nombre --token $Token --cloud $Cloud `
     *>&1 | Tee-Object -FilePath $registerLog
 $rc = $LASTEXITCODE
 Pop-Location

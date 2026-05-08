@@ -15,13 +15,12 @@ function arg(name: string, fallback?: string): string {
 
 async function main() {
   const nombre = arg("nombre", `Totem-${os.hostname()}`);
-  const casinoId = arg("casino");
   const token = arg("token", process.env.TOTEM_BOOTSTRAP_TOKEN || "");
   const cloud = arg("cloud", process.env.CLOUD_URL || "https://app.buenamezcla.cl");
   const version = arg("version", "1.0.0");
 
-  if (!casinoId || !token) {
-    console.error("Uso: tsx totem/register.ts --casino <id> --token <bootstrap> [--nombre <n>] [--cloud <url>]");
+  if (!token) {
+    console.error("Uso: tsx totem/register.ts --token <bootstrap> [--nombre <n>] [--cloud <url>]");
     process.exit(1);
   }
 
@@ -39,7 +38,7 @@ async function main() {
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", "x-bootstrap-token": token },
-    body: JSON.stringify({ nombre, casinoId, hostname: os.hostname(), ipLocal, version }),
+    body: JSON.stringify({ nombre, hostname: os.hostname(), ipLocal, version }),
   });
   if (!res.ok) {
     console.error("Registro falló:", res.status, await res.text());
