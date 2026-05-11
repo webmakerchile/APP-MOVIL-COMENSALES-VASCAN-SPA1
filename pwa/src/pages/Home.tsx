@@ -57,13 +57,8 @@ const DAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MONTHS_ES  = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const MONTHS_FULL = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 
-const RANGE_OPTIONS: { label: string; days: number }[] = [
-  { label: "Esta sem.",  days: 7  },
-  { label: "2 semanas",  days: 14 },
-  { label: "3 semanas",  days: 21 },
-  { label: "4 semanas",  days: 28 },
-  { label: "1 mes",      days: 31 },
-];
+// Los rangos del periodo activo determinan los chips disponibles. No hay
+// rangos calendario fijos: todo se calcula sobre la ventana de servicio.
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function getOptions(m: Minuta) {
@@ -136,7 +131,7 @@ export default function Home() {
   const [selections, setSelections] = useState<Record<string, DaySelection>>({});
   const [expandedMinuta, setExpandedMinuta] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
-  const [rangeDays, setRangeDays] = useState(7);
+  const [activeChip, setActiveChip] = useState<string>("all");
   const [qrModal, setQrModal] = useState<{
     qrCode: string; opcionNum: number; opcionText: string; fecha: string;
   } | null>(null);
@@ -171,22 +166,31 @@ export default function Home() {
   const todayStr = new Date().toISOString().split("T")[0];
   const today = parseDate(todayStr);
 
-  const limitDate = useMemo(() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + rangeDays);
-    return d;
-  }, [rangeDays, todayStr]);
+  // Chips reflejan los rangos reales del periodo activo (semanas dentro de la
+  // ventana de servicio). Si no hay periodo activo, no hay chips.
+  const chips = useMemo(() => {
+    const all = (minutas ?? []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+    if (all.length === 0) return [] as { key: string; label: string; from: string; to: string }[];
+    const out: { key: string; label: string; from: string; to: string }[] = [];
+    out.push({ key: "all", label: "Todo el periodo", from: all[0].fecha, to: all[all.length - 1].fecha });
+    const seen = new Set<string>();
+    for (const m of all) {
+      const k = weekGroupKey(m.fecha);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const items = all.filter(x => weekGroupKey(x.fecha) === k);
+      out.push({ key: k, label: weekGroupLabel(items[0].fecha).replace(/\sSemana\s/, "Sem ").replace(/—.*/, "").trim(), from: items[0].fecha, to: items[items.length - 1].fecha });
+    }
+    return out;
+  }, [minutas]);
 
-  const sortedMinutas = useMemo(
-    () =>
-      (minutas ?? [])
-        .filter((m) => {
-          const d = parseDate(m.fecha);
-          return d >= today && d < limitDate;
-        })
-        .sort((a, b) => parseDate(a.fecha).getTime() - parseDate(b.fecha).getTime()),
-    [minutas, rangeDays, todayStr]
-  );
+  const sortedMinutas = useMemo(() => {
+    const all = (minutas ?? []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+    if (activeChip === "all") return all;
+    const chip = chips.find(c => c.key === activeChip);
+    if (!chip) return all;
+    return all.filter(m => m.fecha >= chip.from && m.fecha <= chip.to);
+  }, [minutas, activeChip, chips]);
 
   /** Grouped as ordered array of { key, label, items } */
   const weekGroups = useMemo(() => {
@@ -374,23 +378,25 @@ export default function Home() {
           <h2 className="text-white font-semibold text-lg">Inscripción</h2>
         </div>
 
-        {/* Range pills */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.days}
-              onClick={() => setRangeDays(opt.days)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                rangeDays === opt.days
-                  ? "bg-vascan-gold text-vascan-bg"
-                  : "bg-white/6 text-white/45 hover:text-white/70 border border-white/8"
-              }`}
-            >
-              <CalendarDays className="w-3 h-3" />
-              {opt.label}
-            </button>
-          ))}
-        </div>
+        {/* Range pills (basadas en la ventana de servicio del periodo activo) */}
+        {chips.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {chips.map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setActiveChip(c.key)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  activeChip === c.key
+                    ? "bg-vascan-gold text-vascan-bg"
+                    : "bg-white/6 text-white/45 hover:text-white/70 border border-white/8"
+                }`}
+              >
+                <CalendarDays className="w-3 h-3" />
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Body ── */}
@@ -405,11 +411,17 @@ export default function Home() {
           title="Sin casino asignado"
           subtitle="Contacta a tu administrador para ser asignado a un casino"
         />
+      ) : !periodoActivo ? (
+        <EmptyState
+          icon={<AlertCircle className="w-10 h-10 text-yellow-400/60" />}
+          title="Sin periodo activo"
+          subtitle="No hay un periodo de inscripción abierto en este momento. Vuelve cuando tu administrador lo habilite."
+        />
       ) : sortedMinutas.length === 0 ? (
         <EmptyState
           icon={<UtensilsCrossed className="w-10 h-10 text-white/20" />}
           title="Sin minutas disponibles"
-          subtitle={`No hay menús programados para los próximos ${rangeDays === 31 ? "30 días" : rangeDays + " días"}`}
+          subtitle="No hay menús cargados para la ventana de servicio del periodo activo."
         />
       ) : (
         <div className="flex-1 overflow-y-auto">

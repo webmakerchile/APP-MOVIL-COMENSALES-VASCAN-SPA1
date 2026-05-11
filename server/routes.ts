@@ -693,51 +693,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Dashboard Stats ──
-  app.get("/api/dashboard/stats", requireAdmin, async (_req: Request, res: Response) => {
+  app.get("/api/dashboard/stats", requireAdmin, async (req: Request, res: Response) => {
     try {
+      const me = (req as any).currentUser;
+      const accessible = await getAccessibleCasinoIds(me);
       const allCasinos = await storage.getCasinos();
-      const activeCasinos = allCasinos.filter(c => c.activo);
+      const activeCasinos = allCasinos.filter(c => c.activo && (accessible === null || accessible.includes(c.id)));
       const allUsers = await storage.getAllUsers();
       const allPedidos = await storage.getAllPedidos();
       const allMinutas = await storage.getAllMinutas();
-
       const today = new Date().toISOString().split('T')[0];
       const now = new Date();
-      const dayOfWeek = now.getDay();
-      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() + mondayOffset);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      const weekStart = monday.toISOString().split('T')[0];
-      const weekEnd = sunday.toISOString().split('T')[0];
 
-      const casinoStats = activeCasinos.map(casino => {
+      const casinoStats = await Promise.all(activeCasinos.map(async casino => {
         const casinoUsers = allUsers.filter(u => u.casinoId === casino.id && u.activo && u.role === 'comensal');
         const totalComensales = casinoUsers.length;
         const esperados = casino.comensalesDiarios || totalComensales;
 
+        // Periodo activo del casino define la ventana de servicio para los cálculos.
+        const periodos = await storage.getPeriodosByCasino(casino.id);
+        const activo = periodos.find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
+        const winStart = activo?.fechaServicioInicio || activo?.fechaInicio?.toString().split("T")[0] || today;
+        const winEnd = activo?.fechaServicioFin || activo?.fechaFin?.toString().split("T")[0] || today;
+
         const todayMinutas = allMinutas.filter(m => m.casinoId === casino.id && m.fecha === today && m.activo);
-        const todayMinutaIds = todayMinutas.map(m => m.id);
-        const todayPedidos = allPedidos.filter(p => todayMinutaIds.includes(p.minutaId));
-        const inscritosHoy = new Set(todayPedidos.map(p => p.userId)).size;
+        const todayIds = todayMinutas.map(m => m.id);
+        const inscritosHoy = new Set(allPedidos.filter(p => todayIds.includes(p.minutaId) && p.tipo !== "no_asiste").map(p => p.userId)).size;
 
-        const weekMinutas = allMinutas.filter(m => m.casinoId === casino.id && m.fecha >= weekStart && m.fecha <= weekEnd && m.activo);
-        const weekMinutaIds = weekMinutas.map(m => m.id);
-        const weekPedidos = allPedidos.filter(p => weekMinutaIds.includes(p.minutaId));
-        const inscritosSemana = new Set(weekPedidos.map(p => p.userId)).size;
+        const periodoMinutas = allMinutas.filter(m => m.casinoId === casino.id && m.fecha >= winStart && m.fecha <= winEnd && m.activo);
+        const periodoIds = periodoMinutas.map(m => m.id);
+        const periodoPedidos = allPedidos.filter(p => periodoIds.includes(p.minutaId));
+        const inscritosPeriodo = new Set(periodoPedidos.filter(p => p.tipo !== "no_asiste").map(p => p.userId)).size;
+        const noAsistePeriodo = periodoPedidos.filter(p => p.tipo === "no_asiste").length;
+        const visitasPeriodo = periodoPedidos.filter(p => p.tipo === "visita").length;
 
-        const weekDates = [...new Set(weekMinutas.map(m => m.fecha))].sort();
-        const dailyBreakdown = weekDates.map(fecha => {
-          const dayMinutas = weekMinutas.filter(m => m.fecha === fecha);
-          const dayMinutaIds = dayMinutas.map(m => m.id);
-          const dayPedidos = allPedidos.filter(p => dayMinutaIds.includes(p.minutaId));
-          const inscritos = new Set(dayPedidos.map(p => p.userId)).size;
+        const fechas = [...new Set(periodoMinutas.map(m => m.fecha))].sort();
+        const dailyBreakdown = fechas.map(fecha => {
+          const dayIds = periodoMinutas.filter(m => m.fecha === fecha).map(m => m.id);
+          const inscritos = new Set(allPedidos.filter(p => dayIds.includes(p.minutaId) && p.tipo !== "no_asiste").map(p => p.userId)).size;
           return { fecha, inscritos, esperados, porcentaje: esperados > 0 ? Math.round((inscritos / esperados) * 100) : 0 };
         });
 
         const porcentajeHoy = esperados > 0 ? Math.round((inscritosHoy / esperados) * 100) : 0;
-        const porcentajeSemana = esperados > 0 ? Math.round((inscritosSemana / esperados) * 100) : 0;
+        const porcentajePeriodo = esperados > 0 ? Math.round((inscritosPeriodo / (esperados * Math.max(1, fechas.length))) * 100) : 0;
 
         return {
           casinoId: casino.id,
@@ -746,16 +744,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           comensalesDiarios: esperados,
           inscritosHoy,
           porcentajeHoy,
-          inscritosSemana,
-          porcentajeSemana,
+          inscritosSemana: inscritosPeriodo,
+          porcentajeSemana: porcentajePeriodo,
+          inscritosPeriodo,
+          noAsistePeriodo,
+          visitasPeriodo,
+          periodoActivo: !!activo,
+          ventanaServicio: activo ? { inicio: winStart, fin: winEnd } : null,
           estado: porcentajeHoy >= 80 ? 'bueno' : porcentajeHoy >= 50 ? 'regular' : 'bajo',
           dailyBreakdown
         };
-      });
+      }));
 
       const totalEsperados = activeCasinos.reduce((sum, c) => sum + (c.comensalesDiarios || 0), 0);
       const totalInscritosHoy = casinoStats.reduce((sum, s) => sum + s.inscritosHoy, 0);
-      const totalComensalesRegistrados = allUsers.filter(u => u.role === 'comensal' && u.activo).length;
+      const totalComensalesRegistrados = allUsers.filter(u => u.role === 'comensal' && u.activo && (accessible === null || (u.casinoId && accessible.includes(u.casinoId)))).length;
 
       return res.json({
         resumen: {
@@ -1166,14 +1169,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tipo = req.body.tipo || "seleccion";
       const nombreVisita = req.body.nombreVisita || null;
 
-      if (tipo === "visita" && user.role !== "interlocutor" && user.role !== "admin") {
-        return res.status(403).json({ message: "Solo interlocutores pueden emitir vales de visita" });
+      if (tipo === "visita" && user.role !== "interlocutor" && user.role !== "admin" && user.role !== "encargado_casino") {
+        return res.status(403).json({ message: "Solo staff puede emitir vales de visita" });
       }
 
       let opcionFinal = parsed.data.opcionSeleccionada;
       if (tipo === "no_asiste") {
         opcionFinal = 0;
-      } else if (user.role === "interlocutor" && tipo !== "visita") {
+      } else if ((user.role === "interlocutor" || user.role === "encargado_casino") && tipo !== "visita") {
         opcionFinal = 1;
       }
 
@@ -1219,27 +1222,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Minutas elegibles para inscribirse: dentro de la ventana de servicio del periodo
-  // activo del casino. Si no hay periodo activo o no define ventana de servicio,
-  // se devuelven las minutas activas desde hoy en adelante (comportamiento legacy).
+  // activo del casino. Si no hay periodo activo, devuelve arreglo vacío.
   app.get("/api/minutas-disponibles/:casinoId", async (req: Request, res: Response) => {
     try {
       const { casinoId } = req.params;
-      const all = await storage.getMinutasByCasino(casinoId);
       const periodosList = await storage.getPeriodosByCasino(casinoId);
       const now = new Date();
       const activo = periodosList.find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
-      const todayStr = now.toISOString().split("T")[0];
-      let filtered = all.filter(m => m.fecha >= todayStr);
-      if (activo && activo.fechaServicioInicio && activo.fechaServicioFin) {
+      if (!activo) {
+        return res.json({ minutas: [], periodo: null });
+      }
+      const all = await storage.getMinutasByCasino(casinoId);
+      let filtered: typeof all = [];
+      if (activo.fechaServicioInicio && activo.fechaServicioFin) {
         filtered = all.filter(m => m.fecha >= activo.fechaServicioInicio! && m.fecha <= activo.fechaServicioFin!);
+      } else {
+        // Periodo activo sin ventana de servicio definida: usar la ventana de inscripción.
+        const fi = activo.fechaInicio.toString().split("T")[0];
+        const ff = activo.fechaFin.toString().split("T")[0];
+        filtered = all.filter(m => m.fecha >= fi && m.fecha <= ff);
       }
       return res.json({
         minutas: filtered.sort((a, b) => a.fecha.localeCompare(b.fecha)),
-        periodo: activo || null,
+        periodo: activo,
       });
     } catch (error) {
       console.error("minutas-disponibles error:", error);
       return res.status(500).json({ message: "Error al obtener minutas disponibles" });
+    }
+  });
+
+  // Buscar pedidos del día por RUT — usado por el tótem (Reimpresión).
+  app.get("/api/pedidos/buscar/por-rut", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const rut = (req.query.rut as string || "").replace(/[^0-9kK]/g, "").toUpperCase();
+      const fecha = (req.query.fecha as string) || new Date().toISOString().split("T")[0];
+      if (!rut) return res.status(400).json({ message: "RUT requerido" });
+      const allUsers = await storage.getAllUsers();
+      const norm = (s: string) => s.replace(/[^0-9kK]/g, "").toUpperCase();
+      const target = allUsers.find(u => norm(u.rut) === rut);
+      if (!target) return res.json({ user: null, pedidos: [], minutas: [] });
+
+      const me = (req as any).currentUser;
+      const accessible = await getAccessibleCasinoIds(me);
+      if (accessible !== null && target.casinoId && !accessible.includes(target.casinoId)) {
+        return res.status(403).json({ message: "Sin acceso a este comensal" });
+      }
+
+      const pedidos = await storage.getPedidosByUser(target.id);
+      const allMinutas = await storage.getAllMinutas();
+      const minutasByDate = allMinutas.filter(m => m.fecha === fecha);
+      const minutaIds = new Set(minutasByDate.map(m => m.id));
+      const pedidosDia = pedidos.filter(p => minutaIds.has(p.minutaId));
+      return res.json({
+        user: { id: target.id, rut: target.rut, nombre: target.nombre, apellido: target.apellido },
+        pedidos: pedidosDia,
+        minutas: minutasByDate,
+      });
+    } catch (error) {
+      console.error("buscar pedidos por rut:", error);
+      return res.status(500).json({ message: "Error" });
     }
   });
 
@@ -1380,8 +1422,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
 
-      if (user.role !== "interlocutor" && user.role !== "admin") {
-        return res.status(403).json({ message: "Solo interlocutores pueden emitir vales de visita" });
+      if (user.role !== "interlocutor" && user.role !== "admin" && user.role !== "encargado_casino") {
+        return res.status(403).json({ message: "Solo staff puede emitir vales de visita" });
       }
 
       const minuta = await storage.getMinuta(minutaId);

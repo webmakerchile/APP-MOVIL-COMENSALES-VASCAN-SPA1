@@ -36,7 +36,20 @@ interface Pedido {
   codigoQr: string | null;
 }
 
-type Step = "login_rut" | "login_pwd" | "change_pwd" | "menu" | "qr" | "error" | "resumen";
+type Step =
+  | "login_rut"
+  | "login_pwd"
+  | "change_pwd"
+  | "menu"
+  | "qr"
+  | "error"
+  | "resumen"
+  | "staff_menu"
+  | "vale_visita_rut"
+  | "vale_visita_nombre"
+  | "vale_visita_opcion"
+  | "reimp_rut"
+  | "reimp_list";
 
 // ── RUT helpers (same logic as PWA) ────────────────────────────────────────
 function formatRutDisplay(raw: string): string {
@@ -166,6 +179,11 @@ export default function Kiosk() {
   const [newPwd2, setNewPwd2] = useState("");
   const [pwdStage, setPwdStage] = useState<1 | 2>(1);
   const [resumen, setResumen] = useState<any>(null);
+  const [reimpRut, setReimpRut] = useState("");
+  const [reimpResult, setReimpResult] = useState<{ user: any; pedidos: Pedido[]; minutas: Minuta[] } | null>(null);
+  const [visitaRut, setVisitaRut] = useState("");
+  const [visitaNombre, setVisitaNombre] = useState("");
+  const [todayMinutas, setTodayMinutas] = useState<Minuta[]>([]);
 
   // ── Reset to initial state ──
   const reset = useCallback(() => {
@@ -184,6 +202,11 @@ export default function Kiosk() {
     setNewPwd2("");
     setPwdStage(1);
     setResumen(null);
+    setReimpRut("");
+    setReimpResult(null);
+    setVisitaRut("");
+    setVisitaNombre("");
+    setTodayMinutas([]);
   }, []);
 
   // Auto-logout after 60s of inactivity in any post-login step.
@@ -239,27 +262,32 @@ export default function Kiosk() {
         }
       } catch {}
 
-      // ¿Cambio de clave forzado?
+      // ¿Cambio de clave forzado en primer login? (Independiente del toggle del casino:
+      // el toggle solo controla si el botón "Cambio de clave" está disponible
+      // como acción opcional dentro del menú staff.)
       if (u!.passwordChangeRequired) {
-        if (casinoData?.permitirCambioClaveTotem) {
-          setStep("change_pwd");
-          setBusy(false);
-          return;
-        }
-        setErrMsg("Debes cambiar tu clave en el panel web antes de usar el tótem. Pide ayuda al encargado.");
-        setStep("error");
+        setStep("change_pwd");
         setBusy(false);
         return;
       }
 
-      // Roles staff → menú especial: resumen del día
+      // Roles staff → menú con 5 botones (Vale propio, Vale visita, Cambio
+      // de clave, Resumen del día, Reimpresión).
       if (u!.role === "admin" || u!.role === "encargado_casino" || u!.role === "interlocutor") {
-        await loadResumen(u!.casinoId);
-        setStep("resumen");
+        const today = todayISO();
+        try {
+          const mRes = await fetch(`/api/minutas/${u!.casinoId}?_t=${Date.now()}`, { credentials: "include" });
+          if (mRes.ok) {
+            const all: Minuta[] = await mRes.json();
+            setTodayMinutas(all.filter(m => m.fecha === today && m.activo));
+          }
+        } catch {}
+        setStep("staff_menu");
         setBusy(false);
         return;
       }
 
+      // Comensal: si ya tiene pedido para hoy, saltar directo al QR.
       const today = todayISO();
       const [minutasRes, pedidosRes] = await Promise.all([
         fetch(`/api/minutas/${u!.casinoId}?_t=${Date.now()}`, { credentials: "include" }),
@@ -269,13 +297,32 @@ export default function Kiosk() {
       const minutasData: Minuta[] = await minutasRes.json();
       const pedidosData: Pedido[] = pedidosRes.ok ? await pedidosRes.json() : [];
 
-      const todayMinutas = minutasData.filter((m) => m.fecha === today && m.activo);
-      if (todayMinutas.length === 0) {
+      const todayMins = minutasData.filter((m) => m.fecha === today && m.activo);
+      if (todayMins.length === 0) {
         setErrMsg("No hay menú disponible para hoy en tu casino.");
         setStep("error");
         return;
       }
-      setMinutas(todayMinutas);
+
+      // Auto-salto a QR si ya tiene pedido del día (no_asiste no se considera).
+      const todayIds = new Set(todayMins.map(m => m.id));
+      const existingToday = pedidosData.find(p => todayIds.has(p.minutaId) && p.opcionSeleccionada > 0);
+      if (existingToday) {
+        const minuta = todayMins.find(m => m.id === existingToday.minutaId)!;
+        const opt = getOptions(minuta).find(o => o.number === existingToday.opcionSeleccionada);
+        setQrCode(existingToday.codigoQr || existingToday.id);
+        setQrMeta({
+          familia: minuta.familia || "Almuerzo",
+          opcion: opt?.text || `Opción ${existingToday.opcionSeleccionada}`,
+          nombre: `${u!.nombre} ${u!.apellido}`,
+          rut: formatRutDisplay(u!.rut),
+        });
+        setStep("qr");
+        try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+        return;
+      }
+
+      setMinutas(todayMins);
       setExistingPedidos(pedidosData);
       setStep("menu");
     } catch {
@@ -306,12 +353,87 @@ export default function Kiosk() {
     try {
       const res = await apiRequest("POST", "/api/auth/change-password", { newPassword: newPwd });
       if (!res.ok) throw new Error();
-      // Volver a login para que el usuario use la nueva clave
       setErrMsg("Clave actualizada. Vuelve a ingresar.");
       setTimeout(reset, 1500);
     } catch {
       setErrMsg("No se pudo cambiar la clave");
     } finally { setBusy(false); }
+  }
+
+  // ── Staff: Vale propio (auto-opcion 1) ──
+  async function handleStaffValePropio() {
+    if (!user) return;
+    if (todayMinutas.length === 0) {
+      setErrMsg("No hay minuta para hoy.");
+      setStep("error");
+      return;
+    }
+    await selectOption(todayMinutas[0], 1);
+  }
+
+  // ── Staff: Vale visita ──
+  async function handleVisitaSubmit() {
+    if (!user) return;
+    if (!visitaRut || visitaRut.length < 2) { setErrMsg("Ingresa el RUT del visitante"); return; }
+    setErrMsg("");
+    setStep("vale_visita_nombre");
+  }
+  async function handleVisitaNombreSubmit() {
+    if (!visitaNombre.trim()) { setErrMsg("Ingresa el nombre del visitante"); return; }
+    if (todayMinutas.length === 0) { setErrMsg("No hay minuta para hoy."); setStep("error"); return; }
+    setErrMsg("");
+    setBusy(true);
+    try {
+      const minuta = todayMinutas[0];
+      const res = await apiRequest("POST", "/api/pedidos/visita", {
+        userId: user!.id,
+        minutaId: minuta.id,
+        nombreVisita: visitaNombre.trim(),
+      });
+      const pedido: Pedido = await res.json();
+      setQrCode(pedido.codigoQr || pedido.id);
+      setQrMeta({
+        familia: minuta.familia || "Almuerzo",
+        opcion: `Visita: ${visitaNombre.trim()}`,
+        nombre: visitaNombre.trim(),
+        rut: formatRutDisplay(visitaRut),
+      });
+      setStep("qr");
+      try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+    } catch {
+      setErrMsg("No se pudo emitir el vale de visita");
+      setStep("error");
+    } finally { setBusy(false); }
+  }
+
+  // ── Staff: Reimpresión ──
+  async function handleReimpSubmit() {
+    if (!reimpRut || reimpRut.length < 2) { setErrMsg("Ingresa el RUT"); return; }
+    setBusy(true); setErrMsg("");
+    try {
+      const r = await fetch(`/api/pedidos/buscar/por-rut?rut=${encodeURIComponent(reimpRut)}&fecha=${todayISO()}`, { credentials: "include" });
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      if (!data.user) { setErrMsg("No se encontró un comensal con ese RUT"); setBusy(false); return; }
+      setReimpResult(data);
+      setStep("reimp_list");
+    } catch {
+      setErrMsg("No se pudo buscar el vale");
+    } finally { setBusy(false); }
+  }
+  function showReimpQR(p: Pedido) {
+    if (!reimpResult) return;
+    const minuta = reimpResult.minutas.find(m => m.id === p.minutaId);
+    if (!minuta) return;
+    const opt = minuta ? getOptions(minuta).find(o => o.number === p.opcionSeleccionada) : null;
+    setQrCode(p.codigoQr || p.id);
+    setQrMeta({
+      familia: minuta.familia || "Almuerzo",
+      opcion: opt?.text || `Opción ${p.opcionSeleccionada}`,
+      nombre: `${reimpResult.user.nombre} ${reimpResult.user.apellido}`,
+      rut: formatRutDisplay(reimpResult.user.rut),
+    });
+    setStep("qr");
   }
 
   // ── Selección de opción ──
@@ -499,6 +621,163 @@ export default function Kiosk() {
             <div className="flex justify-center gap-3">
               <button onClick={() => user.casinoId && loadResumen(user.casinoId)} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
                 Actualizar
+              </button>
+              <button onClick={reset} className="px-6 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold">
+                Terminar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "staff_menu" && user && (
+          <div className="w-full max-w-3xl flex flex-col gap-6">
+            <div className="text-center">
+              <p className="text-vascan-goldLight text-lg">Hola, <span className="text-white font-semibold">{user.nombre} {user.apellido}</span></p>
+              <h2 className="text-3xl font-bold mt-1">¿Qué necesitas hacer?</h2>
+              {casino && <p className="text-white/50 mt-1">{casino.nombre}</p>}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                onClick={handleStaffValePropio}
+                disabled={busy || todayMinutas.length === 0}
+                className="p-6 rounded-2xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold text-xl transition disabled:opacity-40"
+              >
+                Mi vale
+                <p className="text-sm font-normal opacity-80 mt-1">Vale propio del día</p>
+              </button>
+              <button
+                onClick={() => { setStep("vale_visita_rut"); setVisitaRut(""); setVisitaNombre(""); setErrMsg(""); }}
+                disabled={todayMinutas.length === 0}
+                className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition disabled:opacity-40"
+              >
+                Vale visita
+                <p className="text-sm font-normal text-white/60 mt-1">Emitir vale para un invitado</p>
+              </button>
+              <button
+                onClick={async () => { if (user.casinoId) await loadResumen(user.casinoId); setStep("resumen"); }}
+                className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition"
+              >
+                Resumen del día
+                <p className="text-sm font-normal text-white/60 mt-1">Ver totales del casino</p>
+              </button>
+              <button
+                onClick={() => { setStep("reimp_rut"); setReimpRut(""); setReimpResult(null); setErrMsg(""); }}
+                className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition"
+              >
+                Reimpresión
+                <p className="text-sm font-normal text-white/60 mt-1">Buscar vale por RUT</p>
+              </button>
+              {casino?.permitirCambioClaveTotem && (
+                <button
+                  onClick={() => { setStep("change_pwd"); setNewPwd(""); setNewPwd2(""); setPwdStage(1); setErrMsg(""); }}
+                  className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition sm:col-span-2"
+                >
+                  Cambio de clave
+                  <p className="text-sm font-normal text-white/60 mt-1">Actualizar tu clave numérica</p>
+                </button>
+              )}
+            </div>
+            {errMsg && <p className="text-red-400 text-sm flex items-center gap-2 justify-center"><AlertCircle className="w-4 h-4" /> {errMsg}</p>}
+            <div className="flex justify-center">
+              <button onClick={reset} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10">Terminar</button>
+            </div>
+          </div>
+        )}
+
+        {step === "vale_visita_rut" && (
+          <div className="w-full max-w-md flex flex-col items-center gap-6">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold mb-2">RUT del visitante</h2>
+              <p className="text-white/50">Sin puntos ni guion</p>
+            </div>
+            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-center">
+              <p className="text-4xl font-bold tracking-widest text-vascan-gold min-h-[2.5rem]">
+                {visitaRut || <span className="text-white/20 text-2xl tracking-normal">12345678K</span>}
+              </p>
+            </div>
+            {errMsg && <p className="text-red-400 text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {errMsg}</p>}
+            <Keypad value={visitaRut} onChange={(v) => setVisitaRut(v.slice(0, 9).toUpperCase())} onSubmit={handleVisitaSubmit} withK />
+            <button onClick={() => setStep("staff_menu")} className="flex items-center gap-2 text-white/40 hover:text-white/70 text-sm">
+              <ArrowLeft className="w-4 h-4" /> Cancelar
+            </button>
+          </div>
+        )}
+
+        {step === "vale_visita_nombre" && (
+          <div className="w-full max-w-md flex flex-col items-center gap-6">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold mb-2">Nombre del visitante</h2>
+              <p className="text-white/50">Aparecerá impreso en el vale</p>
+            </div>
+            <input
+              autoFocus
+              value={visitaNombre}
+              onChange={(e) => setVisitaNombre(e.target.value)}
+              placeholder="Juan Pérez"
+              className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-2xl text-white text-center focus:outline-none focus:border-vascan-gold/60"
+            />
+            {errMsg && <p className="text-red-400 text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {errMsg}</p>}
+            <div className="flex gap-3 w-full">
+              <button onClick={() => setStep("vale_visita_rut")} className="flex-1 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10">
+                Atrás
+              </button>
+              <button onClick={handleVisitaNombreSubmit} disabled={busy} className="flex-1 px-6 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold disabled:opacity-50">
+                Emitir vale
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "reimp_rut" && (
+          <div className="w-full max-w-md flex flex-col items-center gap-6">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold mb-2">Reimpresión de vale</h2>
+              <p className="text-white/50">Ingresa el RUT del comensal</p>
+            </div>
+            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-center">
+              <p className="text-4xl font-bold tracking-widest text-vascan-gold min-h-[2.5rem]">
+                {reimpRut || <span className="text-white/20 text-2xl tracking-normal">12345678K</span>}
+              </p>
+            </div>
+            {errMsg && <p className="text-red-400 text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {errMsg}</p>}
+            <Keypad value={reimpRut} onChange={(v) => setReimpRut(v.slice(0, 9).toUpperCase())} onSubmit={handleReimpSubmit} withK />
+            <button onClick={() => setStep("staff_menu")} className="flex items-center gap-2 text-white/40 hover:text-white/70 text-sm">
+              <ArrowLeft className="w-4 h-4" /> Cancelar
+            </button>
+          </div>
+        )}
+
+        {step === "reimp_list" && reimpResult && (
+          <div className="w-full max-w-2xl flex flex-col gap-5">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold">{reimpResult.user.nombre} {reimpResult.user.apellido}</h2>
+              <p className="text-white/50 font-mono mt-1">{formatRutDisplay(reimpResult.user.rut)}</p>
+            </div>
+            <div className="space-y-3">
+              {reimpResult.pedidos.length === 0 ? (
+                <p className="text-white/60 text-center py-8 bg-white/3 rounded-xl border border-white/10">
+                  Este comensal no tiene vales emitidos para hoy.
+                </p>
+              ) : (
+                reimpResult.pedidos.filter(p => p.opcionSeleccionada > 0).map(p => {
+                  const m = reimpResult.minutas.find(x => x.id === p.minutaId);
+                  const opt = m ? getOptions(m).find(o => o.number === p.opcionSeleccionada) : null;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => showReimpQR(p)}
+                      className="w-full text-left p-5 rounded-xl bg-white/5 border border-white/10 hover:border-vascan-gold/60 hover:bg-vascan-gold/5 transition"
+                    >
+                      <p className="text-vascan-goldLight text-sm uppercase tracking-wide">{m?.familia || "Almuerzo"}</p>
+                      <p className="text-white text-lg font-semibold mt-1">{opt?.text || `Opción ${p.opcionSeleccionada}`}</p>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            <div className="flex justify-center gap-3">
+              <button onClick={() => setStep("reimp_rut")} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
+                Buscar otro
               </button>
               <button onClick={reset} className="px-6 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold">
                 Terminar
