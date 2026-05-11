@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(rut: string, password: string) {
     const res = await apiRequest("POST", "/api/auth/login", { rut, password });
     const data = await res.json();
-    if (data.user.role !== "comensal" && data.user.role !== "interlocutor" && data.user.role !== "admin") {
+    if (data.user.role !== "comensal" && data.user.role !== "interlocutor" && data.user.role !== "admin" && data.user.role !== "encargado_casino") {
       throw new Error("Rol no autorizado");
     }
     setUser(data.user);

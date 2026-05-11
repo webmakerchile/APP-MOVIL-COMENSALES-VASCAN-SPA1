@@ -253,5 +253,5 @@ export type TotemRelease = typeof totemReleases.$inferSelect;
 export type UsuarioCasino = typeof usuarioCasinos.$inferSelect;
 
 // List of syncable tables in canonical order (master-first; pedidos last because of FKs)
-export const SYNC_TABLES = ["casinos", "familias", "users", "minutas", "periodos", "pedidos"] as const;
+export const SYNC_TABLES = ["casinos", "familias", "users", "usuario_casinos", "minutas", "periodos", "pedidos"] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
