@@ -1443,24 +1443,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/pedidos/visita", async (req: Request, res: Response) => {
     try {
-      const { userId, minutaId, nombreVisita } = req.body;
-      if (!userId || !minutaId || !nombreVisita) {
-        return res.status(400).json({ message: "userId, minutaId y nombreVisita son requeridos" });
+      // El actor se deriva siempre de la sesión; nunca del body.
+      const sessionUserId = (req.session as any).userId;
+      if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+      const actor = await storage.getUser(sessionUserId);
+      if (!actor) return res.status(401).json({ message: "Usuario no encontrado" });
+
+      if (actor.role !== "interlocutor" && actor.role !== "admin" && actor.role !== "encargado_casino") {
+        return res.status(403).json({ message: "Solo staff puede emitir vales de visita" });
       }
 
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
-
-      if (user.role !== "interlocutor" && user.role !== "admin" && user.role !== "encargado_casino") {
-        return res.status(403).json({ message: "Solo staff puede emitir vales de visita" });
+      const { minutaId, nombreVisita } = req.body;
+      if (!minutaId || !nombreVisita) {
+        return res.status(400).json({ message: "minutaId y nombreVisita son requeridos" });
       }
 
       const minuta = await storage.getMinuta(minutaId);
       if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
 
+      // El casino de la minuta debe estar dentro del scope del actor.
+      const accessible = await getAccessibleCasinoIds(actor);
+      if (accessible !== null && !accessible.includes(minuta.casinoId)) {
+        return res.status(403).json({ message: "Sin acceso al casino de esta minuta" });
+      }
+
       const codigoQr = `VASCAN-VISITA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const pedido = await storage.createPedido({
-        userId,
+        userId: actor.id,
         minutaId,
         opcionSeleccionada: 1,
         codigoQr,

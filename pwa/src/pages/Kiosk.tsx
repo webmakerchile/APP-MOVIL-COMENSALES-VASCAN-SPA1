@@ -354,9 +354,9 @@ export default function Kiosk() {
     if (newPwd2 !== newPwd) { setErrMsg("Las claves no coinciden"); setNewPwd2(""); return; }
     setBusy(true); setErrMsg("");
     try {
-      const body: any = { newPassword: newPwd };
       // Si NO es cambio forzado, el backend exige currentPassword.
       // Reutilizamos la clave que el usuario acaba de tipear al ingresar.
+      const body: { newPassword: string; currentPassword?: string } = { newPassword: newPwd };
       if (!user?.passwordChangeRequired && lastLoginPwd) {
         body.currentPassword = lastLoginPwd;
       }
