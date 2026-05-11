@@ -164,6 +164,24 @@ async function getAccessibleCasinoIds(user: any): Promise<string[] | null> {
   return Array.from(ids);
 }
 
+// Verifica que el usuario actual pueda consultar el casino solicitado.
+// `casinoId` puede ser "all": admin→permitido, otros→403.
+// Devuelve true si está OK; si retorna false ya envió la respuesta 403.
+async function assertCasinoAccess(req: Request, res: Response, casinoId: string | undefined | null): Promise<boolean> {
+  const me = (req as any).currentUser;
+  const accessible = await getAccessibleCasinoIds(me);
+  if (accessible === null) return true; // admin
+  if (!casinoId || casinoId === "all") {
+    res.status(403).json({ message: "Debes seleccionar un casino al que tengas acceso" });
+    return false;
+  }
+  if (!accessible.includes(casinoId)) {
+    res.status(403).json({ message: "Sin acceso a este casino" });
+    return false;
+  }
+  return true;
+}
+
 async function autoSeed() {
   try {
     const existingCasinos = await storage.getCasinos();
@@ -614,7 +632,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/casinos", async (req: Request, res: Response) => {
+  app.post("/api/casinos", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const parsed = insertCasinoSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -628,7 +646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/casinos/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.put("/api/casinos/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { nombre, direccion, activo, comensalesDiarios, permitirCambioClaveTotem } = req.body;
@@ -663,7 +681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/casinos/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.delete("/api/casinos/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const force = req.query.force === "true";
@@ -802,7 +820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/minutas/batch-toggle", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/minutas/batch-toggle", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { ids, activo } = req.body;
       if (!Array.isArray(ids) || ids.length === 0) {
@@ -820,7 +838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/minutas", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/minutas", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { casinoIds, ...rest } = req.body;
       const targetIds: string[] = casinoIds && Array.isArray(casinoIds) && casinoIds.length > 0
@@ -848,7 +866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/minutas/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.put("/api/minutas/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { casinoId, fecha, familia, opcion1, opcion2, opcion3, opcion4, opcion5, activo, replicateToCasinoIds } = req.body;
@@ -916,7 +934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/minutas/:id/clonar", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/minutas/:id/clonar", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { fecha, casinoIds } = req.body;
@@ -962,7 +980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/familias", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/familias", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { nombre, color } = req.body;
       if (!nombre) return res.status(400).json({ message: "El nombre es obligatorio" });
@@ -975,7 +993,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/familias/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.put("/api/familias/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { nombre, color, activo } = req.body;
@@ -992,7 +1010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/familias/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.delete("/api/familias/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const deleted = await storage.deleteFamilia(id);
@@ -1026,7 +1044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/periodos", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/periodos", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { casinoId, nombre, fechaInicio, fechaFin, fechaServicioInicio, fechaServicioFin } = req.body;
       if (!casinoId || !nombre || !fechaInicio || !fechaFin) {
@@ -1053,7 +1071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/periodos/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.put("/api/periodos/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { nombre, fechaInicio, fechaFin, fechaServicioInicio, fechaServicioFin, activo } = req.body;
@@ -1076,7 +1094,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/periodos/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.delete("/api/periodos/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const deleted = await storage.deletePeriodo(id);
@@ -1447,7 +1465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Reporte Diario Manual ──
-  app.post("/api/reportes/diario", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/reportes/diario", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const fecha = (req.body?.fecha as string) || new Date().toISOString().split("T")[0];
       const entries = await generateDailyReport(fecha);
@@ -1459,8 +1477,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ── Dashboard Stats ──
-  app.get("/api/reportes/dashboard", requireAdmin, async (req: Request, res: Response) => {
+  // ── Dashboard Stats (admin pleno solamente; el panel scoped vive en /api/dashboard/stats) ──
+  app.get("/api/reportes/dashboard", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const allPedidos = await db.select().from(pedidosTable);
       const totalInscripciones = allPedidos.filter(p => p.tipo === "seleccion" || !p.tipo).length;
@@ -1480,6 +1498,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!casinoId || !fecha) {
         return res.status(400).json({ message: "casinoId y fecha son requeridos" });
       }
+
+      if (!(await assertCasinoAccess(req, res, casinoId as string))) return;
 
       const isAllCasinos = (casinoId as string) === "all";
       const hasRange = !!(fechaHasta && fechaHasta !== fecha);
@@ -1568,6 +1588,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { casinoId, fecha } = req.query;
       if (!casinoId || !fecha) return res.status(400).json({ message: "casinoId y fecha requeridos" });
 
+      if (!(await assertCasinoAccess(req, res, casinoId as string))) return;
+
       const casino = await storage.getCasino(casinoId as string);
       if (!casino) return res.status(404).json({ message: "Casino no encontrado" });
 
@@ -1636,6 +1658,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!casinoId || !fecha) {
         return res.status(400).json({ message: "casinoId y fecha son requeridos" });
       }
+
+      if (!(await assertCasinoAccess(req, res, casinoId as string))) return;
 
       const casino = await storage.getCasino(casinoId as string);
       if (!casino) return res.status(404).json({ message: "Casino no encontrado" });
@@ -1852,7 +1876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Carga Masiva de Usuarios ──
-  app.post("/api/usuarios/upload", requireAdmin, upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/usuarios/upload", requireAdminOnly, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No se recibió archivo" });
@@ -2356,7 +2380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Importar Minutas desde Excel ──
-  app.post("/api/minutas/upload", requireAdmin, upload.single("file"), async (req: Request, res: Response) => {
+  app.post("/api/minutas/upload", requireAdminOnly, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No se recibió archivo" });
@@ -2508,6 +2532,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { fechaDesde, fechaHasta } = req.query as any;
       const casinoId = scopedCasinoId(req, req.query.casinoId as string);
+      if (casinoId && casinoId !== "all" && !(await assertCasinoAccess(req, res, casinoId as string))) return;
+      if ((!casinoId || casinoId === "all") && (req as any).currentUser?.role !== "admin") {
+        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      }
       if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
 
       const allPedidos = await storage.getAllPedidos();
@@ -2587,6 +2615,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { fechaDesde, fechaHasta } = req.query as any;
       const casinoId = scopedCasinoId(req, req.query.casinoId as string);
+      if (casinoId && casinoId !== "all" && !(await assertCasinoAccess(req, res, casinoId as string))) return;
+      if ((!casinoId || casinoId === "all") && (req as any).currentUser?.role !== "admin") {
+        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      }
       if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
 
       const allPedidos = await storage.getAllPedidos();
@@ -2672,6 +2704,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { mes } = req.query as any; // mes = YYYY-MM
       const casinoId = scopedCasinoId(req, req.query.casinoId as string);
+      if (casinoId && casinoId !== "all" && !(await assertCasinoAccess(req, res, casinoId as string))) return;
+      if ((!casinoId || casinoId === "all") && (req as any).currentUser?.role !== "admin") {
+        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      }
       if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return res.status(400).json({ message: "mes requerido (YYYY-MM)" });
 
       const allMinutas = await storage.getAllMinutas();

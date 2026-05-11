@@ -262,11 +262,17 @@ export default function HomeScreen() {
           <Text style={styles.emptyTitle}>Sin casino asignado</Text>
           <Text style={styles.emptyText}>Contacta a tu administrador para ser asignado a un casino</Text>
         </View>
+      ) : !periodoActivo ? (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons name="clock-alert-outline" size={48} color="#f59e0b" />
+          <Text style={styles.emptyTitle}>Sin periodo activo</Text>
+          <Text style={styles.emptyText}>No hay un periodo de inscripción abierto en este momento. Vuelve cuando tu administrador lo habilite.</Text>
+        </View>
       ) : sortedMinutas.length === 0 ? (
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons name="food-off" size={48} color={Colors.textMuted} />
           <Text style={styles.emptyTitle}>Sin minutas disponibles</Text>
-          <Text style={styles.emptyText}>No hay menús programados para esta semana</Text>
+          <Text style={styles.emptyText}>No hay menús cargados para la ventana de servicio del periodo activo.</Text>
         </View>
       ) : (
         <ScrollView
