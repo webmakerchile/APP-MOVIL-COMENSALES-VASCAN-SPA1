@@ -1362,6 +1362,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userAccessible = await getAccessibleCasinoIds(user);
       const userCasinos = userAccessible === null ? null : new Set(userAccessible);
 
+      // Si quien llama no es el mismo usuario destino, además debe tener acceso (como staff)
+      // al casino de cada minuta. Esto evita que un encargado/interlocutor inscriba a usuarios
+      // de casinos fuera de su scope vía userId ajeno.
+      const actorAccessible = userId === sessionUserId ? null : await getAccessibleCasinoIds(sessionUser);
+      const actorCasinos = actorAccessible === null ? null : new Set(actorAccessible);
+
       // Pre-cargamos periodos por casino para validar ventana de servicio por minuta.
       const now = new Date();
       const periodosCache = new Map<string, any>();
@@ -1378,6 +1384,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Verificar que el usuario destino tenga acceso al casino de la minuta
         if (userCasinos !== null && !userCasinos.has(minuta.casinoId)) {
           skipped.push({ minutaId, reason: "usuario sin acceso a este casino" });
+          continue;
+        }
+        // Verificar que el actor (sessionUser) también tenga acceso al casino de la minuta
+        if (actorCasinos !== null && !actorCasinos.has(minuta.casinoId)) {
+          skipped.push({ minutaId, reason: "sin permiso para inscribir en este casino" });
           continue;
         }
 

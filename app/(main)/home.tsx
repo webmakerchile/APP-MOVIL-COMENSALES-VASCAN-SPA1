@@ -304,7 +304,7 @@ export default function HomeScreen() {
             return (
               <View key={minuta.id} style={styles.dayCard}>
                 <Pressable
-                  onPress={() => !alreadyRegistered && toggleMinuta(minuta.id)}
+                  onPress={() => toggleMinuta(minuta.id)}
                   style={[
                     styles.dayHeader,
                     { borderLeftColor: statusColor, borderLeftWidth: 4 },
@@ -327,17 +327,23 @@ export default function HomeScreen() {
                       <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                       <Text style={[styles.statusText, { color: statusColor }]}>{getStatusLabel(status)}</Text>
                     </View>
-                    {!alreadyRegistered && (
-                      <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color={Colors.textMuted} />
-                    )}
+                    <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color={Colors.textMuted} />
                   </View>
                 </Pressable>
 
-                {isExpanded && !alreadyRegistered && (
+                {isExpanded && (
                   <View style={styles.dayBody}>
-                    <Text style={styles.selectLabel}>Selecciona tu opción:</Text>
+                    {alreadyRegistered && (
+                      <Text style={[styles.selectLabel, { color: Colors.primaryLight }]}>
+                        Ya inscrito {pedido.opcionSeleccionada === 0 ? "(no asistirás)" : `(Opción ${pedido.opcionSeleccionada})`}. Puedes modificar tu selección:
+                      </Text>
+                    )}
+                    {!alreadyRegistered && (
+                      <Text style={styles.selectLabel}>Selecciona tu opción:</Text>
+                    )}
                     {options.map(opt => {
-                      const isSelected = sel?.tipo === "seleccion" && sel?.opcionSeleccionada === opt.number;
+                      const currentOpt = sel?.tipo === "seleccion" ? sel.opcionSeleccionada : (alreadyRegistered && !sel ? pedido.opcionSeleccionada : undefined);
+                      const isSelected = currentOpt === opt.number;
                       return (
                         <Pressable
                           key={opt.number}
@@ -354,19 +360,33 @@ export default function HomeScreen() {
                         </Pressable>
                       );
                     })}
-                    <Pressable
-                      onPress={() => selectNoAsiste(minuta.id)}
-                      style={[styles.noAsisteBtn, sel?.tipo === "no_asiste" && styles.noAsisteBtnActive]}
-                    >
-                      <Feather name="x-circle" size={18} color={sel?.tipo === "no_asiste" ? "#FFF" : "#F97316"} />
-                      <Text style={[styles.noAsisteBtnText, sel?.tipo === "no_asiste" && { color: "#FFF" }]}>
-                        No asisto este día
-                      </Text>
-                    </Pressable>
+                    {(() => {
+                      const noAsisteActive = sel?.tipo === "no_asiste" || (alreadyRegistered && !sel && pedido.opcionSeleccionada === 0);
+                      return (
+                        <Pressable
+                          onPress={() => selectNoAsiste(minuta.id)}
+                          style={[styles.noAsisteBtn, noAsisteActive && styles.noAsisteBtnActive]}
+                        >
+                          <Feather name="x-circle" size={18} color={noAsisteActive ? "#FFF" : "#F97316"} />
+                          <Text style={[styles.noAsisteBtnText, noAsisteActive && { color: "#FFF" }]}>
+                            No asisto este día
+                          </Text>
+                        </Pressable>
+                      );
+                    })()}
+                    {alreadyRegistered && pedido.opcionSeleccionada !== 0 && (
+                      <Pressable
+                        onPress={() => router.push({ pathname: "/(main)/minuta-detail", params: { id: minuta.id, fecha: minuta.fecha } })}
+                        style={styles.verValeInline}
+                      >
+                        <Feather name="external-link" size={16} color={Colors.primary} />
+                        <Text style={styles.verValeText}>Ver vale actual →</Text>
+                      </Pressable>
+                    )}
                   </View>
                 )}
 
-                {alreadyRegistered && (
+                {!isExpanded && alreadyRegistered && (
                   <View style={styles.registeredInfo}>
                     {pedido.opcionSeleccionada === 0 ? (
                       <Text style={styles.registeredText}>No asistirás este día</Text>
@@ -669,6 +689,18 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_500Medium",
     fontSize: 13,
     color: Colors.primary,
+  },
+  verValeInline: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "rgba(212, 168, 67, 0.08)",
+    borderWidth: 1,
+    borderColor: Colors.primary,
   },
   visitaBtnContainer: {
     flexDirection: "row",

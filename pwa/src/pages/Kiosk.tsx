@@ -167,6 +167,7 @@ export default function Kiosk() {
   const [step, setStep] = useState<Step>("login_rut");
   const [rutRaw, setRutRaw] = useState("");
   const [pwdRaw, setPwdRaw] = useState("");
+  const [lastLoginPwd, setLastLoginPwd] = useState("");
   const [user, setUser] = useState<KioskUser | null>(null);
   const [minutas, setMinutas] = useState<Minuta[]>([]);
   const [existingPedidos, setExistingPedidos] = useState<Pedido[]>([]);
@@ -231,11 +232,13 @@ export default function Kiosk() {
     setBusy(true);
     setErrMsg("");
     let u: KioskUser | null = null;
+    const submittedPwd = pwdRaw;
     try {
-      const res = await apiRequest("POST", "/api/auth/login", { rut: rutRaw, password: pwdRaw });
+      const res = await apiRequest("POST", "/api/auth/login", { rut: rutRaw, password: submittedPwd });
       const data = await res.json();
       if (!data.user) throw new Error("Sin sesión");
       u = data.user;
+      setLastLoginPwd(submittedPwd);
     } catch {
       setErrMsg("RUT o contraseña incorrectos");
       setPwdRaw("");
@@ -351,7 +354,13 @@ export default function Kiosk() {
     if (newPwd2 !== newPwd) { setErrMsg("Las claves no coinciden"); setNewPwd2(""); return; }
     setBusy(true); setErrMsg("");
     try {
-      const res = await apiRequest("POST", "/api/auth/change-password", { newPassword: newPwd });
+      const body: any = { newPassword: newPwd };
+      // Si NO es cambio forzado, el backend exige currentPassword.
+      // Reutilizamos la clave que el usuario acaba de tipear al ingresar.
+      if (!user?.passwordChangeRequired && lastLoginPwd) {
+        body.currentPassword = lastLoginPwd;
+      }
+      const res = await apiRequest("POST", "/api/auth/change-password", body);
       if (!res.ok) throw new Error();
       setErrMsg("Clave actualizada. Vuelve a ingresar.");
       setTimeout(reset, 1500);
