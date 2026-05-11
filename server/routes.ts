@@ -1053,8 +1053,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (new Date(fechaFin) <= new Date(fechaInicio)) {
         return res.status(400).json({ message: "La fecha/hora de fin debe ser posterior a la de inicio" });
       }
-      if (fechaServicioInicio && fechaServicioFin && fechaServicioFin < fechaServicioInicio) {
-        return res.status(400).json({ message: "La fecha de fin de servicio debe ser posterior a la de inicio" });
+      if (fechaServicioInicio && fechaServicioFin) {
+        if (fechaServicioFin < fechaServicioInicio) {
+          return res.status(400).json({ message: "La fecha de fin de servicio debe ser posterior a la de inicio" });
+        }
+        // La ventana de servicio debe ser posterior o igual a la de inscripción
+        const insStart = new Date(fechaInicio).toISOString().split("T")[0];
+        const insEnd = new Date(fechaFin).toISOString().split("T")[0];
+        if (fechaServicioInicio < insStart || fechaServicioFin < insEnd) {
+          return res.status(400).json({ message: "La ventana de servicio debe ser posterior o igual a la ventana de inscripción" });
+        }
       }
       const periodo = await storage.createPeriodo({
         casinoId,
@@ -1084,6 +1092,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (activo !== undefined) updateData.activo = activo;
       if (updateData.fechaInicio && updateData.fechaFin && new Date(updateData.fechaFin) <= new Date(updateData.fechaInicio)) {
         return res.status(400).json({ message: "La fecha/hora de fin debe ser posterior a la de inicio" });
+      }
+      // Validar coherencia ventana de servicio respecto a inscripción (cuando ambas presentes en payload)
+      if (updateData.fechaServicioInicio && updateData.fechaServicioFin) {
+        if (updateData.fechaServicioFin < updateData.fechaServicioInicio) {
+          return res.status(400).json({ message: "La fecha de fin de servicio debe ser posterior a la de inicio" });
+        }
+        const fi = updateData.fechaInicio || (await storage.getPeriodo(id))?.fechaInicio;
+        const ff = updateData.fechaFin || (await storage.getPeriodo(id))?.fechaFin;
+        if (fi && ff) {
+          const insStart = new Date(fi).toISOString().split("T")[0];
+          const insEnd = new Date(ff).toISOString().split("T")[0];
+          if (updateData.fechaServicioInicio < insStart || updateData.fechaServicioFin < insEnd) {
+            return res.status(400).json({ message: "La ventana de servicio debe ser posterior o igual a la ventana de inscripción" });
+          }
+        }
       }
       const periodo = await storage.updatePeriodo(id, updateData);
       if (!periodo) return res.status(404).json({ message: "Periodo no encontrado" });
@@ -1400,11 +1423,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const periodoActivo = (periodos as any[]).find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
         if (!periodoActivo) { skipped.push({ minutaId, reason: "fuera de horario de inscripción" }); continue; }
-        if (periodoActivo.fechaServicioInicio && periodoActivo.fechaServicioFin) {
-          if (minuta.fecha < periodoActivo.fechaServicioInicio || minuta.fecha > periodoActivo.fechaServicioFin) {
-            skipped.push({ minutaId, reason: "fuera de la ventana de servicio del periodo" });
-            continue;
-          }
+        // Mismo fallback que /api/minutas-disponibles: si no hay ventana de servicio
+        // explícita, usar la ventana de inscripción como rango de servicio.
+        const svcStart = periodoActivo.fechaServicioInicio
+          || new Date(periodoActivo.fechaInicio).toISOString().split("T")[0];
+        const svcEnd = periodoActivo.fechaServicioFin
+          || new Date(periodoActivo.fechaFin).toISOString().split("T")[0];
+        if (minuta.fecha < svcStart || minuta.fecha > svcEnd) {
+          skipped.push({ minutaId, reason: "fuera de la ventana de servicio del periodo" });
+          continue;
         }
 
         const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);

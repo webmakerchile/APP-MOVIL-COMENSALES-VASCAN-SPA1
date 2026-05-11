@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS casinos (
   nombre TEXT NOT NULL,
   direccion TEXT,
   comensales_diarios INTEGER NOT NULL DEFAULT 0,
+  permitir_cambio_clave_totem INTEGER NOT NULL DEFAULT 0,
   activo INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER,
   updated_at INTEGER NOT NULL,
@@ -31,6 +32,8 @@ CREATE TABLE IF NOT EXISTS users (
   nombre TEXT NOT NULL,
   apellido TEXT NOT NULL,
   telefono TEXT,
+  fecha_nacimiento TEXT,
+  password_change_required INTEGER NOT NULL DEFAULT 1,
   role TEXT NOT NULL DEFAULT 'comensal',
   casino_id TEXT,
   activo INTEGER NOT NULL DEFAULT 1,
@@ -39,6 +42,18 @@ CREATE TABLE IF NOT EXISTS users (
   deleted_at INTEGER,
   sync_version INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS usuario_casinos (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  casino_id TEXT NOT NULL,
+  created_at INTEGER,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER,
+  sync_version INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_usuario_casinos_user ON usuario_casinos(user_id);
+CREATE INDEX IF NOT EXISTS idx_usuario_casinos_casino ON usuario_casinos(casino_id);
 
 CREATE TABLE IF NOT EXISTS minutas (
   id TEXT PRIMARY KEY,
@@ -63,6 +78,8 @@ CREATE TABLE IF NOT EXISTS periodos (
   nombre TEXT NOT NULL,
   fecha_inicio INTEGER NOT NULL,
   fecha_fin INTEGER NOT NULL,
+  fecha_servicio_inicio TEXT,
+  fecha_servicio_fin TEXT,
   activo INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER,
   updated_at INTEGER NOT NULL,

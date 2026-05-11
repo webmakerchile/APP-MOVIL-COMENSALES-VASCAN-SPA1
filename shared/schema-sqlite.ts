@@ -17,9 +17,20 @@ export const users = sqliteTable("users", {
   nombre: text("nombre").notNull(),
   apellido: text("apellido").notNull(),
   telefono: text("telefono"),
+  fechaNacimiento: text("fecha_nacimiento"), // YYYY-MM-DD
+  passwordChangeRequired: integer("password_change_required", { mode: "boolean" }).notNull().default(true),
   role: text("role").notNull().default("comensal"),
   casinoId: text("casino_id"),
   activo: integer("activo", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }),
+  ...syncCols,
+});
+
+// Mirror de la tabla puente N:M usuarios↔casinos (interlocutor multi-casino).
+export const usuarioCasinos = sqliteTable("usuario_casinos", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  casinoId: text("casino_id").notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }),
   ...syncCols,
 });
@@ -29,6 +40,7 @@ export const casinos = sqliteTable("casinos", {
   nombre: text("nombre").notNull(),
   direccion: text("direccion"),
   comensalesDiarios: integer("comensales_diarios").notNull().default(0),
+  permitirCambioClaveTotem: integer("permitir_cambio_clave_totem", { mode: "boolean" }).notNull().default(false),
   activo: integer("activo", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp_ms" }),
   ...syncCols,
@@ -64,6 +76,8 @@ export const periodos = sqliteTable("periodos", {
   nombre: text("nombre").notNull(),
   fechaInicio: integer("fecha_inicio", { mode: "timestamp_ms" }).notNull(),
   fechaFin: integer("fecha_fin", { mode: "timestamp_ms" }).notNull(),
+  fechaServicioInicio: text("fecha_servicio_inicio"), // YYYY-MM-DD
+  fechaServicioFin: text("fecha_servicio_fin"),       // YYYY-MM-DD
   activo: integer("activo", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp_ms" }),
   ...syncCols,
@@ -117,4 +131,5 @@ export type SqliteFamilia = typeof familias.$inferSelect;
 export type SqliteMinuta = typeof minutas.$inferSelect;
 export type SqlitePedido = typeof pedidos.$inferSelect;
 export type SqlitePeriodo = typeof periodos.$inferSelect;
+export type SqliteUsuarioCasino = typeof usuarioCasinos.$inferSelect;
 export type SyncOutboxRow = typeof syncOutbox.$inferSelect;
