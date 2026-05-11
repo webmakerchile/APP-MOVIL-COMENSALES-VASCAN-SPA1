@@ -131,7 +131,7 @@ function requireAdmin(req: Request, res: Response, next: Function) {
     if (!user) {
       return res.status(401).json({ message: "Usuario no encontrado" });
     }
-    if (user.role !== "admin" && user.role !== "interlocutor") {
+    if (user.role !== "admin" && user.role !== "interlocutor" && user.role !== "encargado_casino") {
       return res.status(403).json({ message: "Acceso restringido" });
     }
     (req as any).currentUser = user;
@@ -139,6 +139,29 @@ function requireAdmin(req: Request, res: Response, next: Function) {
   }).catch(() => {
     return res.status(500).json({ message: "Error de autenticación" });
   });
+}
+
+// Solo administradores plenos (no interlocutor, no encargado_casino).
+function requireAdminOnly(req: Request, res: Response, next: Function) {
+  const userId = (req.session as any).userId;
+  if (!userId) return res.status(401).json({ message: "No autenticado" });
+  storage.getUser(userId).then((user) => {
+    if (!user) return res.status(401).json({ message: "Usuario no encontrado" });
+    if (user.role !== "admin") return res.status(403).json({ message: "Solo administradores" });
+    (req as any).currentUser = user;
+    next();
+  }).catch(() => res.status(500).json({ message: "Error de autenticación" }));
+}
+
+// Resuelve los casinos accesibles por el usuario actual.
+// admin → null (= todos). interlocutor/encargado → unión(casinoId base, usuario_casinos).
+async function getAccessibleCasinoIds(user: any): Promise<string[] | null> {
+  if (!user) return [];
+  if (user.role === "admin") return null;
+  const extra = await storage.getUserCasinoIds(user.id);
+  const ids = new Set<string>(extra);
+  if (user.casinoId) ids.add(user.casinoId);
+  return Array.from(ids);
 }
 
 async function autoSeed() {
@@ -361,7 +384,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const { password: _, ...userWithoutPassword } = user;
-    return res.json({ user: userWithoutPassword });
+    const casinoIds = await getAccessibleCasinoIds(user);
+    return res.json({ user: { ...userWithoutPassword, casinoIds: casinoIds || [] } });
+  });
+
+  // Cambio de clave (auto-servicio o forzado en primer login en tótem).
+  app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+    try {
+      const userId = (req.session as any).userId;
+      if (!userId) return res.status(401).json({ message: "No autenticado" });
+      const { currentPassword, newPassword } = req.body || {};
+      if (!newPassword || String(newPassword).length < 4) {
+        return res.status(400).json({ message: "La nueva clave debe tener al menos 4 caracteres" });
+      }
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ message: "Usuario no encontrado" });
+
+      // Si NO es primer cambio forzado, exigimos clave actual.
+      if (!user.passwordChangeRequired) {
+        if (!currentPassword) return res.status(400).json({ message: "Clave actual requerida" });
+        const ok = await bcrypt.compare(currentPassword, user.password);
+        if (!ok) return res.status(401).json({ message: "Clave actual incorrecta" });
+      }
+      const hashed = await bcrypt.hash(newPassword, 10);
+      await storage.updateUser(user.id, { password: hashed, passwordChangeRequired: false } as any);
+      return res.json({ message: "Clave actualizada" });
+    } catch (error) {
+      console.error("Change password error:", error);
+      return res.status(500).json({ message: "Error al cambiar la clave" });
+    }
   });
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
@@ -390,23 +441,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ── Usuarios CRUD (admin-only) ──
-  app.get("/api/usuarios", requireAdmin, async (_req: Request, res: Response) => {
+  // ── Usuarios CRUD ──
+  // GET: cualquier rol staff. Filtrado por casinos accesibles cuando NO es admin.
+  // POST/PUT/DELETE: solo admin (interlocutor/encargado son read-only).
+  app.get("/api/usuarios", requireAdmin, async (req: Request, res: Response) => {
     try {
+      const me = (req as any).currentUser;
+      const accessible = await getAccessibleCasinoIds(me);
       const allUsers = await storage.getAllUsers();
-      const usersWithoutPasswords = allUsers
-        .filter(u => u.rut !== SUPER_ADMIN_RUT)
-        .map(({ password, ...u }) => u);
-      return res.json(usersWithoutPasswords);
+
+      // Map userId → set of casinos asignados (incluye casinoId base)
+      const allUserCasinos = await Promise.all(
+        allUsers.map(async u => ({ id: u.id, ids: await storage.getUserCasinoIds(u.id) }))
+      );
+      const userCasinoMap = new Map(allUserCasinos.map(x => [x.id, x.ids]));
+
+      let filtered = allUsers.filter(u => u.rut !== SUPER_ADMIN_RUT);
+      if (accessible !== null) {
+        const set = new Set(accessible);
+        filtered = filtered.filter(u => {
+          if (u.casinoId && set.has(u.casinoId)) return true;
+          const extra = userCasinoMap.get(u.id) || [];
+          return extra.some(cid => set.has(cid));
+        });
+      }
+      // Permite filtrar explícitamente por ?casinoId=
+      const reqCasino = (req.query.casinoId as string | undefined)?.trim();
+      if (reqCasino && reqCasino !== "all") {
+        filtered = filtered.filter(u => {
+          if (u.casinoId === reqCasino) return true;
+          const extra = userCasinoMap.get(u.id) || [];
+          return extra.includes(reqCasino);
+        });
+      }
+      const result = filtered.map(({ password, ...u }) => ({
+        ...u,
+        casinoIds: userCasinoMap.get(u.id) || [],
+      }));
+      return res.json(result);
     } catch (error) {
       console.error("Get users error:", error);
       return res.status(500).json({ message: "Error interno del servidor" });
     }
   });
 
-  app.post("/api/usuarios", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/usuarios", requireAdminOnly, async (req: Request, res: Response) => {
     try {
-      const { rut, nombre, apellido, telefono, role, casinoId, password: pwd } = req.body;
+      const { rut, nombre, apellido, telefono, role, casinoId, casinoIds, fechaNacimiento, password: pwd } = req.body;
       if (!rut || !nombre || !apellido) {
         return res.status(400).json({ message: "RUT, nombre y apellido son requeridos" });
       }
@@ -430,7 +511,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: hashedPassword,
         role: role || "comensal",
         casinoId: casinoId || null,
-      });
+        fechaNacimiento: fechaNacimiento || null,
+        passwordChangeRequired: true,
+      } as any);
+
+      if (Array.isArray(casinoIds) && casinoIds.length > 0) {
+        await storage.setUserCasinos(user.id, casinoIds);
+      }
 
       const { password: _, ...userWithoutPassword } = user;
       return res.status(201).json(userWithoutPassword);
@@ -440,10 +527,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/usuarios/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.put("/api/usuarios/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { nombre, apellido, telefono, role, casinoId, activo, password: newPwd } = req.body;
+      const { nombre, apellido, telefono, role, casinoId, casinoIds, fechaNacimiento, activo, password: newPwd, passwordChangeRequired } = req.body;
 
       const updateData: any = {};
       if (nombre !== undefined) updateData.nombre = nombre;
@@ -451,12 +538,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (telefono !== undefined) updateData.telefono = telefono || null;
       if (role !== undefined) updateData.role = role;
       if (casinoId !== undefined) updateData.casinoId = casinoId || null;
+      if (fechaNacimiento !== undefined) updateData.fechaNacimiento = fechaNacimiento || null;
       if (activo !== undefined) updateData.activo = activo;
-      if (newPwd) updateData.password = await bcrypt.hash(newPwd, 10);
+      if (newPwd) {
+        updateData.password = await bcrypt.hash(newPwd, 10);
+        // si admin resetea clave, forzar cambio en próximo login (a menos que se pase explícito)
+        updateData.passwordChangeRequired = passwordChangeRequired === undefined ? true : !!passwordChangeRequired;
+      } else if (passwordChangeRequired !== undefined) {
+        updateData.passwordChangeRequired = !!passwordChangeRequired;
+      }
 
       const user = await storage.updateUser(id, updateData);
       if (!user) {
         return res.status(404).json({ message: "Usuario no encontrado" });
+      }
+      if (Array.isArray(casinoIds)) {
+        await storage.setUserCasinos(id, casinoIds);
       }
 
       const { password: _, ...userWithoutPassword } = user;
@@ -467,7 +564,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/usuarios/:id", requireAdmin, async (req: Request, res: Response) => {
+  // GET casinos asignados a un usuario (multi-casino interlocutor / encargado).
+  // Solo admin o el propio usuario.
+  app.get("/api/usuarios/:id/casinos", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const me = (req as any).currentUser;
+      if (me.role !== "admin" && me.id !== req.params.id) {
+        return res.status(403).json({ message: "Acceso restringido" });
+      }
+      const ids = await storage.getUserCasinoIds(req.params.id);
+      return res.json({ casinoIds: ids });
+    } catch {
+      return res.status(500).json({ message: "Error" });
+    }
+  });
+
+  app.delete("/api/usuarios/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const deleted = await storage.deleteUser(id);
@@ -519,12 +631,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/casinos/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { nombre, direccion, activo, comensalesDiarios } = req.body;
+      const { nombre, direccion, activo, comensalesDiarios, permitirCambioClaveTotem } = req.body;
       const updateData: any = {};
       if (nombre !== undefined) updateData.nombre = nombre;
       if (direccion !== undefined) updateData.direccion = direccion;
       if (activo !== undefined) updateData.activo = activo;
       if (comensalesDiarios !== undefined) updateData.comensalesDiarios = parseInt(comensalesDiarios) || 0;
+      if (permitirCambioClaveTotem !== undefined) updateData.permitirCambioClaveTotem = !!permitirCambioClaveTotem;
 
       const casino = await storage.updateCasino(id, updateData);
       if (!casino) {
@@ -786,7 +899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/minutas/:id", requireAdmin, async (req: Request, res: Response) => {
+  app.delete("/api/minutas/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const deleted = await storage.deleteMinuta(id);
@@ -912,19 +1025,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/periodos", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { casinoId, nombre, fechaInicio, fechaFin } = req.body;
+      const { casinoId, nombre, fechaInicio, fechaFin, fechaServicioInicio, fechaServicioFin } = req.body;
       if (!casinoId || !nombre || !fechaInicio || !fechaFin) {
         return res.status(400).json({ message: "Todos los campos son obligatorios" });
       }
       if (new Date(fechaFin) <= new Date(fechaInicio)) {
         return res.status(400).json({ message: "La fecha/hora de fin debe ser posterior a la de inicio" });
       }
+      if (fechaServicioInicio && fechaServicioFin && fechaServicioFin < fechaServicioInicio) {
+        return res.status(400).json({ message: "La fecha de fin de servicio debe ser posterior a la de inicio" });
+      }
       const periodo = await storage.createPeriodo({
         casinoId,
         nombre,
         fechaInicio: new Date(fechaInicio),
         fechaFin: new Date(fechaFin),
-      });
+        fechaServicioInicio: fechaServicioInicio || null,
+        fechaServicioFin: fechaServicioFin || null,
+      } as any);
       return res.status(201).json(periodo);
     } catch (error) {
       console.error("Create periodo error:", error);
@@ -935,11 +1053,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/periodos/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { nombre, fechaInicio, fechaFin, activo } = req.body;
+      const { nombre, fechaInicio, fechaFin, fechaServicioInicio, fechaServicioFin, activo } = req.body;
       const updateData: any = {};
       if (nombre !== undefined) updateData.nombre = nombre;
       if (fechaInicio !== undefined) updateData.fechaInicio = new Date(fechaInicio);
       if (fechaFin !== undefined) updateData.fechaFin = new Date(fechaFin);
+      if (fechaServicioInicio !== undefined) updateData.fechaServicioInicio = fechaServicioInicio || null;
+      if (fechaServicioFin !== undefined) updateData.fechaServicioFin = fechaServicioFin || null;
       if (activo !== undefined) updateData.activo = activo;
       if (updateData.fechaInicio && updateData.fechaFin && new Date(updateData.fechaFin) <= new Date(updateData.fechaInicio)) {
         return res.status(400).json({ message: "La fecha/hora de fin debe ser posterior a la de inicio" });
@@ -1087,40 +1207,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const periodosList = await storage.getPeriodosByCasino(casinoId);
       const now = new Date();
       const activo = periodosList.find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
-      return res.json({ activo: !!activo, periodo: activo || null });
+      return res.json({
+        activo: !!activo,
+        periodo: activo || null,
+        fechaServicioInicio: activo?.fechaServicioInicio || null,
+        fechaServicioFin: activo?.fechaServicioFin || null,
+      });
     } catch (error) {
       return res.status(500).json({ message: "Error al verificar periodo" });
     }
   });
 
+  // Minutas elegibles para inscribirse: dentro de la ventana de servicio del periodo
+  // activo del casino. Si no hay periodo activo o no define ventana de servicio,
+  // se devuelven las minutas activas desde hoy en adelante (comportamiento legacy).
+  app.get("/api/minutas-disponibles/:casinoId", async (req: Request, res: Response) => {
+    try {
+      const { casinoId } = req.params;
+      const all = await storage.getMinutasByCasino(casinoId);
+      const periodosList = await storage.getPeriodosByCasino(casinoId);
+      const now = new Date();
+      const activo = periodosList.find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
+      const todayStr = now.toISOString().split("T")[0];
+      let filtered = all.filter(m => m.fecha >= todayStr);
+      if (activo && activo.fechaServicioInicio && activo.fechaServicioFin) {
+        filtered = all.filter(m => m.fecha >= activo.fechaServicioInicio! && m.fecha <= activo.fechaServicioFin!);
+      }
+      return res.json({
+        minutas: filtered.sort((a, b) => a.fecha.localeCompare(b.fecha)),
+        periodo: activo || null,
+      });
+    } catch (error) {
+      console.error("minutas-disponibles error:", error);
+      return res.status(500).json({ message: "Error al obtener minutas disponibles" });
+    }
+  });
+
+  // Resumen del día para encargado_casino / admin: totales por opción + no_asiste + visitas.
+  app.get("/api/reportes/resumen-dia/:casinoId", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { casinoId } = req.params;
+      const me = (req as any).currentUser;
+      const accessible = await getAccessibleCasinoIds(me);
+      if (accessible !== null && !accessible.includes(casinoId)) {
+        return res.status(403).json({ message: "Sin acceso a este casino" });
+      }
+      const fecha = (req.query.fecha as string) || new Date().toISOString().split("T")[0];
+      const minutas = await storage.getAllMinutasByCasino(casinoId);
+      const minuta = minutas.find(m => m.fecha === fecha && m.activo);
+      if (!minuta) {
+        return res.json({ fecha, casinoId, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
+      }
+      const pedidosList = await storage.getPedidosByMinuta(minuta.id);
+      const sel = pedidosList.filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
+      const noAsiste = pedidosList.filter(p => p.tipo === "no_asiste").length;
+      const visitas = pedidosList.filter(p => p.tipo === "visita").length;
+      const opts = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
+      const opciones = opts.map((d, i) => d ? { numero: i + 1, descripcion: d, cantidad: sel.filter(p => p.opcionSeleccionada === i + 1).length } : null).filter(Boolean);
+      return res.json({
+        fecha, casinoId,
+        minuta: { id: minuta.id, familia: minuta.familia },
+        opciones, totalSeleccion: sel.length, totalNoAsiste: noAsiste, totalVisitas: visitas,
+      });
+    } catch (error) {
+      console.error("Resumen dia error:", error);
+      return res.status(500).json({ message: "Error al obtener resumen" });
+    }
+  });
+
   app.post("/api/pedidos/semanal", async (req: Request, res: Response) => {
     try {
-      const { userId, selecciones } = req.body;
-      if (!userId || !selecciones || !Array.isArray(selecciones)) {
-        return res.status(400).json({ message: "userId y selecciones son requeridos" });
+      const sessionUserId = (req.session as any).userId;
+      if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+
+      const sessionUser = await storage.getUser(sessionUserId);
+      if (!sessionUser) return res.status(401).json({ message: "Usuario no encontrado" });
+
+      const { selecciones } = req.body;
+      let { userId } = req.body;
+      // Solo admin/interlocutor/encargado pueden inscribir a otros; comensal solo a sí mismo.
+      if (!userId || userId === sessionUserId) {
+        userId = sessionUserId;
+      } else if (sessionUser.role === "comensal") {
+        return res.status(403).json({ message: "No puede inscribir a otro usuario" });
+      }
+      if (!selecciones || !Array.isArray(selecciones)) {
+        return res.status(400).json({ message: "selecciones son requeridas" });
       }
 
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
 
-      if (user.casinoId) {
-        const periodosList = await storage.getPeriodosByCasino(user.casinoId);
-        const now = new Date();
-        const periodoActivo = periodosList.find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
-        if (!periodoActivo) {
-          return res.status(403).json({ message: "No hay un periodo de inscripción activo. Contacta a tu administrador." });
-        }
-      }
+      // Casinos a los que el usuario destino tiene acceso (debe coincidir con el de la minuta).
+      const userAccessible = await getAccessibleCasinoIds(user);
+      const userCasinos = userAccessible === null ? null : new Set(userAccessible);
+
+      // Pre-cargamos periodos por casino para validar ventana de servicio por minuta.
+      const now = new Date();
+      const periodosCache = new Map<string, any>();
 
       const results: any[] = [];
+      const skipped: { minutaId: string; reason: string }[] = [];
       for (const sel of selecciones) {
         const { minutaId, opcionSeleccionada, tipo } = sel;
         if (!minutaId) continue;
 
-        const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
-
         const minuta = await storage.getMinuta(minutaId);
-        if (!minuta) continue;
+        if (!minuta) { skipped.push({ minutaId, reason: "minuta no encontrada" }); continue; }
+
+        // Verificar que el usuario destino tenga acceso al casino de la minuta
+        if (userCasinos !== null && !userCasinos.has(minuta.casinoId)) {
+          skipped.push({ minutaId, reason: "usuario sin acceso a este casino" });
+          continue;
+        }
+
+        // Validar periodo activo + ventana de servicio para el casino de la minuta
+        let periodos = periodosCache.get(minuta.casinoId);
+        if (!periodos) {
+          periodos = await storage.getPeriodosByCasino(minuta.casinoId);
+          periodosCache.set(minuta.casinoId, periodos);
+        }
+        const periodoActivo = (periodos as any[]).find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
+        if (!periodoActivo) { skipped.push({ minutaId, reason: "fuera de horario de inscripción" }); continue; }
+        if (periodoActivo.fechaServicioInicio && periodoActivo.fechaServicioFin) {
+          if (minuta.fecha < periodoActivo.fechaServicioInicio || minuta.fecha > periodoActivo.fechaServicioFin) {
+            skipped.push({ minutaId, reason: "fuera de la ventana de servicio del periodo" });
+            continue;
+          }
+        }
+
+        const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
 
         let opcion = opcionSeleccionada || 1;
         const selTipo = tipo || "seleccion";
@@ -1147,7 +1363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         results.push(pedido);
       }
 
-      return res.status(201).json(results);
+      return res.status(201).json({ results, skipped });
     } catch (error) {
       console.error("Create pedidos semanales error:", error);
       return res.status(500).json({ message: "Error al registrar selecciones semanales" });

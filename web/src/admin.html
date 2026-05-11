@@ -479,7 +479,8 @@
       const [toast, setToast] = useState(null);
       const [search, setSearch] = useState('');
 
-      const [form, setForm] = useState({ rut: '', nombre: '', apellido: '', telefono: '', role: 'comensal', casinoId: '', password: '' });
+      const [form, setForm] = useState({ rut: '', nombre: '', apellido: '', telefono: '', role: 'comensal', casinoId: '', casinoIds: [], fechaNacimiento: '', password: '' });
+      const [filterCasino, setFilterCasino] = useState('all');
 
       useEffect(() => { loadData(); }, []);
 
@@ -495,21 +496,23 @@
 
       function openCreate() {
         setEditUser(null);
-        setForm({ rut: '', nombre: '', apellido: '', telefono: '', role: 'comensal', casinoId: '', password: '' });
+        setForm({ rut: '', nombre: '', apellido: '', telefono: '', role: 'comensal', casinoId: '', casinoIds: [], fechaNacimiento: '', password: '' });
         setShowModal(true);
       }
 
       function openEdit(u) {
         setEditUser(u);
-        setForm({ rut: u.rut, nombre: u.nombre, apellido: u.apellido, telefono: u.telefono || '', role: u.role, casinoId: u.casinoId || '', password: '' });
+        setForm({ rut: u.rut, nombre: u.nombre, apellido: u.apellido, telefono: u.telefono || '', role: u.role, casinoId: u.casinoId || '', casinoIds: u.casinoIds || [], fechaNacimiento: u.fechaNacimiento || '', password: '' });
         setShowModal(true);
       }
 
       async function handleSave(e) {
         e.preventDefault();
         try {
+          const isMulti = form.role === 'interlocutor' || form.role === 'encargado_casino';
           if (editUser) {
-            const body = { nombre: form.nombre, apellido: form.apellido, telefono: form.telefono || null, role: form.role, casinoId: form.casinoId || null };
+            const body = { nombre: form.nombre, apellido: form.apellido, telefono: form.telefono || null, role: form.role, casinoId: form.casinoId || null, fechaNacimiento: form.fechaNacimiento || null };
+            if (isMulti) body.casinoIds = form.casinoIds;
             if (form.password) body.password = form.password;
             await apiFetch(`/api/usuarios/${editUser.id}`, { method: 'PUT', body: JSON.stringify(body) });
             setToast({ message: 'Usuario actualizado', type: 'success' });
@@ -519,7 +522,9 @@
               setToast({ message: 'El RUT ingresado no es válido. Verifique el dígito verificador.', type: 'error' });
               return;
             }
-            await apiFetch('/api/usuarios', { method: 'POST', body: JSON.stringify({...form, rut: rutLimpio}) });
+            const payload = { ...form, rut: rutLimpio, fechaNacimiento: form.fechaNacimiento || null };
+            if (!isMulti) delete payload.casinoIds;
+            await apiFetch('/api/usuarios', { method: 'POST', body: JSON.stringify(payload) });
             setToast({ message: 'Usuario creado', type: 'success' });
           }
           setShowModal(false);
@@ -549,14 +554,18 @@
         }
       }
 
-      const filtered = users.filter(u =>
-        u.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        u.apellido.toLowerCase().includes(search.toLowerCase()) ||
-        u.rut.toLowerCase().includes(search.toLowerCase())
-      );
+      const filtered = users.filter(u => {
+        const txt = (u.nombre + ' ' + u.apellido + ' ' + u.rut).toLowerCase();
+        if (search && !txt.includes(search.toLowerCase())) return false;
+        if (filterCasino && filterCasino !== 'all') {
+          const ids = [u.casinoId, ...(u.casinoIds || [])].filter(Boolean);
+          if (!ids.includes(filterCasino)) return false;
+        }
+        return true;
+      });
 
-      const roleLabels = { admin: 'Admin', comensal: 'Comensal', interlocutor: 'Interlocutor' };
-      const roleBadge = { admin: 'bg-purple-500/20 text-purple-400', comensal: 'bg-blue-500/20 text-blue-400', interlocutor: 'bg-vascan-gold/20 text-vascan-gold' };
+      const roleLabels = { admin: 'Admin', comensal: 'Comensal', interlocutor: 'Interlocutor', encargado_casino: 'Encargado' };
+      const roleBadge = { admin: 'bg-purple-500/20 text-purple-400', comensal: 'bg-blue-500/20 text-blue-400', interlocutor: 'bg-vascan-gold/20 text-vascan-gold', encargado_casino: 'bg-emerald-500/20 text-emerald-400' };
 
       if (loading) return <LoadingSpinner />;
 
@@ -573,9 +582,14 @@
           </div>
 
           <div className="bg-vascan-surface rounded-2xl border border-white/10 overflow-hidden">
-            <div className="p-4 border-b border-white/10">
+            <div className="p-4 border-b border-white/10 flex flex-col md:flex-row gap-3">
               <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, apellido o RUT..."
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-vascan-gold/50 transition text-sm" />
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-vascan-gold/50 transition text-sm" />
+              <select value={filterCasino} onChange={e => setFilterCasino(e.target.value)}
+                className="bg-vascan-dark border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm" style={{colorScheme:'dark'}}>
+                <option value="all">Todos los casinos</option>
+                {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -640,11 +654,29 @@
                 <InputField label="Apellido" value={form.apellido} onChange={v => setForm({...form, apellido: v})} required />
               </div>
               <InputField label="Teléfono" value={form.telefono} onChange={v => setForm({...form, telefono: v})} placeholder="+56912345678" />
-              <SelectField label="Rol" value={form.role} onChange={v => setForm({...form, role: v})}
-                options={[{ value: 'comensal', label: 'Comensal' }, { value: 'interlocutor', label: 'Interlocutor' }, { value: 'admin', label: 'Admin' }]} />
-              <SelectField label="Casino" value={form.casinoId} onChange={v => setForm({...form, casinoId: v})}
+              <div className="grid grid-cols-2 gap-4">
+                <SelectField label="Rol" value={form.role} onChange={v => setForm({...form, role: v})}
+                  options={[{ value: 'comensal', label: 'Comensal' }, { value: 'encargado_casino', label: 'Encargado de Casino' }, { value: 'interlocutor', label: 'Interlocutor (multi-casino)' }, { value: 'admin', label: 'Admin' }]} />
+                <InputField label="Fecha de nacimiento" value={form.fechaNacimiento} onChange={v => setForm({...form, fechaNacimiento: v})} type="date" />
+              </div>
+              <SelectField label="Casino principal" value={form.casinoId} onChange={v => setForm({...form, casinoId: v})}
                 options={[{ value: '', label: 'Sin casino asignado' }, ...casinos.map(c => ({ value: c.id, label: c.nombre }))]} />
-              <InputField label={editUser ? 'Nueva contraseña (dejar vacío para mantener)' : 'Contraseña (vacío = primeros 4 dígitos del RUT)'}
+              {(form.role === 'interlocutor' || form.role === 'encargado_casino') && (
+                <div>
+                  <label className="block text-sm font-medium text-white/70 mb-1.5">Casinos adicionales accesibles</label>
+                  <p className="text-xs text-white/40 mb-2">El usuario podrá ver datos de estos casinos además del principal.</p>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto bg-white/5 rounded-xl p-3 border border-white/10">
+                    {casinos.map(c => (
+                      <label key={c.id} className="flex items-center gap-3 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1 transition">
+                        <input type="checkbox" checked={form.casinoIds.includes(c.id)} onChange={() => setForm(f => ({...f, casinoIds: f.casinoIds.includes(c.id) ? f.casinoIds.filter(x=>x!==c.id) : [...f.casinoIds, c.id]}))}
+                          className="w-4 h-4 rounded accent-amber-500" />
+                        <span className="text-sm text-white/80">{c.nombre}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <InputField label={editUser ? 'Nueva contraseña (vacío = no cambiar; al cambiar, se forzará nuevo cambio en próximo login)' : 'Contraseña (vacío = primeros 4 dígitos del RUT). Se forzará cambio en primer login.'}
                 value={form.password} onChange={v => setForm({...form, password: v})} type="password" />
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-medium transition">Cancelar</button>
@@ -669,7 +701,7 @@
       const [editItem, setEditItem] = useState(null);
       const [deleteTarget, setDeleteTarget] = useState(null);
       const [toast, setToast] = useState(null);
-      const [form, setForm] = useState({ nombre: '', direccion: '', comensalesDiarios: 0 });
+      const [form, setForm] = useState({ nombre: '', direccion: '', comensalesDiarios: 0, permitirCambioClaveTotem: false });
 
       useEffect(() => { loadData(); }, []);
 
@@ -684,13 +716,13 @@
 
       function openCreate() {
         setEditItem(null);
-        setForm({ nombre: '', direccion: '', comensalesDiarios: 0 });
+        setForm({ nombre: '', direccion: '', comensalesDiarios: 0, permitirCambioClaveTotem: false });
         setShowModal(true);
       }
 
       function openEdit(c) {
         setEditItem(c);
-        setForm({ nombre: c.nombre, direccion: c.direccion || '', comensalesDiarios: c.comensalesDiarios || 0 });
+        setForm({ nombre: c.nombre, direccion: c.direccion || '', comensalesDiarios: c.comensalesDiarios || 0, permitirCambioClaveTotem: !!c.permitirCambioClaveTotem });
         setShowModal(true);
       }
 
@@ -799,6 +831,13 @@
               <InputField label="Nombre" value={form.nombre} onChange={v => setForm({...form, nombre: v})} placeholder="Casino Central" required />
               <InputField label="Dirección" value={form.direccion} onChange={v => setForm({...form, direccion: v})} placeholder="Av. Principal 123" />
               <InputField label="Comensales Diarios Esperados" value={form.comensalesDiarios} onChange={v => setForm({...form, comensalesDiarios: parseInt(v) || 0})} type="number" placeholder="Ej: 180" />
+              <label className="flex items-start gap-3 p-3 bg-white/5 border border-white/10 rounded-xl cursor-pointer hover:bg-white/8">
+                <input type="checkbox" checked={form.permitirCambioClaveTotem} onChange={e => setForm({...form, permitirCambioClaveTotem: e.target.checked})} className="mt-0.5 w-4 h-4 accent-amber-500" />
+                <div>
+                  <p className="text-sm font-medium text-white">Permitir cambio de clave en el tótem</p>
+                  <p className="text-xs text-white/50 mt-0.5">Si está activo, los comensales podrán cambiar su clave en el primer ingreso por el tótem. Si no, deberán cambiarla en el panel web.</p>
+                </div>
+              </label>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-medium transition">Cancelar</button>
                 <button type="submit" className="px-5 py-2.5 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-sm font-medium transition">
@@ -1684,7 +1723,7 @@
       const [loading, setLoading] = useState(true);
       const [showModal, setShowModal] = useState(false);
       const [editing, setEditing] = useState(null);
-      const [form, setForm] = useState({ nombre: '', casinoId: '', casinoIds: [], fechaInicio: '', fechaFin: '' });
+      const [form, setForm] = useState({ nombre: '', casinoId: '', casinoIds: [], fechaInicio: '', fechaFin: '', fechaServicioInicio: '', fechaServicioFin: '' });
       const [toast, setToast] = useState(null);
 
       useEffect(() => {
@@ -1705,7 +1744,7 @@
 
       function openCreate() {
         setEditing(null);
-        setForm({ nombre: '', casinoId: '', casinoIds: casinos.map(c => c.id), fechaInicio: '', fechaFin: '' });
+        setForm({ nombre: '', casinoId: '', casinoIds: casinos.map(c => c.id), fechaInicio: '', fechaFin: '', fechaServicioInicio: '', fechaServicioFin: '' });
         setShowModal(true);
       }
 
@@ -1717,7 +1756,7 @@
           const pad = n => String(n).padStart(2, '0');
           return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
         };
-        setForm({ nombre: p.nombre, casinoId: p.casinoId, casinoIds: [p.casinoId], fechaInicio: toLocal(fi), fechaFin: toLocal(ff) });
+        setForm({ nombre: p.nombre, casinoId: p.casinoId, casinoIds: [p.casinoId], fechaInicio: toLocal(fi), fechaFin: toLocal(ff), fechaServicioInicio: p.fechaServicioInicio || '', fechaServicioFin: p.fechaServicioFin || '' });
         setShowModal(true);
       }
 
@@ -1731,7 +1770,7 @@
         }
         try {
           if (editing) {
-            await apiFetch(`/api/periodos/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin }) });
+            await apiFetch(`/api/periodos/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin, fechaServicioInicio: form.fechaServicioInicio || null, fechaServicioFin: form.fechaServicioFin || null }) });
             setToast({ message: 'Periodo actualizado', type: 'success' });
             setShowModal(false); refresh();
           } else {
@@ -1739,7 +1778,7 @@
               setToast({ message: 'Seleccione al menos un casino', type: 'error' }); return;
             }
             for (const cId of form.casinoIds) {
-              await apiFetch('/api/periodos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, casinoId: cId, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin }) });
+              await apiFetch('/api/periodos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, casinoId: cId, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin, fechaServicioInicio: form.fechaServicioInicio || null, fechaServicioFin: form.fechaServicioFin || null }) });
             }
             setToast({ message: `Periodo creado en ${form.casinoIds.length} casino(s)`, type: 'success' });
             setShowModal(false); refresh();
@@ -1906,6 +1945,22 @@
                     <label className="block text-sm font-medium text-white/60 mb-1">Fecha y hora de fin</label>
                     <input type="datetime-local" value={form.fechaFin} onChange={e => setForm({...form, fechaFin: e.target.value})}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" style={{colorScheme: 'dark'}} />
+                  </div>
+                  <div className="border-t border-white/10 pt-4 mt-2">
+                    <h3 className="text-sm font-semibold text-white/80 mb-1">Ventana de servicio (opcional)</h3>
+                    <p className="text-xs text-white/40 mb-3">Días para los cuales el comensal podrá inscribirse durante este periodo. Si se deja vacío, podrán inscribirse a cualquier minuta futura.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-white/60 mb-1">Desde</label>
+                        <input type="date" value={form.fechaServicioInicio} onChange={e => setForm({...form, fechaServicioInicio: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm" style={{colorScheme: 'dark'}} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-white/60 mb-1">Hasta</label>
+                        <input type="date" value={form.fechaServicioFin} onChange={e => setForm({...form, fechaServicioFin: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm" style={{colorScheme: 'dark'}} />
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-3 mt-6">

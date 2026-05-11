@@ -70,10 +70,11 @@ export default function HomeScreen() {
   const [selections, setSelections] = useState<Record<string, DaySelection>>({});
   const [expandedMinuta, setExpandedMinuta] = useState<string | null>(null);
 
-  const { data: minutas, isLoading, isRefetching, refetch } = useQuery<Minuta[]>({
-    queryKey: ["/api/minutas", user?.casinoId ?? "none"],
+  const { data: disponibles, isLoading, isRefetching, refetch } = useQuery<{ minutas: Minuta[]; periodo: any }>({
+    queryKey: ["/api/minutas-disponibles", user?.casinoId ?? "none"],
     enabled: !!user?.casinoId,
   });
+  const minutas = disponibles?.minutas;
 
   const { data: periodoData } = useQuery<{ activo: boolean; periodo: any }>({
     queryKey: ["/api/periodo-activo", user?.casinoId ?? "none"],
@@ -95,13 +96,21 @@ export default function HomeScreen() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/pedidos"] });
       setSelections({});
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      Alert.alert("Listo", "Tu inscripción semanal fue registrada correctamente.");
+      const skipped = Array.isArray(data?.skipped) ? data.skipped : [];
+      const okCount = Array.isArray(data?.results) ? data.results.length : 0;
+      if (skipped.length > 0 && okCount > 0) {
+        Alert.alert("Inscripción parcial", `Se registraron ${okCount} días. ${skipped.length} quedaron fuera de la ventana de inscripción.`);
+      } else if (skipped.length > 0 && okCount === 0) {
+        Alert.alert("Sin registros", "Ningún día pudo registrarse: todos están fuera de la ventana de inscripción.");
+      } else {
+        Alert.alert("Listo", "Tu inscripción semanal fue registrada correctamente.");
+      }
     },
     onError: (err: any) => {
       const msg = err?.message || "Hubo un problema al registrar tu inscripción.";

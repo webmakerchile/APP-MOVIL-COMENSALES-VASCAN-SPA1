@@ -147,12 +147,15 @@ export default function Home() {
   );
 
   // ── Queries ──
-  const { data: minutas, isLoading, isRefetching, refetch } = useQuery<Minuta[]>({
-    queryKey: ["/api/minutas", user?.casinoId ?? "none"],
+  // Usamos /api/minutas-disponibles que ya filtra por la ventana de servicio
+  // del periodo activo (cuando está definida). Devuelve { minutas, periodo }.
+  const { data: disponibles, isLoading, isRefetching, refetch } = useQuery<{ minutas: Minuta[]; periodo: any }>({
+    queryKey: ["/api/minutas-disponibles", user?.casinoId ?? "none"],
     enabled: !!user?.casinoId,
   });
+  const minutas = disponibles?.minutas;
 
-  const { data: periodoData } = useQuery<{ activo: boolean; periodo: { fechaInicio: string; fechaFin: string } | null }>({
+  const { data: periodoData } = useQuery<{ activo: boolean; periodo: { fechaInicio: string; fechaFin: string; fechaServicioInicio?: string | null; fechaServicioFin?: string | null } | null; fechaServicioInicio?: string | null; fechaServicioFin?: string | null }>({
     queryKey: ["/api/periodo-activo", user?.casinoId ?? "none"],
     enabled: !!user?.casinoId,
   });
@@ -213,10 +216,18 @@ export default function Home() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ["/api/pedidos"] });
       setSelections({});
-      showToast("¡Inscripción registrada correctamente!", "success");
+      const skipped = Array.isArray(data?.skipped) ? data.skipped : [];
+      const okCount = Array.isArray(data?.results) ? data.results.length : 0;
+      if (skipped.length > 0 && okCount > 0) {
+        showToast(`Se registraron ${okCount} días. ${skipped.length} fueron omitidos por estar fuera de la ventana de inscripción.`, "warning");
+      } else if (skipped.length > 0 && okCount === 0) {
+        showToast("Ningún día pudo registrarse: todos están fuera de la ventana de inscripción.", "error");
+      } else {
+        showToast("¡Inscripción registrada correctamente!", "success");
+      }
     },
     onError: (err: Error) => {
       showToast(err.message || "Hubo un problema al registrar la inscripción.", "error");

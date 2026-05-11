@@ -11,6 +11,12 @@ interface KioskUser {
   apellido: string;
   role: string;
   casinoId: string | null;
+  passwordChangeRequired?: boolean;
+}
+interface KioskCasino {
+  id: string;
+  nombre: string;
+  permitirCambioClaveTotem?: boolean;
 }
 interface Minuta {
   id: string;
@@ -30,7 +36,7 @@ interface Pedido {
   codigoQr: string | null;
 }
 
-type Step = "login_rut" | "login_pwd" | "menu" | "qr" | "error";
+type Step = "login_rut" | "login_pwd" | "change_pwd" | "menu" | "qr" | "error" | "resumen";
 
 // ── RUT helpers (same logic as PWA) ────────────────────────────────────────
 function formatRutDisplay(raw: string): string {
@@ -155,6 +161,11 @@ export default function Kiosk() {
   const [errMsg, setErrMsg] = useState("");
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [qrMeta, setQrMeta] = useState<{ familia: string; opcion: string; nombre: string; rut: string } | null>(null);
+  const [casino, setCasino] = useState<KioskCasino | null>(null);
+  const [newPwd, setNewPwd] = useState("");
+  const [newPwd2, setNewPwd2] = useState("");
+  const [pwdStage, setPwdStage] = useState<1 | 2>(1);
+  const [resumen, setResumen] = useState<any>(null);
 
   // ── Reset to initial state ──
   const reset = useCallback(() => {
@@ -168,6 +179,11 @@ export default function Kiosk() {
     setErrMsg("");
     setQrCode(null);
     setQrMeta(null);
+    setCasino(null);
+    setNewPwd("");
+    setNewPwd2("");
+    setPwdStage(1);
+    setResumen(null);
   }, []);
 
   // Auto-logout after 60s of inactivity in any post-login step.
@@ -211,6 +227,39 @@ export default function Kiosk() {
         setStep("error");
         return;
       }
+
+      // Cargar info del casino para saber si permite cambio de clave en tótem
+      let casinoData: KioskCasino | null = null;
+      try {
+        const cRes = await fetch(`/api/casinos`, { credentials: "include" });
+        if (cRes.ok) {
+          const all: KioskCasino[] = await cRes.json();
+          casinoData = all.find(c => c.id === u!.casinoId) || null;
+          setCasino(casinoData);
+        }
+      } catch {}
+
+      // ¿Cambio de clave forzado?
+      if (u!.passwordChangeRequired) {
+        if (casinoData?.permitirCambioClaveTotem) {
+          setStep("change_pwd");
+          setBusy(false);
+          return;
+        }
+        setErrMsg("Debes cambiar tu clave en el panel web antes de usar el tótem. Pide ayuda al encargado.");
+        setStep("error");
+        setBusy(false);
+        return;
+      }
+
+      // Roles staff → menú especial: resumen del día
+      if (u!.role === "admin" || u!.role === "encargado_casino" || u!.role === "interlocutor") {
+        await loadResumen(u!.casinoId);
+        setStep("resumen");
+        setBusy(false);
+        return;
+      }
+
       const today = todayISO();
       const [minutasRes, pedidosRes] = await Promise.all([
         fetch(`/api/minutas/${u!.casinoId}?_t=${Date.now()}`, { credentials: "include" }),
@@ -235,6 +284,34 @@ export default function Kiosk() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadResumen(casinoId: string) {
+    try {
+      const r = await fetch(`/api/reportes/resumen-dia/${casinoId}?_t=${Date.now()}`, { credentials: "include" });
+      if (r.ok) setResumen(await r.json());
+    } catch {}
+  }
+
+  // ── Cambio de clave forzado (primer ingreso) ──
+  async function handleChangePwd() {
+    if (pwdStage === 1) {
+      if (!newPwd || newPwd.length < 4) { setErrMsg("Mínimo 4 dígitos"); return; }
+      setErrMsg("");
+      setPwdStage(2);
+      return;
+    }
+    if (newPwd2 !== newPwd) { setErrMsg("Las claves no coinciden"); setNewPwd2(""); return; }
+    setBusy(true); setErrMsg("");
+    try {
+      const res = await apiRequest("POST", "/api/auth/change-password", { newPassword: newPwd });
+      if (!res.ok) throw new Error();
+      // Volver a login para que el usuario use la nueva clave
+      setErrMsg("Clave actualizada. Vuelve a ingresar.");
+      setTimeout(reset, 1500);
+    } catch {
+      setErrMsg("No se pudo cambiar la clave");
+    } finally { setBusy(false); }
   }
 
   // ── Selección de opción ──
@@ -352,6 +429,81 @@ export default function Kiosk() {
             >
               <ArrowLeft className="w-4 h-4" /> Cambiar RUT
             </button>
+          </div>
+        )}
+
+        {step === "change_pwd" && (
+          <div className="w-full max-w-md flex flex-col items-center gap-6">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold mb-2">{pwdStage === 1 ? "Crea tu nueva clave" : "Confirma tu nueva clave"}</h2>
+              <p className="text-white/50">Mínimo 4 dígitos · solo numérica</p>
+            </div>
+            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-center">
+              <p className="text-5xl font-bold tracking-[0.5em] text-vascan-gold min-h-[3rem]">
+                {(pwdStage === 1 ? newPwd : newPwd2)
+                  ? "•".repeat((pwdStage === 1 ? newPwd : newPwd2).length)
+                  : <span className="text-white/20 text-3xl tracking-normal">••••</span>}
+              </p>
+            </div>
+            {errMsg && (
+              <p className="text-red-400 text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {errMsg}</p>
+            )}
+            <Keypad
+              value={pwdStage === 1 ? newPwd : newPwd2}
+              onChange={(v) => (pwdStage === 1 ? setNewPwd(v.slice(0, 12)) : setNewPwd2(v.slice(0, 12)))}
+              onSubmit={handleChangePwd}
+            />
+          </div>
+        )}
+
+        {step === "resumen" && user && (
+          <div className="w-full max-w-3xl flex flex-col gap-6">
+            <div className="text-center">
+              <p className="text-vascan-goldLight text-lg">Hola, <span className="text-white font-semibold">{user.nombre} {user.apellido}</span></p>
+              <h2 className="text-3xl font-bold mt-1">Resumen del día</h2>
+              {casino && <p className="text-white/50 mt-1">{casino.nombre}</p>}
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              {resumen?.minuta ? (
+                <>
+                  <div className="grid grid-cols-3 gap-4 mb-5">
+                    <div className="text-center">
+                      <p className="text-white/50 text-sm">Selecciones</p>
+                      <p className="text-3xl font-bold text-vascan-gold mt-1">{resumen.totalSeleccion}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-white/50 text-sm">No asiste</p>
+                      <p className="text-3xl font-bold text-orange-300 mt-1">{resumen.totalNoAsiste}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-white/50 text-sm">Visitas</p>
+                      <p className="text-3xl font-bold text-blue-300 mt-1">{resumen.totalVisitas}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {(resumen.opciones || []).map((o: any) => (
+                      <div key={o.numero} className="flex items-center justify-between bg-white/3 rounded-lg px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-full bg-vascan-gold/20 text-vascan-gold flex items-center justify-center font-bold">{o.numero}</span>
+                          <span className="text-white">{o.descripcion}</span>
+                        </div>
+                        <span className="text-vascan-gold font-bold text-xl">{o.cantidad}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-white/60 text-center py-6">No hay menú para hoy.</p>
+              )}
+            </div>
+            <div className="flex justify-center gap-3">
+              <button onClick={() => user.casinoId && loadResumen(user.casinoId)} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
+                Actualizar
+              </button>
+              <button onClick={reset} className="px-6 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold">
+                Terminar
+              </button>
+            </div>
           </div>
         )}
 

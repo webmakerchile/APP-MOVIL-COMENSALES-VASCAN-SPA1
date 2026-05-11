@@ -17,6 +17,7 @@ export const userRoleEnum = pgEnum("user_role", [
   "admin",
   "comensal",
   "interlocutor",
+  "encargado_casino",
 ]);
 
 // Sync helper columns shared by all syncable tables.
@@ -40,9 +41,24 @@ export const users = pgTable("users", {
   telefono: text("telefono"),
   role: userRoleEnum("role").notNull().default("comensal"),
   casinoId: varchar("casino_id").references(() => casinos.id),
+  fechaNacimiento: date("fecha_nacimiento"),
+  passwordChangeRequired: boolean("password_change_required").notNull().default(true),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   ...syncCols,
+});
+
+export const usuarioCasinos = pgTable("usuario_casinos", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  casinoId: varchar("casino_id")
+    .notNull()
+    .references(() => casinos.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const casinos = pgTable("casinos", {
@@ -52,6 +68,7 @@ export const casinos = pgTable("casinos", {
   nombre: text("nombre").notNull(),
   direccion: text("direccion"),
   comensalesDiarios: integer("comensales_diarios").notNull().default(0),
+  permitirCambioClaveTotem: boolean("permitir_cambio_clave_totem").notNull().default(false),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   ...syncCols,
@@ -97,6 +114,8 @@ export const periodos = pgTable("periodos", {
   nombre: text("nombre").notNull(),
   fechaInicio: timestamp("fecha_inicio").notNull(),
   fechaFin: timestamp("fecha_fin").notNull(),
+  fechaServicioInicio: date("fecha_servicio_inicio"),
+  fechaServicioFin: date("fecha_servicio_fin"),
   activo: boolean("activo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   ...syncCols,
@@ -167,6 +186,8 @@ export const insertUserSchema = createInsertSchema(users).pick({
   telefono: true,
   role: true,
   casinoId: true,
+  fechaNacimiento: true,
+  passwordChangeRequired: true,
 });
 
 export const loginSchema = z.object({
@@ -178,6 +199,7 @@ export const insertCasinoSchema = createInsertSchema(casinos).pick({
   nombre: true,
   direccion: true,
   comensalesDiarios: true,
+  permitirCambioClaveTotem: true,
 });
 
 export const insertFamiliaSchema = createInsertSchema(familias).pick({
@@ -210,6 +232,8 @@ export const insertPeriodoSchema = createInsertSchema(periodos).pick({
   nombre: true,
   fechaInicio: true,
   fechaFin: true,
+  fechaServicioInicio: true,
+  fechaServicioFin: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -226,6 +250,7 @@ export type Periodo = typeof periodos.$inferSelect;
 export type InsertPeriodo = z.infer<typeof insertPeriodoSchema>;
 export type Totem = typeof totems.$inferSelect;
 export type TotemRelease = typeof totemReleases.$inferSelect;
+export type UsuarioCasino = typeof usuarioCasinos.$inferSelect;
 
 // List of syncable tables in canonical order (master-first; pedidos last because of FKs)
 export const SYNC_TABLES = ["casinos", "familias", "users", "minutas", "periodos", "pedidos"] as const;

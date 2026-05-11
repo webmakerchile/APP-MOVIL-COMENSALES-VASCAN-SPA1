@@ -29,6 +29,7 @@ import {
   minutas,
   pedidos,
   periodos,
+  usuarioCasinos,
   type User,
   type InsertUser,
   type Casino,
@@ -284,6 +285,18 @@ export class DatabaseStorage implements IStorage {
   async deletePeriodo(id: string): Promise<boolean> {
     const [periodo] = await db.update(periodos).set(tombstone()).where(eq(periodos.id, id)).returning();
     return !!periodo;
+  }
+
+  // ── Usuario ↔ Casinos (multi-casino interlocutor / encargado) ──
+  async getUserCasinoIds(userId: string): Promise<string[]> {
+    const rows = await db.select().from(usuarioCasinos).where(eq(usuarioCasinos.userId, userId));
+    return rows.map(r => r.casinoId);
+  }
+  async setUserCasinos(userId: string, casinoIds: string[]): Promise<void> {
+    await db.delete(usuarioCasinos).where(eq(usuarioCasinos.userId, userId));
+    if (casinoIds.length === 0) return;
+    const rows = casinoIds.map(cid => ({ userId, casinoId: cid }));
+    await db.insert(usuarioCasinos).values(rows).onConflictDoNothing();
   }
 }
 
