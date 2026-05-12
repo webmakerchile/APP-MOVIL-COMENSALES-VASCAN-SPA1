@@ -11,6 +11,10 @@ interface KioskUser {
   apellido: string;
   role: string;
   casinoId: string | null;
+  // Casinos accesibles (incluye casinoId base + multi-casino vía usuario_casinos).
+  // Permite que un mismo tótem atienda staff a cargo de varios casinos
+  // (ej: Química General + Química Ejecutivo).
+  casinoIds?: string[];
   passwordChangeRequired?: boolean;
 }
 interface KioskCasino {
@@ -44,6 +48,7 @@ type Step =
   | "qr"
   | "error"
   | "resumen"
+  | "staff_select_casino"
   | "staff_menu"
   | "vale_visita_rut"
   | "vale_visita_nombre"
@@ -185,6 +190,9 @@ export default function Kiosk() {
   const [visitaRut, setVisitaRut] = useState("");
   const [visitaNombre, setVisitaNombre] = useState("");
   const [todayMinutas, setTodayMinutas] = useState<Minuta[]>([]);
+  // Multi-casino para staff: casinos accesibles del usuario y casino activo elegido.
+  const [accessibleCasinos, setAccessibleCasinos] = useState<KioskCasino[]>([]);
+  const [selectedCasinoId, setSelectedCasinoId] = useState<string | null>(null);
 
   // ── Reset to initial state ──
   const reset = useCallback(() => {
@@ -208,6 +216,8 @@ export default function Kiosk() {
     setVisitaRut("");
     setVisitaNombre("");
     setTodayMinutas([]);
+    setAccessibleCasinos([]);
+    setSelectedCasinoId(null);
   }, []);
 
   // Auto-logout after 60s of inactivity in any post-login step.
@@ -254,16 +264,17 @@ export default function Kiosk() {
         return;
       }
 
-      // Cargar info del casino para saber si permite cambio de clave en tótem
-      let casinoData: KioskCasino | null = null;
+      // Cargar catálogo de casinos una sola vez (necesario para multi-casino del staff
+      // y para conocer el flag permitirCambioClaveTotem del casino del usuario).
+      let allCasinos: KioskCasino[] = [];
       try {
         const cRes = await fetch(`/api/casinos`, { credentials: "include" });
-        if (cRes.ok) {
-          const all: KioskCasino[] = await cRes.json();
-          casinoData = all.find(c => c.id === u!.casinoId) || null;
-          setCasino(casinoData);
-        }
+        if (cRes.ok) allCasinos = await cRes.json();
       } catch {}
+      const casinoData: KioskCasino | null = u!.casinoId
+        ? (allCasinos.find(c => c.id === u!.casinoId) || null)
+        : null;
+      setCasino(casinoData);
 
       // ¿Cambio de clave forzado en primer login? (Independiente del toggle del casino:
       // el toggle solo controla si el botón "Cambio de clave" está disponible
@@ -277,14 +288,33 @@ export default function Kiosk() {
       // Roles staff → menú con 5 botones (Vale propio, Vale visita, Cambio
       // de clave, Resumen del día, Reimpresión).
       if (u!.role === "admin" || u!.role === "encargado_casino" || u!.role === "interlocutor") {
-        const today = todayISO();
-        try {
-          const mRes = await fetch(`/api/minutas/${u!.casinoId}?_t=${Date.now()}`, { credentials: "include" });
-          if (mRes.ok) {
-            const all: Minuta[] = await mRes.json();
-            setTodayMinutas(all.filter(m => m.fecha === today && m.activo));
-          }
-        } catch {}
+        // Resolver casinos accesibles para el staff (multi-casino):
+        // un mismo tótem físico puede atender más de un casino (ej: Química
+        // General + Química Ejecutivo). Se usa la lista de casinos que el
+        // usuario tiene asignados (casinoId base + relación usuario_casinos,
+        // expuesta en `casinoIds` por /api/auth/me).
+        const ids = (u!.casinoIds && u!.casinoIds.length > 0)
+          ? u!.casinoIds
+          : (u!.casinoId ? [u!.casinoId] : []);
+        const matched = allCasinos.filter(c => ids.includes(c.id));
+        // Admin global (sin casinoIds explícitos) → ve todos los casinos activos.
+        const list = matched.length > 0
+          ? matched
+          : (u!.role === "admin" ? allCasinos : (casinoData ? [casinoData] : []));
+        setAccessibleCasinos(list);
+        if (list.length > 1) {
+          // Pedir al staff que elija a qué casino está atendiendo en este momento.
+          setStep("staff_select_casino");
+          setBusy(false);
+          return;
+        }
+        // Un solo casino accesible → entrar directo al menú staff.
+        const onlyCasino = list[0] || casinoData || null;
+        if (onlyCasino) {
+          setSelectedCasinoId(onlyCasino.id);
+          setCasino(onlyCasino);
+          await loadStaffContextForCasino(onlyCasino.id);
+        }
         setStep("staff_menu");
         setBusy(false);
         return;
@@ -333,6 +363,23 @@ export default function Kiosk() {
       setStep("error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Carga las minutas activas del día para el casino dado (usado al entrar al
+  // staff_menu y al cambiar de casino dentro del menú staff).
+  async function loadStaffContextForCasino(casinoId: string) {
+    const today = todayISO();
+    try {
+      const mRes = await fetch(`/api/minutas/${casinoId}?_t=${Date.now()}`, { credentials: "include" });
+      if (mRes.ok) {
+        const all: Minuta[] = await mRes.json();
+        setTodayMinutas(all.filter(m => m.fecha === today && m.activo));
+      } else {
+        setTodayMinutas([]);
+      }
+    } catch {
+      setTodayMinutas([]);
     }
   }
 
@@ -628,7 +675,7 @@ export default function Kiosk() {
               )}
             </div>
             <div className="flex justify-center gap-3">
-              <button onClick={() => user.casinoId && loadResumen(user.casinoId)} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
+              <button onClick={() => selectedCasinoId && loadResumen(selectedCasinoId)} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
                 Actualizar
               </button>
               <button onClick={reset} className="px-6 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold">
@@ -638,12 +685,55 @@ export default function Kiosk() {
           </div>
         )}
 
+        {step === "staff_select_casino" && user && (
+          <div className="w-full max-w-2xl flex flex-col gap-6">
+            <div className="text-center">
+              <p className="text-vascan-goldLight text-lg">Hola, <span className="text-white font-semibold">{user.nombre} {user.apellido}</span></p>
+              <h2 className="text-3xl font-bold mt-1">¿A qué casino vas a atender?</h2>
+              <p className="text-white/50 mt-1">Tienes más de un casino asignado en este tótem</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {accessibleCasinos.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={async () => {
+                    setSelectedCasinoId(c.id);
+                    setCasino(c);
+                    setBusy(true);
+                    await loadStaffContextForCasino(c.id);
+                    setBusy(false);
+                    setStep("staff_menu");
+                  }}
+                  className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition text-left"
+                >
+                  {c.nombre}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-center">
+              <button onClick={reset} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10">Cancelar</button>
+            </div>
+          </div>
+        )}
+
         {step === "staff_menu" && user && (
           <div className="w-full max-w-3xl flex flex-col gap-6">
             <div className="text-center">
               <p className="text-vascan-goldLight text-lg">Hola, <span className="text-white font-semibold">{user.nombre} {user.apellido}</span></p>
               <h2 className="text-3xl font-bold mt-1">¿Qué necesitas hacer?</h2>
-              {casino && <p className="text-white/50 mt-1">{casino.nombre}</p>}
+              {casino && (
+                <div className="mt-1 flex items-center justify-center gap-2">
+                  <p className="text-white/50">Atendiendo: <span className="text-white/80 font-semibold">{casino.nombre}</span></p>
+                  {accessibleCasinos.length > 1 && (
+                    <button
+                      onClick={() => setStep("staff_select_casino")}
+                      className="text-xs px-2 py-1 rounded-md bg-white/5 border border-white/10 text-vascan-goldLight hover:bg-white/10"
+                    >
+                      Cambiar casino
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
@@ -663,7 +753,7 @@ export default function Kiosk() {
                 <p className="text-sm font-normal text-white/60 mt-1">Emitir vale para un invitado</p>
               </button>
               <button
-                onClick={async () => { if (user.casinoId) await loadResumen(user.casinoId); setStep("resumen"); }}
+                onClick={async () => { if (selectedCasinoId) await loadResumen(selectedCasinoId); setStep("resumen"); }}
                 className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition"
               >
                 Resumen del día
