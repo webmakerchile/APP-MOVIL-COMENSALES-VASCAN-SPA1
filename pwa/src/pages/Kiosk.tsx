@@ -224,6 +224,24 @@ export default function Kiosk() {
   // Auto-return after 15s on QR screen (specific shorter timer).
   useIdleReset(reset, step === "qr" ? 15000 : 60000, step !== "login_rut");
 
+  // Auto-impresión del vale al llegar al paso QR. La impresora térmica USB
+  // del tótem está configurada en Chrome `--kiosk-printing` para imprimir
+  // sin diálogo. El layout imprimible vive en el div `.print-vale` al final
+  // del render y usa CSS `@media print` (pwa/src/index.css) para 80mm.
+  const printedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (step !== "qr" || !qrCode || !qrMeta) return;
+    if (printedRef.current === qrCode) return;
+    printedRef.current = qrCode;
+    const t = window.setTimeout(() => {
+      try { window.print(); } catch {}
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [step, qrCode, qrMeta]);
+  useEffect(() => {
+    if (step !== "qr") printedRef.current = null;
+  }, [step]);
+
   // ── Login submit ──
   async function handleLoginRut() {
     if (!rutRaw || rutRaw.length < 2) {
@@ -954,13 +972,21 @@ export default function Kiosk() {
               <p className="text-white text-xl font-semibold mt-1">{qrMeta.opcion}</p>
               <p className="text-white/40 text-xs mt-2 font-mono">{qrMeta.rut}</p>
             </div>
-            <button
-              onClick={reset}
-              className="px-8 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold transition-all"
-            >
-              Terminar
-            </button>
-            <p className="text-white/30 text-xs">El vale se cerrará automáticamente en 15s</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { try { window.print(); } catch {} }}
+                className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 font-semibold transition-all"
+              >
+                Reimprimir
+              </button>
+              <button
+                onClick={reset}
+                className="px-8 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold transition-all"
+              >
+                Terminar
+              </button>
+            </div>
+            <p className="text-white/30 text-xs">El vale se imprimió. Esta pantalla se cerrará en 15s.</p>
           </div>
         )}
 
@@ -992,6 +1018,45 @@ export default function Kiosk() {
         <span>BuenaMezcla · Sistema de Comensales</span>
         <span>{new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</span>
       </footer>
+
+      {/* Layout imprimible (térmica 80mm). Solo visible en @media print. */}
+      {qrCode && qrMeta && (
+        <div className="print-vale" aria-hidden="true">
+          <div className="pv-center pv-brand">BuenaMezcla</div>
+          {casino?.nombre && <div className="pv-center pv-sub">{casino.nombre}</div>}
+          <hr className="pv-hr" />
+          <div className="pv-familia">{qrMeta.familia}</div>
+          <div className="pv-opcion">{qrMeta.opcion}</div>
+          <div className="pv-row">
+            <span className="pv-label">Comensal</span>
+            <span className="pv-value">{qrMeta.nombre}</span>
+          </div>
+          <div className="pv-row">
+            <span className="pv-label">RUT</span>
+            <span className="pv-value">{qrMeta.rut}</span>
+          </div>
+          <div className="pv-row">
+            <span className="pv-label">Fecha</span>
+            <span className="pv-value">
+              {new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })}
+            </span>
+          </div>
+          <div className="pv-row">
+            <span className="pv-label">Hora</span>
+            <span className="pv-value">
+              {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          <hr className="pv-hr" />
+          <div className="pv-qr">
+            <QRCodeSVG value={qrCode} size={180} level="M" />
+          </div>
+          <div className="pv-foot">Presenta este vale al retirar tu comida</div>
+          <div className="pv-foot" style={{ fontFamily: "monospace", marginTop: "1mm" }}>
+            {qrCode.slice(0, 8).toUpperCase()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

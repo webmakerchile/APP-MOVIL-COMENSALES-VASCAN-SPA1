@@ -59,6 +59,61 @@ body,
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Impresión vale térmico 80mm ───────────────────────────────────────── */
+.print-vale { display: none; }
+
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  html, body, #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+  body * { visibility: hidden !important; }
+  .print-vale, .print-vale * { visibility: visible !important; }
+  .print-vale {
+    display: block !important;
+    position: absolute;
+    left: 0; top: 0;
+    width: 80mm;
+    padding: 4mm 4mm 8mm 4mm;
+    color: #000;
+    background: #fff;
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .print-vale .pv-center { text-align: center; }
+  .print-vale .pv-brand { font-size: 18px; font-weight: 800; letter-spacing: 1px; }
+  .print-vale .pv-sub   { font-size: 11px; margin-top: 1mm; }
+  .print-vale .pv-hr    { border: 0; border-top: 1px dashed #000; margin: 3mm 0; }
+  .print-vale .pv-row   { display: flex; justify-content: space-between; gap: 4mm; margin: 0.8mm 0; font-size: 12px; }
+  .print-vale .pv-label { color: #000; font-weight: 600; }
+  .print-vale .pv-value { text-align: right; font-weight: 700; }
+  .print-vale .pv-opcion {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 800;
+    margin: 2mm 0;
+    padding: 2mm;
+    border: 1.5px solid #000;
+    border-radius: 2mm;
+  }
+  .print-vale .pv-familia {
+    text-align: center;
+    text-transform: uppercase;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+  .print-vale .pv-qr { display: flex; justify-content: center; margin: 3mm 0 1mm; }
+  .print-vale .pv-foot { text-align: center; font-size: 10px; margin-top: 2mm; }
+}
+
 .animate-slide-down {
   animation: slide-down 0.25s ease-out;
 }
