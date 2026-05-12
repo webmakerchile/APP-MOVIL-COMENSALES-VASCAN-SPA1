@@ -795,10 +795,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Minutas CRUD ──
-  app.get("/api/minutas", requireAdmin, async (_req: Request, res: Response) => {
+  app.get("/api/minutas", requireAdmin, async (req: Request, res: Response) => {
     try {
+      const me = (req as any).currentUser;
+      const accessible = await getAccessibleCasinoIds(me);
       const minutasList = await storage.getAllMinutas();
-      return res.json(minutasList);
+      // Interlocutor / encargado: filtrar a sólo casinos accesibles (multi-casino).
+      // Admin (accessible === null) ve todas.
+      const filtered = accessible === null
+        ? minutasList
+        : minutasList.filter(m => accessible.includes(m.casinoId));
+      return res.json(filtered);
     } catch (error) {
       console.error("Get all minutas error:", error);
       return res.status(500).json({ message: "Error interno del servidor" });

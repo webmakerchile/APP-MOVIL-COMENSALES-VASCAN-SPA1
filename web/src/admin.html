@@ -591,11 +591,16 @@
             <div className="p-4 border-b border-white/10 flex flex-col md:flex-row gap-3">
               <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, apellido o RUT..."
                 className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-vascan-gold/50 transition text-sm" />
-              <select value={filterCasino} onChange={e => setFilterCasino(e.target.value)}
-                className="bg-vascan-dark border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm" style={{colorScheme:'dark'}}>
-                <option value="all">Todos los casinos</option>
-                {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
+              {/* Interlocutor: el backend ya filtra a sus casinos asignados;
+                  ocultamos el desplegable para no inducir a creer que puede
+                  ver el resto de los casinos. */}
+              {currentUser?.role !== 'interlocutor' && (
+                <select value={filterCasino} onChange={e => setFilterCasino(e.target.value)}
+                  className="bg-vascan-dark border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm" style={{colorScheme:'dark'}}>
+                  <option value="all">Todos los casinos</option>
+                  {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -909,14 +914,17 @@
 
       useEffect(() => {
         Promise.all([apiFetch('/api/casinos'), apiFetch('/api/familias')]).then(([casinoData, famData]) => {
-          setCasinos(casinoData);
-          setFamiliasList(famData.filter(f => f.activo));
-          if (user?.role === 'interlocutor' && user?.casinoId) {
-            setSelectedCasino(user.casinoId);
-            loadMinutas(user.casinoId);
+          // Interlocutor ve sólo los casinos de su responsabilidad (casinoIds expuestos
+          // por /api/auth/me). Por defecto carga TODAS las minutas de esos casinos
+          // ('' = todos los casinos accesibles) — el backend ya filtra por permisos.
+          if (user?.role === 'interlocutor') {
+            const myIds = new Set([...(user.casinoIds || []), user.casinoId].filter(Boolean));
+            setCasinos(casinoData.filter(c => myIds.has(c.id)));
           } else {
-            loadMinutas('');
+            setCasinos(casinoData);
           }
+          setFamiliasList(famData.filter(f => f.activo));
+          loadMinutas('');
         });
       }, []);
 
@@ -1087,17 +1095,21 @@
 
           <div className="bg-vascan-surface rounded-2xl border border-white/10 p-4 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {user?.role !== 'interlocutor' ? (
-                <select value={selectedCasino} onChange={e => handleCasinoChange(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-vascan-gold/50 transition text-sm" style={{colorScheme: 'dark'}}>
-                  <option value="">Todos los casinos</option>
-                  {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
-              ) : (
+              {/* Selector de casino. Para interlocutor la lista `casinos` ya viene
+                  filtrada a sus casinos asignados (ver useEffect inicial), de modo
+                  que "Todos los casinos" muestra TODAS las minutas de los casinos
+                  de su responsabilidad. Si sólo tiene uno, mostramos sólo el nombre. */}
+              {user?.role === 'interlocutor' && casinos.length <= 1 ? (
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white/60 text-sm">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" /></svg>
-                  {casinos.find(c => c.id === selectedCasino)?.nombre || 'Mi casino'}
+                  {casinos[0]?.nombre || 'Mi casino'}
                 </div>
+              ) : (
+                <select value={selectedCasino} onChange={e => handleCasinoChange(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-vascan-gold/50 transition text-sm" style={{colorScheme: 'dark'}}>
+                  <option value="">{user?.role === 'interlocutor' ? 'Todos mis casinos' : 'Todos los casinos'}</option>
+                  {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
               )}
               <select value={filterFamilia} onChange={e => setFilterFamilia(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-vascan-gold/50 transition text-sm" style={{colorScheme: 'dark'}}>
@@ -1782,9 +1794,15 @@
         if (!form.nombre || !form.fechaInicio || !form.fechaFin) {
           setToast({ message: 'Nombre y fechas son obligatorios', type: 'error' }); return;
         }
+        // Convertir el valor del input datetime-local (sin TZ) a ISO con TZ
+        // explícita del navegador. Sin esto el server (UTC) interpreta la
+        // hora como UTC y al volver a renderizarla en hora local de Chile
+        // aparece desplazada (caso reportado: "16:51" se muestra como "04:52 a.m.").
+        const fechaInicioISO = new Date(form.fechaInicio).toISOString();
+        const fechaFinISO = new Date(form.fechaFin).toISOString();
         try {
           if (editing) {
-            await apiFetch(`/api/periodos/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin, fechaServicioInicio: form.fechaServicioInicio || null, fechaServicioFin: form.fechaServicioFin || null }) });
+            await apiFetch(`/api/periodos/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, fechaInicio: fechaInicioISO, fechaFin: fechaFinISO, fechaServicioInicio: form.fechaServicioInicio || null, fechaServicioFin: form.fechaServicioFin || null }) });
             setToast({ message: 'Periodo actualizado', type: 'success' });
             setShowModal(false); refresh();
           } else {
@@ -1792,7 +1810,7 @@
               setToast({ message: 'Seleccione al menos un casino', type: 'error' }); return;
             }
             for (const cId of form.casinoIds) {
-              await apiFetch('/api/periodos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, casinoId: cId, fechaInicio: form.fechaInicio, fechaFin: form.fechaFin, fechaServicioInicio: form.fechaServicioInicio || null, fechaServicioFin: form.fechaServicioFin || null }) });
+              await apiFetch('/api/periodos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: form.nombre, casinoId: cId, fechaInicio: fechaInicioISO, fechaFin: fechaFinISO, fechaServicioInicio: form.fechaServicioInicio || null, fechaServicioFin: form.fechaServicioFin || null }) });
             }
             setToast({ message: `Periodo creado en ${form.casinoIds.length} casino(s)`, type: 'success' });
             setShowModal(false); refresh();
