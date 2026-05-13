@@ -40,11 +40,37 @@ if (-not $Nombre) {
   if ($r) { $Nombre = $r } else { $Nombre = $def }
 }
 
-Step "1/8 Preparando carpetas"
-New-Item -ItemType Directory -Force -Path $InstallDir       | Out-Null
+Step "1/8 Preparando carpetas (limpieza de instalacion previa si existe)"
+# Detener tareas/procesos previos que pudieran tener archivos abiertos
+schtasks /End    /TN "BuenaMezclaTotem"      2>$null | Out-Null
+schtasks /End    /TN "BuenaMezclaTotemKiosk" 2>$null | Out-Null
+schtasks /Delete /TN "BuenaMezclaTotem"      /F 2>$null | Out-Null
+schtasks /Delete /TN "BuenaMezclaTotemKiosk" /F 2>$null | Out-Null
+
+# Matar cualquier node.exe corriendo desde C:\BuenaMezcla (deja libre el .node de SQLite)
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($InstallDir, [System.StringComparison]::OrdinalIgnoreCase) } |
+  ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+Start-Sleep -Seconds 2
+
+New-Item -ItemType Directory -Force -Path $InstallDir              | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallDir\totem-data" | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallDir\logs"       | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallDir\scripts"    | Out-Null
+
+# Borrar artefactos de instalacion previa que tar no puede sobrescribir.
+# OJO: NO borramos totem-data (DB local con pedidos pendientes) ni logs ni node\.
+foreach ($d in @("node_modules", "totem", "shared", "public", "pwa")) {
+  $p = Join-Path $InstallDir $d
+  if (Test-Path $p) {
+    Write-Host "  limpiando $p ..."
+    Remove-Item -Recurse -Force -LiteralPath $p -ErrorAction SilentlyContinue
+  }
+}
+foreach ($f in @("package.json", "package-lock.json")) {
+  $p = Join-Path $InstallDir $f
+  if (Test-Path $p) { Remove-Item -Force -LiteralPath $p -ErrorAction SilentlyContinue }
+}
 
 # ── Bajar y extraer bundle ──
 Step "2/8 Descargando bundle (~500KB)"
@@ -56,7 +82,7 @@ try {
 }
 Write-Host "Extrayendo..."
 tar -xzf $bundleTmp -C $InstallDir 2>&1
-if ($LASTEXITCODE -ne 0) { Fail "Error extrayendo bundle." }
+if ($LASTEXITCODE -ne 0) { Fail "Error extrayendo bundle. Si el problema persiste, cierra cualquier ventana de Chrome del totem y vuelve a ejecutar el instalador." }
 Remove-Item $bundleTmp -Force
 
 # ── Node.js portable ──
