@@ -2574,13 +2574,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 1) Reporte de Inscripción x rango: día inscripción / comensal / casino / opción / día servicio
   // Helper: enforce interlocutor casino scope (returns effective casinoId or null for "all admins-only")
   function scopedCasinoId(req: Request, requested: string | undefined): string | undefined | null {
-    const sUser = (req.session as any).user;
+    // currentUser is injected by requireAdmin/requireAuth middlewares (session stores only userId)
+    const sUser = (req as any).currentUser;
     if (sUser?.role === "interlocutor") {
       // interlocutor is locked to their own casino regardless of what they requested
       return sUser.casinoId || null;
     }
     return requested;
   }
+
+  // JSON: detalle de inscripciones (para tabla en vivo del admin)
+  app.get("/api/reportes/inscripciones-live", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { fechaDesde, fechaHasta } = req.query as any;
+      const casinoId = scopedCasinoId(req, req.query.casinoId as string);
+      if (casinoId && casinoId !== "all" && !(await assertCasinoAccess(req, res, casinoId as string))) return;
+      if ((!casinoId || casinoId === "all") && (req as any).currentUser?.role !== "admin") {
+        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      }
+      if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
+
+      const [allPedidos, allMinutas, allUsers, allCasinos, allFamilias] = await Promise.all([
+        storage.getAllPedidos(),
+        storage.getAllMinutas(),
+        storage.getAllUsers(),
+        storage.getCasinos(),
+        storage.getAllFamilias().catch(() => [] as any[]),
+      ]);
+      const minutaById = new Map(allMinutas.map(m => [m.id, m]));
+      const userById = new Map(allUsers.map(u => [u.id, u]));
+      const casinoById = new Map(allCasinos.map(c => [c.id, c]));
+      const familiaByName = new Map((allFamilias as any[]).map((f: any) => [String(f.nombre || "").toLowerCase(), f]));
+
+      const start = new Date(fechaDesde + "T00:00:00");
+      const end = new Date(fechaHasta + "T23:59:59");
+
+      const filtered = allPedidos.filter(p => {
+        const created = p.createdAt ? new Date(p.createdAt) : null;
+        if (!created || created < start || created > end) return false;
+        if (casinoId && casinoId !== "all") {
+          const m = minutaById.get(p.minutaId);
+          if (!m || m.casinoId !== casinoId) return false;
+        }
+        return true;
+      });
+
+      const rows = filtered
+        .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+        .map(p => {
+          const m = minutaById.get(p.minutaId);
+          const u = userById.get(p.userId);
+          const c = m ? casinoById.get(m.casinoId) : null;
+          const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
+          const opcionTexto = p.tipo === "no_asiste"
+            ? "(no asiste)"
+            : (opciones[p.opcionSeleccionada - 1] || `Opción ${p.opcionSeleccionada}`);
+          const famName = m ? String((m as any).familia || "").toLowerCase() : "";
+          const fam: any = famName ? familiaByName.get(famName) : null;
+          return {
+            id: p.id,
+            createdAt: p.createdAt,
+            tipo: p.tipo || "seleccion",
+            rut: p.tipo === "visita" ? "" : (u?.rut || ""),
+            comensal: p.tipo === "visita"
+              ? (p.nombreVisita || "VISITA")
+              : (u ? `${u.nombre} ${u.apellido}` : "—"),
+            casinoId: m?.casinoId || "",
+            casino: c?.nombre || "—",
+            familia: fam?.nombre || (m as any)?.familia || "—",
+            familiaColor: fam?.color || null,
+            opcionNumero: p.opcionSeleccionada,
+            opcionTexto,
+            fechaServicio: m?.fecha || "—",
+            codigoQr: p.codigoQr || null,
+            origenTotemId: (p as any).origenTotemId || null,
+          };
+        });
+
+      res.json({ rows, total: rows.length, generatedAt: new Date().toISOString() });
+    } catch (error) {
+      console.error("Inscripciones live error:", error);
+      res.status(500).json({ message: "Error al cargar inscripciones" });
+    }
+  });
 
   app.get("/api/reportes/inscripcion-detalle", requireAdmin, async (req: Request, res: Response) => {
     try {

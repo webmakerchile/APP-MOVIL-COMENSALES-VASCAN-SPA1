@@ -1318,6 +1318,37 @@
       const [downloading, setDownloading] = useState(false);
       const [loadingCasinos, setLoadingCasinos] = useState(true);
       const [weekReport, setWeekReport] = useState(null);
+      const [showLive, setShowLive] = useState(false);
+      const [liveRows, setLiveRows] = useState([]);
+      const [liveLoading, setLiveLoading] = useState(false);
+      const [liveUpdatedAt, setLiveUpdatedAt] = useState(null);
+      const [liveError, setLiveError] = useState('');
+      const [liveFilter, setLiveFilter] = useState('');
+
+      const fetchLive = React.useCallback(async () => {
+        if (!dateFrom) return;
+        const casinoParam = selectedCasino || 'all';
+        const dateToParam = dateTo || dateFrom;
+        try {
+          setLiveLoading(true);
+          const data = await apiFetch(`/api/reportes/inscripciones-live?fechaDesde=${dateFrom}&fechaHasta=${dateToParam}&casinoId=${casinoParam}`);
+          setLiveRows(data.rows || []);
+          setLiveUpdatedAt(new Date());
+          setLiveError('');
+        } catch (err) {
+          console.error(err);
+          setLiveError(err?.message || 'Error al cargar detalle');
+        } finally {
+          setLiveLoading(false);
+        }
+      }, [dateFrom, dateTo, selectedCasino]);
+
+      useEffect(() => {
+        if (!showLive) return;
+        fetchLive();
+        const id = setInterval(fetchLive, 10000);
+        return () => clearInterval(id);
+      }, [showLive, fetchLive]);
 
       useEffect(() => {
         apiFetch('/api/casinos').then(data => {
@@ -1557,6 +1588,117 @@
               )}
             </div>
           )}
+
+          {/* Detalle en vivo de inscripciones */}
+          <div className="bg-vascan-surface rounded-2xl border border-white/10 overflow-hidden mt-6">
+            <div className="p-5 border-b border-white/10 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <span className={`relative flex h-2.5 w-2.5 ${showLive ? '' : 'opacity-40'}`}>
+                  {showLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>}
+                  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${showLive ? 'bg-green-500' : 'bg-white/30'}`}></span>
+                </span>
+                <div>
+                  <h2 className="font-semibold text-lg">Detalle en vivo de inscripciones</h2>
+                  <p className="text-white/50 text-xs mt-0.5">
+                    {showLive
+                      ? <>Actualiza cada 10s · {liveRows.length} {liveRows.length === 1 ? 'registro' : 'registros'}{liveUpdatedAt ? ` · última: ${liveUpdatedAt.toLocaleTimeString('es-CL')}` : ''}{liveLoading ? ' · cargando…' : ''}</>
+                      : 'Click en "Mostrar" para ver cada inscripción individual con hora, RUT, opción y origen'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {showLive && (
+                  <input
+                    value={liveFilter}
+                    onChange={e => setLiveFilter(e.target.value)}
+                    placeholder="Filtrar RUT, nombre, opción…"
+                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-vascan-gold/50 w-56"
+                  />
+                )}
+                {showLive && (
+                  <button onClick={fetchLive} disabled={liveLoading}
+                    className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-white/80 transition disabled:opacity-50" title="Refrescar ahora">
+                    ↻
+                  </button>
+                )}
+                <button onClick={() => setShowLive(s => !s)}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${showLive ? 'bg-white/10 hover:bg-white/15 text-white' : 'bg-vascan-gold hover:bg-vascan-goldDark text-white'}`}>
+                  {showLive ? 'Ocultar detalle' : 'Mostrar detalle en vivo'}
+                </button>
+              </div>
+            </div>
+            {showLive && (
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                {liveError ? (
+                  <div className="p-6 text-center text-red-400 text-sm">{liveError}</div>
+                ) : liveRows.length === 0 && !liveLoading ? (
+                  <div className="p-8 text-center text-white/40 text-sm">No hay inscripciones en el rango seleccionado</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-vascan-surface z-10">
+                      <tr className="border-b border-white/10 text-white/50 text-xs">
+                        <th className="text-left px-4 py-2.5">Hora</th>
+                        <th className="text-left px-4 py-2.5">RUT</th>
+                        <th className="text-left px-4 py-2.5">Comensal</th>
+                        <th className="text-left px-4 py-2.5">Casino</th>
+                        <th className="text-left px-4 py-2.5">Familia</th>
+                        <th className="text-left px-4 py-2.5">Opción</th>
+                        <th className="text-left px-4 py-2.5">Día servicio</th>
+                        <th className="text-left px-4 py-2.5">Tipo</th>
+                        <th className="text-left px-4 py-2.5">Origen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {liveRows
+                        .filter(r => {
+                          if (!liveFilter.trim()) return true;
+                          const q = liveFilter.toLowerCase();
+                          return [r.rut, r.comensal, r.casino, r.familia, r.opcionTexto, r.tipo].some(v => String(v || '').toLowerCase().includes(q));
+                        })
+                        .map(r => {
+                          const d = r.createdAt ? new Date(r.createdAt) : null;
+                          const horaStr = d
+                            ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`
+                            : '—';
+                          const fechaStr = d ? d.toLocaleDateString('es-CL') : '';
+                          const tipoBadge = r.tipo === 'no_asiste'
+                            ? <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 text-[10px] font-semibold uppercase">No asiste</span>
+                            : r.tipo === 'visita'
+                              ? <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-semibold uppercase">Visita</span>
+                              : <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-semibold uppercase">Selección</span>;
+                          const origenBadge = r.origenTotemId
+                            ? <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-mono uppercase" title={`Tótem ${r.origenTotemId}`}>Tótem</span>
+                            : <span className="px-2 py-0.5 rounded-full bg-white/5 text-white/50 text-[10px] font-semibold uppercase">App</span>;
+                          return (
+                            <tr key={r.id} className="border-b border-white/5 hover:bg-white/[0.03]">
+                              <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
+                                <div className="text-white">{horaStr}</div>
+                                <div className="text-white/30 text-[10px]">{fechaStr}</div>
+                              </td>
+                              <td className="px-4 py-2 font-mono text-xs text-white/70">{r.rut || '—'}</td>
+                              <td className="px-4 py-2 text-white/90">{r.comensal}</td>
+                              <td className="px-4 py-2 text-white/70 text-xs">{r.casino}</td>
+                              <td className="px-4 py-2">
+                                <span className="text-xs px-2 py-0.5 rounded" style={{
+                                  backgroundColor: (r.familiaColor || '#D4A843') + '22',
+                                  color: r.familiaColor || '#D4A843'
+                                }}>{r.familia}</span>
+                              </td>
+                              <td className="px-4 py-2 text-white/80 max-w-[260px] truncate" title={r.opcionTexto}>
+                                <span className="text-vascan-gold font-bold mr-1">#{r.opcionNumero}</span>{r.opcionTexto}
+                              </td>
+                              <td className="px-4 py-2 font-mono text-xs text-white/60 whitespace-nowrap">{r.fechaServicio}</td>
+                              <td className="px-4 py-2">{tipoBadge}</td>
+                              <td className="px-4 py-2">{origenBadge}</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
 
           {weekReport && (
             <div className="bg-vascan-surface rounded-2xl border border-white/10 overflow-hidden mt-6 fade-in">
