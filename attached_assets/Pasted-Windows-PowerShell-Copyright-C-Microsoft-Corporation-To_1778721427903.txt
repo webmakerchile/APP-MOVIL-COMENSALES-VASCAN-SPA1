@@ -1,0 +1,68 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> $node = "C:\BuenaMezcla\node\node.exe"
+>>
+>> # 1. Probar los endpoints directamente para ver qué falla
+>> Write-Host "`n=== Login y traer minutas/pedidos ===" -ForegroundColor Cyan
+>> $session = $null
+>> $body = @{rut="123456785";password="123456"} | ConvertTo-Json
+>> $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session
+>> $casinoId = $login.user.casinoId
+>> $userId = $login.user.id
+>> Write-Host "Casino: $casinoId  User: $userId"
+>>
+>> Write-Host "`n=== /api/minutas/{casinoId} ===" -ForegroundColor Cyan
+>> try {
+>>   $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$casinoId" -WebSession $session
+>>   Write-Host "Total minutas: $($m.Count)"
+>>   $today = (Get-Date).ToString("yyyy-MM-dd")
+>>   Write-Host "Hoy es: $today"
+>>   $m | Where-Object { $_.fecha -eq $today } | Select-Object fecha, familia, activo, opcion1
+>> } catch { Write-Host "ERROR: $($_.ErrorDetails.Message)" -ForegroundColor Red }
+>>
+>> Write-Host "`n=== Conteo en SQLite local ===" -ForegroundColor Cyan
+>> & $node -e "const db=require('better-sqlite3')('C:/BuenaMezcla/totem-data/totem.db',{readonly:true}); const today=new Date().toISOString().slice(0,10); console.log('Total minutas:', db.prepare('SELECT COUNT(*) c FROM minutas').get().c); console.log('Minutas hoy ('+today+'):', db.prepare('SELECT COUNT(*) c FROM minutas WHERE fecha=? AND activo=1').get(today).c); console.log('Casinos:', JSON.stringify(db.prepare('SELECT id,nombre FROM casinos').all())); console.log('Ultimo sync:'); console.log(db.prepare('SELECT * FROM sync_state').all());" 2>&1
+
+=== Login y traer minutas/pedidos ===
+Invoke-RestMethod : {"message":"Credenciales inválidas"}
+En línea: 7 Carácter: 10
++ $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login ...
++          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invoke-RestMethod], WebExc
+   eption
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeRestMethodCommand
+Casino:   User:
+
+=== /api/minutas/{casinoId} ===
+ERROR: {"message":"No autenticado"}
+
+=== Conteo en SQLite local ===
+node.exe : node:internal/modules/cjs/loader:1228
+En línea: 22 Carácter: 1
++ & $node -e "const db=require('better-sqlite3')('C:/BuenaMezcla/totem- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:internal/modules/cjs/loader:1228:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+  throw err;
+  ^
+Error: Cannot find module 'better-sqlite3'
+Require stack:
+- C:\Windows\system32\[eval]
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at [eval]:1:10
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:118:14
+    at [eval]-wrapper:6:24
+    at runScript (node:internal/process/execution:101:62)
+    at evalScript (node:internal/process/execution:133:3) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\Windows\\system32\\[eval]' ]
+}
+Node.js v20.18.0
