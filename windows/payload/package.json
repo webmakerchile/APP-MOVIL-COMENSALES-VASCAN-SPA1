@@ -4,7 +4,7 @@
   "private": true,
   "main": "totem/runtime.js",
   "dependencies": {
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^12.9.0",
     "drizzle-orm": "^0.36.0",
     "drizzle-zod": "^0.5.1",
     "express": "^4.21.0",
