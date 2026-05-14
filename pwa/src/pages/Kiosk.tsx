@@ -71,6 +71,13 @@ function formatRutDisplay(raw: string): string {
   return out + "-" + dv;
 }
 
+// Normaliza RUT al formato canónico de la BD: "12345678-5" (sin puntos, con guion).
+function normalizeRutForApi(raw: string): string {
+  const cleaned = raw.replace(/[^0-9kK]/g, "").toUpperCase();
+  if (cleaned.length <= 1) return cleaned;
+  return cleaned.slice(0, -1) + "-" + cleaned.slice(-1);
+}
+
 function getOptions(m: Minuta) {
   const opts = [
     { number: 1, text: m.opcion1 },
@@ -262,7 +269,7 @@ export default function Kiosk() {
     let u: KioskUser | null = null;
     const submittedPwd = pwdRaw;
     try {
-      const res = await apiRequest("POST", "/api/auth/login", { rut: rutRaw, password: submittedPwd });
+      const res = await apiRequest("POST", "/api/auth/login", { rut: normalizeRutForApi(rutRaw), password: submittedPwd });
       const data = await res.json();
       if (!data.user) throw new Error("Sin sesión");
       u = data.user;
@@ -470,7 +477,7 @@ export default function Kiosk() {
         familia: minuta.familia || "Almuerzo",
         opcion: `Visita: ${visitaNombre.trim()}`,
         nombre: visitaNombre.trim(),
-        rut: formatRutDisplay(visitaRut),
+        rut: normalizeRutForApi(visitaRut),
       });
       setStep("qr");
       try { await apiRequest("POST", "/api/auth/logout"); } catch {}
@@ -485,7 +492,7 @@ export default function Kiosk() {
     if (!reimpRut || reimpRut.length < 2) { setErrMsg("Ingresa el RUT"); return; }
     setBusy(true); setErrMsg("");
     try {
-      const r = await fetch(`/api/pedidos/buscar/por-rut?rut=${encodeURIComponent(reimpRut)}&fecha=${todayISO()}`, { credentials: "include" });
+      const r = await fetch(`/api/pedidos/buscar/por-rut?rut=${encodeURIComponent(normalizeRutForApi(reimpRut))}&fecha=${todayISO()}`, { credentials: "include" });
       if (!r.ok) throw new Error();
       const data = await r.json();
       if (!data.user) { setErrMsg("No se encontró un comensal con ese RUT"); setBusy(false); return; }

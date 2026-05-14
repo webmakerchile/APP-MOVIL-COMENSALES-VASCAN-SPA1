@@ -98,7 +98,14 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
   async getUserByRut(rut: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.rut, rut));
+    // Normaliza RUT al formato canónico "12345678-5" antes de consultar.
+    // Acepta entradas con/sin puntos y con/sin guion (ej. desde el kiosko que
+    // solo permite teclado numérico, o desde Excel que viene con dots).
+    const cleaned = (rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
+    const normalized = cleaned.length > 1
+      ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1)
+      : cleaned;
+    const [user] = await db.select().from(users).where(eq(users.rut, normalized));
     return user;
   }
   async getAllUsers(): Promise<User[]> {
