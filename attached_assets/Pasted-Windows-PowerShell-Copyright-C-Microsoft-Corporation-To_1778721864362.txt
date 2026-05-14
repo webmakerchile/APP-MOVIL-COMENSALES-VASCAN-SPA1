@@ -1,0 +1,67 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> # 1. Detener tarea
+>> schtasks /End /TN "BuenaMezclaTotem"
+>>                                                                                                                      >> # 2. Matar TODOS los node.exe (sin filtrar) y esperar                                                                >> Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force                                                 >> Start-Sleep -Seconds 5                                                                                               >>
+>> # 3. Verificar que ningún node.exe sigue vivo
+>> $nodes = Get-Process node -ErrorAction SilentlyContinue
+>> if ($nodes) { Write-Host "TODAVÍA HAY NODE.EXE:" -ForegroundColor Red; $nodes | Select Id, Path; Stop-Process -Id $nodes.Id -Force; Start-Sleep -Seconds 3 }
+>> else { Write-Host "OK: ningún node.exe vivo" -ForegroundColor Green }
+>>
+>> # 4. Borrar runtime.js viejo a mano
+>> Remove-Item C:\BuenaMezcla\totem\runtime.js -Force
+>> Remove-Item C:\BuenaMezcla\totem\sync-worker.js -Force -ErrorAction SilentlyContinue
+>> Remove-Item C:\BuenaMezcla\totem\register.js -Force -ErrorAction SilentlyContinue
+>>
+>> # 5. Bajar bundle nuevo y extraer
+>> Invoke-WebRequest "https://vascan.replit.app/totem/totem-bundle.tar.gz" `
+>>   -OutFile "$env:TEMP\totem-bundle.tar.gz" -UseBasicParsing
+>> tar -xzf "$env:TEMP\totem-bundle.tar.gz" -C "C:\BuenaMezcla"
+>>
+>> # 6. Verificar que ahora SÍ es el nuevo (~180KB)
+>> Get-Item C:\BuenaMezcla\totem\runtime.js | Select-Object Name, Length, LastWriteTime
+>>
+>> # 7. Re-arrancar y testear
+>> schtasks /Run /TN "BuenaMezclaTotem"
+>> Start-Sleep -Seconds 12
+>>
+>> $session = $null
+>> $body = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>> $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session
+>> $cid = $login.user.casinoId
+>> Write-Host "Login OK: $($login.user.nombre)"
+>>
+>> try {
+>>   $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$cid" -WebSession $session
+>>   Write-Host "minutas OK: $($m.Count) totales" -ForegroundColor Green
+>>   $today = (Get-Date).ToString("yyyy-MM-dd")
+>>   $hoy = $m | Where-Object { $_.fecha -eq $today -and $_.activo }
+>>   Write-Host "Hoy ($today): $($hoy.Count)"
+>> } catch { Write-Host "FAIL: $($_.ErrorDetails.Message)" -ForegroundColor Red; Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 10 }
+>>
+>> Start-Process "C:\BuenaMezcla\scripts\start-kiosk.cmd"
+CORRECTO: la tarea programada "BuenaMezclaTotem" ha finalizado correctamente.
+OK: ningún node.exe vivo
+
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+Login OK: Juan Carlos
+FAIL: {"message":"Error interno del servidor"}
+Name        Length LastWriteTime
+----        ------ -------------
+runtime.js 7208085 08/05/2026 0:07:21
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+^CWarning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+
+
+PS C:\Windows\system32>
