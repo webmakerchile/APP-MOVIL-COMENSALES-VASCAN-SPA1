@@ -1,0 +1,133 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> $ErrorActionPreference = "Continue"
+>> $Install = "C:\BuenaMezcla"
+>> $Cloud   = "https://vascan.replit.app"
+>>
+>> # 0) Matar node viejo (por las dudas)
+>> Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+>>   Where-Object { $_.ExecutablePath -like "$Install\*" } |
+>>   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+>> Start-Sleep -Seconds 2
+>>
+>> Write-Host "=== Estado actual de C:\BuenaMezcla ===" -ForegroundColor Yellow
+>> Get-ChildItem $Install | Select-Object Mode, Length, Name | Format-Table -AutoSize
+>>
+>> Write-Host ""
+>> Write-Host "=== Bajando bundle desde la nube ===" -ForegroundColor Yellow
+>> $bundle = "$env:TEMP\totem-bundle.tar.gz"
+>> Invoke-WebRequest -Uri "$Cloud/totem/totem-bundle.tar.gz" -OutFile $bundle -UseBasicParsing
+>> Write-Host "Descargado: $((Get-Item $bundle).Length) bytes" -ForegroundColor Green
+>>
+>> Write-Host ""
+>> Write-Host "=== Extrayendo bundle ===" -ForegroundColor Yellow
+>> # tar viene con Windows 10+ por defecto
+>> Push-Location $Install
+>> & tar -xzf $bundle
+>> $tarRc = $LASTEXITCODE
+>> Pop-Location
+>> Write-Host "tar exit code: $tarRc" -ForegroundColor Gray
+>> Remove-Item $bundle -Force -ErrorAction SilentlyContinue
+>>
+>> Write-Host ""
+>> Write-Host "=== Verificando runtime.js ===" -ForegroundColor Yellow
+>> if (Test-Path "$Install\totem\runtime.js") {
+>>   Write-Host "OK: $Install\totem\runtime.js existe ($((Get-Item "$Install\totem\runtime.js").Length) bytes)" -ForegroundColor Green
+>>   Get-ChildItem "$Install\totem" | Select-Object Length, Name | Format-Table -AutoSize
+>> } else {
+>>   Write-Host "FALLO: runtime.js NO existe despues de extraer" -ForegroundColor Red
+>>   Get-ChildItem $Install -Recurse -Filter "runtime.js" -ErrorAction SilentlyContinue
+>>   Read-Host; exit 1
+>> }
+>>
+>> # Reiniciar servicio
+>> Write-Host ""
+>> Write-Host "=== Arrancando servicio ===" -ForegroundColor Yellow
+>> Clear-Content "$Install\logs\service.out.log" -ErrorAction SilentlyContinue
+>> Clear-Content "$Install\logs\service.err.log" -ErrorAction SilentlyContinue
+>> schtasks /Run /TN "BuenaMezclaTotem"
+>> Start-Sleep -Seconds 15
+>>
+>> $running = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+>>   Where-Object { $_.ExecutablePath -like "$Install\*" }                                                              >> if ($running) {                                                                                                      >>   Write-Host "node.exe corriendo (PID $($running.ProcessId))" -ForegroundColor Green                                 >> } else {                                                                                                             >>   Write-Host "node.exe NO arranco. err.log:" -ForegroundColor Red
+>>   Get-Content "$Install\logs\service.err.log" -Tail 30
+>>   Read-Host; exit 1
+>> }
+>>
+>> # Esperar primer pull
+>> Write-Host ""
+>> Write-Host "=== Esperando primer pull (40 seg) ===" -ForegroundColor Yellow
+>> Start-Sleep -Seconds 40
+>> Write-Host "--- Logs ---" -ForegroundColor Cyan
+>> Get-Content "$Install\logs\service.out.log" -Tail 20
+>> Write-Host ""
+>> Write-Host "--- Errores ---" -ForegroundColor Cyan
+>> Get-Content "$Install\logs\service.err.log" -Tail 10
+>>
+>> # Probar login local
+>> Write-Host ""
+>> Write-Host "=== Test login local ===" -ForegroundColor Yellow
+>> try {
+>>   $r = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST `
+>>         -Body (@{ rut='12345678-5'; password='123456' } | ConvertTo-Json) `
+>>         -ContentType "application/json" -TimeoutSec 10
+>>   Write-Host "Login OK: $($r.user.nombre)" -ForegroundColor Green
+>> } catch {
+>>   Write-Host "Login FALLO: $($_.Exception.Message)" -ForegroundColor Red
+>>   Write-Host $_.ErrorDetails.Message -ForegroundColor Red
+>> }
+=== Estado actual de C:\BuenaMezcla ===
+
+Mode   Length Name
+----   ------ ----
+d-----        logs
+d-----        node
+d-----        node_modules
+d-----        scripts
+d-----        server
+d-----        totem-data
+-a---- 16589  package-lock.json
+-a---- 60     package.json
+
+
+
+=== Bajando bundle desde la nube ===
+Descargado: 3301726 bytes
+
+=== Extrayendo bundle ===
+tar exit code: 0
+
+=== Verificando runtime.js ===
+OK: C:\BuenaMezcla\totem\runtime.js existe (7208085 bytes)
+
+ Length Name
+ ------ ----
+1290044 register.js
+7208085 runtime.js
+1296085 sync-worker.js
+
+
+
+=== Arrancando servicio ===
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+node.exe corriendo (PID 10220)
+
+=== Esperando primer pull (40 seg) ===
+--- Logs ---
+[sync] worker iniciado
+Serving PWA from pwa/dist
+express server serving on port 5000
+[cron] Reportes diarios programados (03:00 y 04:00 UTC â†’ medianoche CL)
+[sync] pull ok â€” 2 filas actualizadas
+
+--- Errores ---
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+
+=== Test login local ===
+Login OK: Juan Carlos
+PS C:\Windows\system32>
