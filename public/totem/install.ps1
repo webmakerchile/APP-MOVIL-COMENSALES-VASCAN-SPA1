@@ -28,16 +28,36 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
   Fail "Abre PowerShell como Administrador (click derecho > Ejecutar como administrador)."
 }
 
-# ── Pedir datos ──
-if (-not $Token) {
-  $Token = Read-Host "Token (del panel admin > Totems > + Instalar nuevo totem)"
+# ── Detectar instalacion previa ──
+# Si ya existe totem.db con un totem_id registrado, esto es una ACTUALIZACION:
+# saltamos el pedido de token y el paso de registro (preservamos totem_id/secret).
+$existingDb = "$InstallDir\totem-data\totem.db"
+$IsUpdate = $false
+if (Test-Path $existingDb) {
+  # Heuristica: si la DB existe y pesa > 4KB asumimos que ya fue inicializada y registrada.
+  # El paso de registro lee totem_id desde totem_config; si ya esta, no necesitamos token nuevo.
+  $dbSize = (Get-Item $existingDb).Length
+  if ($dbSize -gt 4096) {
+    $IsUpdate = $true
+    Write-Host ""
+    Write-Host "Instalacion previa detectada en $InstallDir." -ForegroundColor Green
+    Write-Host "Modo: ACTUALIZACION (se preserva totem_id, totem_secret y pedidos locales)." -ForegroundColor Green
+    Write-Host ""
+  }
 }
-if (-not $Token) { Fail "Token requerido." }
 
-if (-not $Nombre) {
-  $def = "Totem-$($env:COMPUTERNAME)"
-  $r = Read-Host "Nombre del totem (Enter = $def)"
-  if ($r) { $Nombre = $r } else { $Nombre = $def }
+# ── Pedir datos (solo si es instalacion nueva) ──
+if (-not $IsUpdate) {
+  if (-not $Token) {
+    $Token = Read-Host "Token (del panel admin > Totems > + Instalar nuevo totem)"
+  }
+  if (-not $Token) { Fail "Token requerido para instalacion nueva." }
+
+  if (-not $Nombre) {
+    $def = "Totem-$($env:COMPUTERNAME)"
+    $r = Read-Host "Nombre del totem (Enter = $def)"
+    if ($r) { $Nombre = $r } else { $Nombre = $def }
+  }
 }
 
 Step "1/8 Preparando carpetas (limpieza de instalacion previa si existe)"
@@ -132,18 +152,22 @@ try {
 }
 
 # ── Registro contra la nube ──
-Step "5/8 Registrando totem en la nube"
 $env:DB_MODE        = "totem"
 $env:TOTEM_DB_PATH  = "$InstallDir\totem-data\totem.db"
 $env:CLOUD_URL      = $Cloud
-$regLog = "$InstallDir\logs\register.log"
-Push-Location $InstallDir
-$regOut = & $nodeExe "$InstallDir\totem\register.js" --nombre $Nombre --token $Token --cloud $Cloud 2>&1
-$regRc  = $LASTEXITCODE
-Pop-Location
-$regOut | Tee-Object -FilePath $regLog | Write-Host
-if ($regRc -ne 0) {
-  Fail "Registro fallo. El token puede estar expirado o ya fue usado. Genera uno nuevo en el panel admin."
+if ($IsUpdate) {
+  Step "5/8 Saltando registro (actualizacion: se preserva totem_id existente)"
+} else {
+  Step "5/8 Registrando totem en la nube"
+  $regLog = "$InstallDir\logs\register.log"
+  Push-Location $InstallDir
+  $regOut = & $nodeExe "$InstallDir\totem\register.js" --nombre $Nombre --token $Token --cloud $Cloud 2>&1
+  $regRc  = $LASTEXITCODE
+  Pop-Location
+  $regOut | Tee-Object -FilePath $regLog | Write-Host
+  if ($regRc -ne 0) {
+    Fail "Registro fallo. El token puede estar expirado o ya fue usado. Genera uno nuevo en el panel admin."
+  }
 }
 
 # ── Script arranque del servicio ──
