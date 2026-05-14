@@ -1,0 +1,54 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+                                                                                                                        Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6                                                                                                                                                                    PS C:\Windows\system32> # 1. Detener + matar nodes                                                                      >> schtasks /End /TN "BuenaMezclaTotem"
+>> Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+>> Start-Sleep -Seconds 5
+>>
+>> # 2. Borrar runtime viejo
+>> Remove-Item C:\BuenaMezcla\totem\runtime.js,C:\BuenaMezcla\totem\sync-worker.js,C:\BuenaMezcla\totem\register.js -Force -ErrorAction SilentlyContinue
+>>
+>> # 3. Bajar bundle desde DEV (tiene el fix)
+>> $DEV = "https://ab328069-2a8e-4ba7-b005-7c5caf268c16-00-2kxd6vn5y7vs6.riker.replit.dev"
+>> Invoke-WebRequest "$DEV/totem/totem-bundle.tar.gz" -OutFile "$env:TEMP\totem-bundle.tar.gz" -UseBasicParsing
+>>
+>> # 4. Extraer
+>> tar -xzf "$env:TEMP\totem-bundle.tar.gz" -C "C:\BuenaMezcla"
+>>
+>> # 5. Verificar runtime nuevo (~180KB esperado)
+>> Get-Item C:\BuenaMezcla\totem\runtime.js | Select-Object Name, Length, LastWriteTime
+>>
+>> # 6. Re-arrancar y testear
+>> schtasks /Run /TN "BuenaMezclaTotem"
+>> Start-Sleep -Seconds 12
+>>
+>> $session = $null
+>> $body = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>> $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session
+>> $cid = $login.user.casinoId
+>> Write-Host "Login OK: $($login.user.nombre)"
+>>
+>> try {
+>>   $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$cid" -WebSession $session
+>>   Write-Host "minutas OK: $($m.Count) totales" -ForegroundColor Green
+>>   $today = (Get-Date).ToString("yyyy-MM-dd")
+>>   $hoy = $m | Where-Object { $_.fecha -eq $today -and $_.activo }
+>>   Write-Host "Hoy ($today): $($hoy.Count)"
+>> } catch { Write-Host "FAIL: $($_.ErrorDetails.Message)" -ForegroundColor Red }
+>>
+>> Start-Process "C:\BuenaMezcla\scripts\start-kiosk.cmd"
+CORRECTO: la tarea programada "BuenaMezclaTotem" ha finalizado correctamente.
+
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+Name       Length LastWriteTime
+----       ------ -------------
+runtime.js 184125 13/05/2026 21:21:04
+Invoke-RestMethod : No es posible conectar con el servidor remoto
+En línea: 25 Carácter: 10
++ $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login ...
++          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Invoke-RestMethod], WebException
+    + FullyQualifiedErrorId : System.Net.WebException,Microsoft.PowerShell.Commands.InvokeRestMethodCommand
+
+Login OK:
+FAIL:
+

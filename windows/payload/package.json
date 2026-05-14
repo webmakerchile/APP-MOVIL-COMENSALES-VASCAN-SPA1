@@ -4,6 +4,18 @@
   "private": true,
   "main": "totem/runtime.js",
   "dependencies": {
-    "better-sqlite3": "^12.9.0"
+    "better-sqlite3": "^11.0.0",
+    "drizzle-orm": "^0.36.0",
+    "drizzle-zod": "^0.5.1",
+    "express": "^4.21.0",
+    "express-session": "^1.18.0",
+    "connect-pg-simple": "^10.0.0",
+    "bcryptjs": "^2.4.3",
+    "multer": "^1.4.5-lts.1",
+    "xlsx": "^0.18.5",
+    "exceljs": "^4.4.0",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.0",
+    "zod": "^3.23.8"
   }
 }
