@@ -1,0 +1,44 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+                                                                                                                                                                                                                                                 Escribiendo solicitud web                                                                                                  Escribiendo secuencia de solicitud... (Número de bytes escritos: 696366)                                                                                                                                                                    >>
+>> # Bajar bundle nuevo
+>> $bundle = "C:\BuenaMezcla\totem-bundle.tar.gz"
+>> Invoke-WebRequest "https://vascan.replit.app/totem/totem-bundle.tar.gz" -OutFile $bundle
+>>
+>> # Re-extraer encima
+>> tar -xzf $bundle -C "C:\BuenaMezcla\app"
+>>
+>> # Reiniciar servicio
+>> Start-Service BuenaMezclaTotem
+>>
+>> # Verificar
+>> Start-Sleep -Seconds 3
+>> Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/health"
+tar.exe: could not chdir to 'C:\BuenaMezcla\app'
+
+Start-Service : No se encuentra ningún servicio con el nombre 'BuenaMezclaTotem'.
+En línea: 12 Carácter: 1
++ Start-Service BuenaMezclaTotem
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (BuenaMezclaTotem:String) [Start-Service], ServiceCommandException
+    + FullyQualifiedErrorId : NoServiceFoundForGivenName,Microsoft.PowerShell.Commands.StartServiceCommand
+
+Invoke-RestMethod :
+Error
+Cannot GET /api/health
+En línea: 16 Carácter: 1
++ Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/health"
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invoke-RestMethod], WebExc
+   eption
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeRestMethodCommand
+PS C:\Windows\system32> Stop-Service BuenaMezclaTotem
+>> Invoke-WebRequest "https://vascan.replit.app/totem/totem-bundle.tar.gz" -OutFile "C:\BuenaMezcla\totem-bundle.tar.gz"
+>> tar -xzf "C:\BuenaMezcla\totem-bundle.tar.gz" -C "C:\BuenaMezcla\app"
+>> Start-Service BuenaMezclaTotem
+Stop-Service : No se encuentra ningún servicio con el nombre 'BuenaMezclaTotem'.
+En línea: 1 Carácter: 1
++ Stop-Service BuenaMezclaTotem
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (BuenaMezclaTotem:String) [Stop-Service], ServiceCommandException
+    + FullyQualifiedErrorId : NoServiceFoundForGivenName,Microsoft.PowerShell.Commands.StopServiceCommand
