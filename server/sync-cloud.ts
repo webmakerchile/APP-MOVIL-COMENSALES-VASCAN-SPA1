@@ -15,7 +15,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { totems, totemReleases, users, casinos, minutas, familias, periodos, pedidos, type Totem } from "@shared/schema";
 import { storage } from "./storage";
-import { eq, and, gt, sql } from "drizzle-orm";
+import { eq, and, gt, sql, inArray } from "drizzle-orm";
 
 interface AuthedTotemRequest extends Request {
   totem?: Totem;
@@ -155,12 +155,17 @@ export function registerSyncRoutes(app: Express) {
       // Scope: the totem's own casino + global tables (familias).
       const casinoFilter = (col: any) => eq(col, t.casinoId);
 
-      const [casinosRows, familiasRows, usersRows, minutasRows, periodosRows] = await Promise.all([
+      // Subquery: ids de minutas del casino del tótem (para scope de pedidos).
+      const minutaIdsForCasino = db.select({ id: minutas.id }).from(minutas).where(eq(minutas.casinoId, t.casinoId));
+
+      const [casinosRows, familiasRows, usersRows, minutasRows, periodosRows, pedidosRows] = await Promise.all([
         db.select().from(casinos).where(and(gt(casinos.updatedAt, since), eq(casinos.id, t.casinoId))).limit(limit),
         db.select().from(familias).where(gt(familias.updatedAt, since)).limit(limit),
         db.select().from(users).where(and(gt(users.updatedAt, since), casinoFilter(users.casinoId))).limit(limit),
         db.select().from(minutas).where(and(gt(minutas.updatedAt, since), casinoFilter(minutas.casinoId))).limit(limit),
         db.select().from(periodos).where(and(gt(periodos.updatedAt, since), casinoFilter(periodos.casinoId))).limit(limit),
+        // Pedidos del casino (incluye tombstones para que el tótem mirror anulaciones desde el dashboard).
+        db.select().from(pedidos).where(and(gt(pedidos.updatedAt, since), inArray(pedidos.minutaId, minutaIdsForCasino))).limit(limit),
       ]);
 
       // Update last sync marker
@@ -169,7 +174,7 @@ export function registerSyncRoutes(app: Express) {
       // Compute the high-water mark from the rows actually returned so the
       // client advances its cursor only past data it has seen. Avoids the
       // "skip changes committed during pull window" race when paginating.
-      const allRows = [...casinosRows, ...familiasRows, ...usersRows, ...minutasRows, ...periodosRows];
+      const allRows = [...casinosRows, ...familiasRows, ...usersRows, ...minutasRows, ...periodosRows, ...pedidosRows];
       const maxUpdatedAt = allRows.reduce((m, r: any) => {
         const ts = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
         return ts > m ? ts : m;
@@ -186,6 +191,7 @@ export function registerSyncRoutes(app: Express) {
           users:    usersRows,
           minutas:  minutasRows,
           periodos: periodosRows,
+          pedidos:  pedidosRows,
         },
       });
     } catch (err) {

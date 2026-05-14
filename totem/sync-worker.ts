@@ -53,13 +53,18 @@ async function cloudFetch(pathRel: string, init: any = {}) {
 }
 
 // ── PULL ───────────────────────────────────────────────────────────────────
-const TABLES = ["casinos", "familias", "users", "minutas", "periodos"] as const;
+const TABLES = ["casinos", "familias", "users", "minutas", "periodos", "pedidos"] as const;
 const COLUMN_MAPS: Record<string, Record<string, string>> = {
   casinos:  { id: "id", nombre: "nombre", direccion: "direccion", comensalesDiarios: "comensales_diarios", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
   familias: { id: "id", nombre: "nombre", color: "color", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
   users:    { id: "id", rut: "rut", password: "password", nombre: "nombre", apellido: "apellido", telefono: "telefono", role: "role", casinoId: "casino_id", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
   minutas:  { id: "id", casinoId: "casino_id", fecha: "fecha", familia: "familia", opcion1: "opcion_1", opcion2: "opcion_2", opcion3: "opcion_3", opcion4: "opcion_4", opcion5: "opcion_5", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
   periodos: { id: "id", casinoId: "casino_id", nombre: "nombre", fechaInicio: "fecha_inicio", fechaFin: "fecha_fin", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
+  // Pedidos: mirror desde cloud para que las anulaciones del admin lleguen al tótem
+  // (tombstones con deleted_at). El tótem también pushea pedidos vía outbox; el upsert
+  // por id es idempotente — si un pedido vuelve del cloud con datos más nuevos
+  // (mayor updated_at), se sobreescribe el local con los valores autoritativos.
+  pedidos:  { id: "id", userId: "user_id", minutaId: "minuta_id", opcionSeleccionada: "opcion_seleccionada", tipo: "tipo", nombreVisita: "nombre_visita", asignadoPorDefecto: "asignado_por_defecto", codigoQr: "codigo_qr", origenTotemId: "origen_totem_id", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
 };
 
 function toEpoch(v: any): number | null {
@@ -75,7 +80,7 @@ function upsertRow(tbl: string, row: any) {
   const dbCols = cols.map(c => map[c]);
   const values = cols.map(k => {
     const v = row[k];
-    if (k === "activo") return toBool(v);
+    if (k === "activo" || k === "asignadoPorDefecto") return toBool(v);
     if (k.startsWith("created") || k.startsWith("updated") || k.startsWith("deleted") || k === "fechaInicio" || k === "fechaFin") {
       return toEpoch(v);
     }

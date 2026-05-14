@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import {
   db,
   DB_MODE,
@@ -197,10 +197,12 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(pedidos);
   }
   async getPedidosByUser(userId: string): Promise<Pedido[]> {
-    return db.select().from(pedidos).where(eq(pedidos.userId, userId));
+    // Excluir tombstones (pedidos anulados por admin) — el comensal puede volver a inscribirse.
+    return db.select().from(pedidos).where(and(eq(pedidos.userId, userId), isNull(pedidos.deletedAt)));
   }
   async getPedidoByUserAndMinuta(userId: string, minutaId: string): Promise<Pedido | undefined> {
-    const [pedido] = await db.select().from(pedidos).where(and(eq(pedidos.userId, userId), eq(pedidos.minutaId, minutaId)));
+    // Excluir tombstones para que admin pueda anular y permitir nueva inscripción.
+    const [pedido] = await db.select().from(pedidos).where(and(eq(pedidos.userId, userId), eq(pedidos.minutaId, minutaId), isNull(pedidos.deletedAt)));
     return pedido;
   }
   async createPedido(insertPedido: InsertPedido & { codigoQr?: string; id?: string; origenTotemId?: string; createdAt?: Date }): Promise<Pedido> {
