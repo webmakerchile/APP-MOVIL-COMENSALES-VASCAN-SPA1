@@ -1,0 +1,73 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+                                                                                                                        Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6                                                                                                                                                                    PS C:\Windows\system32> # 1. Detener                                                                                    >> schtasks /End /TN "BuenaMezclaTotem"
+>> Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+>> Start-Sleep -Seconds 5
+>>
+>> # 2. Borrar runtime viejo (forzar overwrite)
+>> Remove-Item C:\BuenaMezcla\totem\runtime.js,C:\BuenaMezcla\totem\sync-worker.js,C:\BuenaMezcla\totem\register.js -Force -ErrorAction SilentlyContinue
+>>
+>> # 3. Bajar bundle nuevo desde DEV
+>> $DEV = "https://ab328069-2a8e-4ba7-b005-7c5caf268c16-00-2kxd6vn5y7vs6.riker.replit.dev"
+>> Invoke-WebRequest "$DEV/totem/totem-bundle.tar.gz" -OutFile "$env:TEMP\totem-bundle.tar.gz" -UseBasicParsing
+>> tar -xzf "$env:TEMP\totem-bundle.tar.gz" -C "C:\BuenaMezcla"
+>>
+>> # 4. Instalar deps nuevas (especialmente node-cron)
+>> cd C:\BuenaMezcla
+>> & "C:\BuenaMezcla\node\npm.cmd" install --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=warn
+>>
+>> # 5. Re-arrancar
+>> schtasks /Run /TN "BuenaMezclaTotem"
+>> Start-Sleep -Seconds 12
+>>
+>> # 6. Test
+>> $session = $null
+>> $body = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>> try {
+>>   $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session
+>>   Write-Host "Login OK: $($login.user.nombre)" -ForegroundColor Green
+>>   $cid = $login.user.casinoId
+>>   $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$cid" -WebSession $session
+>>   Write-Host "minutas OK: $($m.Count) totales" -ForegroundColor Green
+>>   $today = (Get-Date).ToString("yyyy-MM-dd")
+>>   $hoy = $m | Where-Object { $_.fecha -eq $today -and $_.activo }
+>>   Write-Host "Hoy ($today): $($hoy.Count) minutas activas"
+>> } catch {
+>>   Write-Host "FAIL: $($_.Exception.Message)" -ForegroundColor Red
+>>   Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 20
+>> }
+>>
+>> Start-Process "C:\BuenaMezcla\scripts\start-kiosk.cmd"
+CORRECTO: la tarea programada "BuenaMezclaTotem" ha finalizado correctamente.
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated multer@1.4.5-lts.2: Multer 1.x is impacted by a number of vulnerabilities, which have been patched in 2.x. You should upgrade to the latest 2.x version.
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated uuid@8.3.2: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+
+added 191 packages, and changed 1 package in 1m
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+FAIL: No es posible conectar con el servidor remoto
+    at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+    at Module.load (node:internal/modules/cjs/loader:1288:32) {
+  tries: [
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\build\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\build\\Debug\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\build\\Release\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\out\\Debug\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\Debug\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\out\\Release\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\Release\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\build\\default\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\compiled\\20.18.0\\win32\\x64\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\addon-build\\release\\install-root\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\addon-build\\debug\\install-root\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\addon-build\\default\\install-root\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\lib\\binding\\node-v115-win32-x64\\better_sqlite3.node'
+  ]
+}
+
+Node.js v20.18.0
+PS C:\BuenaMezcla>
