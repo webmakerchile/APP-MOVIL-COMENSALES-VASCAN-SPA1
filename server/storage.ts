@@ -82,6 +82,8 @@ export interface IStorage {
   getPedidoByUserAndMinuta(userId: string, minutaId: string): Promise<Pedido | undefined>;
   createPedido(pedido: InsertPedido & { codigoQr?: string }): Promise<Pedido>;
   updatePedido(id: string, data: Partial<InsertPedido & { codigoQr?: string | null }>): Promise<Pedido | undefined>;
+  getPedidoById(id: string): Promise<Pedido | undefined>;
+  deletePedido(id: string): Promise<boolean>;
   getPedidosByMinuta(minutaId: string): Promise<Pedido[]>;
   getAllFamilias(): Promise<Familia[]>;
   createFamilia(familia: InsertFamilia): Promise<Familia>;
@@ -251,6 +253,25 @@ export class DatabaseStorage implements IStorage {
   }
   async getPedidosByMinuta(minutaId: string): Promise<Pedido[]> {
     return db.select().from(pedidos).where(eq(pedidos.minutaId, minutaId));
+  }
+  async getPedidoById(id: string): Promise<Pedido | undefined> {
+    const [p] = await db.select().from(pedidos).where(eq(pedidos.id, id));
+    return p;
+  }
+  async deletePedido(id: string): Promise<boolean> {
+    if (DB_MODE === "totem" && sqlite) {
+      const tx = sqlite.transaction(() => {
+        const [p] = (db.update(pedidos).set(tombstone()).where(eq(pedidos.id, id)).returning() as any).all
+          ? (db.update(pedidos).set(tombstone()).where(eq(pedidos.id, id)).returning() as any).all()
+          : [];
+        const updated = p ?? (sqlite!.prepare("SELECT * FROM pedidos WHERE id = ?").get(id) as any);
+        if (updated) enqueuePedidoOutboxSync(updated, "delete");
+        return !!updated;
+      });
+      return tx();
+    }
+    const [pedido] = await db.update(pedidos).set(tombstone()).where(eq(pedidos.id, id)).returning();
+    return !!pedido;
   }
 
   // ── Familias ──

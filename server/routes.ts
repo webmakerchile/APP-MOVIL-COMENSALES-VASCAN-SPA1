@@ -1148,6 +1148,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE pedido — admin/interlocutor pueden anular un vale para que el comensal vuelva a inscribirse
+  app.delete("/api/pedidos/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const pedido = await storage.getPedidoById(id);
+      if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
+      if ((pedido as any).deletedAt) return res.status(410).json({ message: "Pedido ya estaba anulado" });
+
+      // Scope check: interlocutor sólo puede borrar pedidos de su casino
+      const me = (req as any).currentUser;
+      if (me?.role === "interlocutor") {
+        const minuta = await storage.getMinuta(pedido.minutaId);
+        if (!minuta || minuta.casinoId !== me.casinoId) {
+          return res.status(403).json({ message: "Sin acceso a este casino" });
+        }
+      }
+
+      const ok = await storage.deletePedido(id);
+      if (!ok) return res.status(500).json({ message: "No se pudo anular el pedido" });
+
+      console.log(`[audit] Pedido ${id} anulado por ${me?.rut || "?"} (${me?.role}) — comensal=${pedido.userId} minuta=${pedido.minutaId} tipo=${pedido.tipo}`);
+      return res.json({ ok: true, message: "Pedido anulado. El comensal puede inscribirse nuevamente." });
+    } catch (error) {
+      console.error("Delete pedido error:", error);
+      return res.status(500).json({ message: "Error interno del servidor" });
+    }
+  });
+
   // ── Historial enriquecido ──
   app.get("/api/historial/:userId", async (req: Request, res: Response) => {
     try {
@@ -2610,6 +2638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const end = new Date(fechaHasta + "T23:59:59");
 
       const filtered = allPedidos.filter(p => {
+        if ((p as any).deletedAt) return false;
         const created = p.createdAt ? new Date(p.createdAt) : null;
         if (!created || created < start || created > end) return false;
         if (casinoId && casinoId !== "all") {
