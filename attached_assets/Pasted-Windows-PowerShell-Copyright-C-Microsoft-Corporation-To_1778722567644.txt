@@ -1,0 +1,89 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> $sql = @"
+>> ALTER TABLE users ADD COLUMN fecha_nacimiento TEXT;
+>> ALTER TABLE users ADD COLUMN password_change_required INTEGER NOT NULL DEFAULT 1;
+>> ALTER TABLE casinos ADD COLUMN permitir_cambio_clave_totem INTEGER NOT NULL DEFAULT 0;
+>> ALTER TABLE periodos ADD COLUMN fecha_servicio_inicio TEXT;
+>> ALTER TABLE periodos ADD COLUMN fecha_servicio_fin TEXT;
+>> ALTER TABLE pedidos ADD COLUMN asignado_por_defecto INTEGER NOT NULL DEFAULT 0;
+>> CREATE TABLE IF NOT EXISTS usuario_casinos (
+>>   id TEXT PRIMARY KEY,
+>>   user_id TEXT NOT NULL,
+>>   casino_id TEXT NOT NULL,
+>>   created_at INTEGER,
+>>   updated_at INTEGER NOT NULL,
+>>   deleted_at INTEGER,
+>>   sync_version INTEGER NOT NULL DEFAULT 0
+>> );
+>> "@
+>> $sql | Out-File -Encoding ASCII C:\BuenaMezcla\migrate.sql
+>>
+>> # Detener server
+>> schtasks /End /TN "BuenaMezclaTotem"
+>> Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+>> Start-Sleep -Seconds 4
+>>
+>> # Aplicar migraciones (ignora errores "duplicate column" si alguna ya existe)
+>> $nodeScript = @"
+>> const Database = require('better-sqlite3');
+>> const fs = require('fs');
+>> const db = new Database('C:/BuenaMezcla/totem-data/totem.db');
+>> const sql = fs.readFileSync('C:/BuenaMezcla/migrate.sql','utf8');
+>> for (const stmt of sql.split(';').map(s=>s.trim()).filter(Boolean)) {
+>>   try { db.exec(stmt + ';'); console.log('OK: ' + stmt.split('\n')[0].slice(0,80)); }
+>>   catch(e) { console.log('SKIP (' + e.message + '): ' + stmt.split('\n')[0].slice(0,80)); }
+>> }
+>> console.log('---');
+>> console.log('users cols:', db.prepare("PRAGMA table_info(users)").all().map(c=>c.name).join(','));
+>> console.log('casinos cols:', db.prepare("PRAGMA table_info(casinos)").all().map(c=>c.name).join(','));
+>> console.log('periodos cols:', db.prepare("PRAGMA table_info(periodos)").all().map(c=>c.name).join(','));
+>> console.log('pedidos cols:', db.prepare("PRAGMA table_info(pedidos)").all().map(c=>c.name).join(','));
+>> db.close();
+>> "@
+>> $nodeScript | Out-File -Encoding ASCII C:\BuenaMezcla\migrate.js
+>> cd C:\BuenaMezcla
+>> & "C:\BuenaMezcla\node\node.exe" migrate.js
+>>
+>> # Re-arrancar
+>> schtasks /Run /TN "BuenaMezclaTotem"
+>> Start-Sleep -Seconds 12
+>>
+>> # Test
+>> $session = $null
+>> $body = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>> try {
+>>   $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session
+>>   Write-Host "LOGIN OK: $($login.user.nombre)" -ForegroundColor Green
+>>   $cid = $login.user.casinoId
+>>   $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$cid" -WebSession $session
+>>   Write-Host "MINUTAS OK: $($m.Count) totales" -ForegroundColor Green
+>>   $today = (Get-Date).ToString("yyyy-MM-dd")
+>>   $hoy = $m | Where-Object { $_.fecha -eq $today -and $_.activo }
+>>   Write-Host "Hoy ($today): $($hoy.Count) minutas activas" -ForegroundColor $(if($hoy.Count -gt 0){"Green"}else{"Yellow"})
+>> } catch {
+>>   Write-Host "FAIL: $($_.Exception.Message)" -ForegroundColor Red
+>>   Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 15
+>> }
+>>
+>> Start-Process "C:\BuenaMezcla\scripts\start-kiosk.cmd"
+CORRECTO: la tarea programada "BuenaMezclaTotem" ha finalizado correctamente.
+OK: ALTER TABLE users ADD COLUMN fecha_nacimiento TEXT
+OK: ALTER TABLE users ADD COLUMN password_change_required INTEGER NOT NULL DEFAULT 1
+OK: ALTER TABLE casinos ADD COLUMN permitir_cambio_clave_totem INTEGER NOT NULL DEFA
+OK: ALTER TABLE periodos ADD COLUMN fecha_servicio_inicio TEXT
+OK: ALTER TABLE periodos ADD COLUMN fecha_servicio_fin TEXT
+SKIP (duplicate column name: asignado_por_defecto): ALTER TABLE pedidos ADD COLUMN asignado_por_defecto INTEGER NOT NULL DEFAULT 0
+OK: CREATE TABLE IF NOT EXISTS usuario_casinos (
+---
+users cols: id,rut,password,nombre,apellido,telefono,role,casino_id,activo,created_at,updated_at,deleted_at,sync_version,fecha_nacimiento,password_change_required
+casinos cols: id,nombre,direccion,comensales_diarios,activo,created_at,updated_at,deleted_at,sync_version,permitir_cambio_clave_totem
+periodos cols: id,casino_id,nombre,fecha_inicio,fecha_fin,activo,created_at,updated_at,deleted_at,sync_version,fecha_servicio_inicio,fecha_servicio_fin
+pedidos cols: id,user_id,minuta_id,opcion_seleccionada,tipo,nombre_visita,asignado_por_defecto,codigo_qr,origen_totem_id,created_at,updated_at,deleted_at,sync_version
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+LOGIN OK: Juan Carlos
+MINUTAS OK: 0 totales
+Hoy (2026-05-13): 0 minutas activas
