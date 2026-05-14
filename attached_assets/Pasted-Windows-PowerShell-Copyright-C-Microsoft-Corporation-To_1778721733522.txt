@@ -1,0 +1,49 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6                                                                                                                                                                    PS C:\Windows\system32> # 1. Detener tarea + matar nodes                                                                >> schtasks /End /TN "BuenaMezclaTotem"                                                                                 >> Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+>>   Where-Object { $_.ExecutablePath -like "C:\BuenaMezcla\*" } |
+>>   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+>> Start-Sleep -Seconds 3
+>>
+>> # 2. Bajar bundle nuevo (~1.5MB)
+>> Invoke-WebRequest "https://vascan.replit.app/totem/totem-bundle.tar.gz" `
+>>   -OutFile "$env:TEMP\totem-bundle.tar.gz" -UseBasicParsing
+>>
+>> # 3. Extraer encima
+>> tar -xzf "$env:TEMP\totem-bundle.tar.gz" -C "C:\BuenaMezcla"
+>>
+>> # 4. Limpiar assets PWA viejos (los hashes anteriores)
+>> Get-ChildItem C:\BuenaMezcla\pwa\dist\assets\index-* |
+>>   Where-Object { $_.Name -ne "index-BUVMMwb-.css" -and $_.Name -ne "index-BWEr72Yz.js" } |
+>>   Remove-Item -Force
+>>
+>> # 5. Re-arrancar
+>> schtasks /Run /TN "BuenaMezclaTotem"
+>> Start-Sleep -Seconds 12
+>>
+>> # 6. Test login + minutas
+>> $session = $null
+>> $body = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>> $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session
+>> $casinoId = $login.user.casinoId
+>> Write-Host "Login OK: $($login.user.nombre)"
+>>
+>> try {
+>>   $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$casinoId" -WebSession $session
+>>   Write-Host "OK: $($m.Count) minutas en total" -ForegroundColor Green
+>>   $today = (Get-Date).ToString("yyyy-MM-dd")
+>>   $hoy = $m | Where-Object { $_.fecha -eq $today -and $_.activo }
+>>   Write-Host "Minutas para HOY ($today): $($hoy.Count)"
+>>   if ($hoy.Count -eq 0) {
+>>     Write-Host "FALTA: cargar minuta para hoy desde el panel admin" -ForegroundColor Yellow
+>>   }
+>> } catch { Write-Host "STILL FAILING: $($_.ErrorDetails.Message)" -ForegroundColor Red }
+>>
+>> # 7. Reabrir kiosko
+>> Start-Process "C:\BuenaMezcla\scripts\start-kiosk.cmd"
+CORRECTO: la tarea programada "BuenaMezclaTotem" ha finalizado correctamente.
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+Login OK: Juan Carlos
+STILL FAILING: {"message":"Error interno del servidor"}
+PS C:\Windows\system32>
