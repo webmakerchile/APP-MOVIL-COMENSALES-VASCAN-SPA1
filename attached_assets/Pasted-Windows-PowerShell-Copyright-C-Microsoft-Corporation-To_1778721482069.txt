@@ -1,0 +1,48 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> cd C:\BuenaMezcla
+>>
+>> # Login con guion (formato canónico de la BD)
+>> $session = $null
+>> $body = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>> $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session
+>> $casinoId = $login.user.casinoId
+>> Write-Host "Casino: $casinoId  User: $($login.user.nombre)"
+>>
+>> Write-Host "`n=== /api/minutas/{casinoId} ===" -ForegroundColor Cyan
+>> $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$casinoId" -WebSession $session
+>> $today = (Get-Date).ToString("yyyy-MM-dd")
+>> Write-Host "Hoy: $today | Total minutas: $($m.Count)"
+>> $hoy = $m | Where-Object { $_.fecha -eq $today -and $_.activo }
+>> Write-Host "Minutas activas hoy: $($hoy.Count)"
+>> $hoy | Select-Object fecha, familia, opcion1, opcion2, opcion3 | Format-Table
+>>
+>> Write-Host "`n=== Conteos en SQLite (corriendo desde C:\BuenaMezcla) ===" -ForegroundColor Cyan
+>> & "C:\BuenaMezcla\node\node.exe" -e "const db=require('better-sqlite3')('C:/BuenaMezcla/totem-data/totem.db',{readonly:true}); const t=new Date().toISOString().slice(0,10); console.log('Total minutas:', db.prepare('SELECT COUNT(*) c FROM minutas').get().c); console.log('Minutas hoy ('+t+'):', db.prepare('SELECT COUNT(*) c FROM minutas WHERE fecha=? AND activo=1').get(t).c); console.log('Casinos:'); console.table(db.prepare('SELECT id,nombre FROM casinos').all());"
+Casino: 4eba24b0-4612-40ef-b96a-02d0d6e69036  User: Juan Carlos
+
+=== /api/minutas/{casinoId} ===
+Invoke-RestMethod : {"message":"Error interno del servidor"}
+En línea: 11 Carácter: 6
++ $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$casin ...
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (System.Net.HttpWebRequest:HttpWebRequest) [Invoke-RestMethod], WebExc
+   eption
+    + FullyQualifiedErrorId : WebCmdletWebResponseException,Microsoft.PowerShell.Commands.InvokeRestMethodCommand
+Hoy: 2026-05-13 | Total minutas: 0
+Minutas activas hoy: 0
+
+=== Conteos en SQLite (corriendo desde C:\BuenaMezcla) ===
+Total minutas: 13
+Minutas hoy (2026-05-14): 0
+Casinos:
+┌─────────┬────────────────────────────────────────┬───────────────────────────┐
+│ (index) │ id                                     │ nombre                    │
+├─────────┼────────────────────────────────────────┼───────────────────────────┤
+│ 0       │ 'c9c812a0-df27-4d8f-94e5-1c064e76f5ba' │ 'Casino Central Santiago' │
+│ 1       │ '4eba24b0-4612-40ef-b96a-02d0d6e69036' │ 'CASINO UNION QUIMICA'    │
+└─────────┴────────────────────────────────────────┴───────────────────────────┘
+PS C:\BuenaMezcla>
