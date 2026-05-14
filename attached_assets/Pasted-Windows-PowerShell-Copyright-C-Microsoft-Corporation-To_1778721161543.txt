@@ -1,0 +1,76 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+                                                                                                                        Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6                                                                                                                                                                    PS C:\Windows\system32> # 1. ¿Qué assets tiene la PWA actualmente en disco?                                             >> Write-Host "`n=== Assets PWA en disco ===" -ForegroundColor Cyan
+>> Get-ChildItem C:\BuenaMezcla\pwa\dist\assets\ | Select-Object Name, Length
+>>
+>> # 2. ¿Qué JS está sirviendo el servidor?
+>> Write-Host "`n=== JS servido por el server ===" -ForegroundColor Cyan
+>> $html = Invoke-WebRequest "http://127.0.0.1:5000/kiosk" -UseBasicParsing
+>> $html.Content -split "`n" | Select-String "index-.*\.js"
+>>
+>> # 3. ¿Existe el usuario en el SQLite del tótem?
+>> Write-Host "`n=== Usuarios en SQLite local ===" -ForegroundColor Cyan
+>> $node = "C:\BuenaMezcla\node\node.exe"
+>> $bs3 = "C:\BuenaMezcla\node_modules\better-sqlite3"
+>> & $node -e "const db=require('$($bs3.Replace('\','/'))')('C:/BuenaMezcla/totem-data/totem.db',{readonly:true}); console.log(JSON.stringify(db.prepare(`"SELECT rut,nombre,role,casino_id FROM users WHERE rut LIKE '%12345678%'`").all()));"
+>>
+>> # 4. Probar login local con CADA formato
+>> Write-Host "`n=== Login con guion (12345678-5) ===" -ForegroundColor Cyan
+>> try {
+>>   $b = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>>   Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $b
+>> } catch { Write-Host $_.ErrorDetails.Message -ForegroundColor Yellow }
+>>
+>> Write-Host "`n=== Login sin guion (123456785) ===" -ForegroundColor Cyan
+>> try {
+>>   $b = @{rut="123456785";password="123456"} | ConvertTo-Json
+>>   Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $b
+>> } catch { Write-Host $_.ErrorDetails.Message -ForegroundColor Yellow }
+>>
+>> # 5. Últimas líneas del log del tótem
+>> Write-Host "`n=== Últimas 15 líneas del error log ===" -ForegroundColor Cyan
+>> Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 15 -ErrorAction SilentlyContinue
+
+=== Assets PWA en disco ===
+
+
+=== JS servido por el server ===
+
+=== Usuarios en SQLite local ===
+[eval]:1
+const db=require('C:/BuenaMezcla/node_modules/better-sqlite3')('C:/BuenaMezcla/totem-data/totem.db',{readonly:true}); console.log(JSON.stringify(db.prepare(SELECT
+                                                                                                                                                            ^^^^^^
+
+SyntaxError: missing ) after argument list
+    at makeContextifyScript (node:internal/vm:185:14)
+    at node:internal/process/execution:107:22
+    at [eval]-wrapper:6:24
+    at runScript (node:internal/process/execution:101:62)
+    at evalScript (node:internal/process/execution:133:3)
+    at node:internal/main/eval_string:51:3
+
+Node.js v20.18.0
+
+=== Login con guion (12345678-5) ===
+Name               Length
+----               ------
+index-BJWQ7q0l.css  20936
+index-BNWFGYlb.js  341498
+index-BUVMMwb-.css  23050
+index-BWEr72Yz.js  360359
+
+
+
+=== Login sin guion (123456785) ===
+{"message":"Credenciales inválidas"}
+
+=== Últimas 15 líneas del error log ===
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+^CWarning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+
+
+PS C:\Windows\system32>
