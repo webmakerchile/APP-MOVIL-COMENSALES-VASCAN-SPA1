@@ -1,0 +1,66 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> schtasks /End /TN "BuenaMezclaTotem"
+>> Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+>> Start-Sleep -Seconds 5                                                                                               >>                                                                                                                      >> # 1. Borrar better-sqlite3 v11 (mal) e instalar v12.9.0                                                              >> Remove-Item C:\BuenaMezcla\node_modules\better-sqlite3 -Recurse -Force -ErrorAction SilentlyContinue                 >>                                                                                                                      >> # 2. Bajar bundle nuevo (con package.json corregido a v12)                                                           >> $DEV = "https://ab328069-2a8e-4ba7-b005-7c5caf268c16-00-2kxd6vn5y7vs6.riker.replit.dev"
+>> Invoke-WebRequest "$DEV/totem/totem-bundle.tar.gz" -OutFile "$env:TEMP\totem-bundle.tar.gz" -UseBasicParsing
+>> Remove-Item C:\BuenaMezcla\totem\runtime.js,C:\BuenaMezcla\totem\sync-worker.js,C:\BuenaMezcla\totem\register.js -Force -ErrorAction SilentlyContinue
+>> tar -xzf "$env:TEMP\totem-bundle.tar.gz" -C "C:\BuenaMezcla"
+>>
+>> # 3. Reinstalar deps (ahora con bs3 v12.9.0)
+>> cd C:\BuenaMezcla
+>> & "C:\BuenaMezcla\node\npm.cmd" install --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=warn
+>>
+>> # 4. Re-bajar binario nativo (npm install lo borra cada vez)
+>> $bs3Dir = "C:\BuenaMezcla\node_modules\better-sqlite3\build\Release"
+>> New-Item -ItemType Directory -Force -Path $bs3Dir | Out-Null
+>> Invoke-WebRequest "$DEV/totem/bs3-win.node" -OutFile "$bs3Dir\better_sqlite3.node" -UseBasicParsing
+>> Write-Host "Binario: $((Get-Item $bs3Dir\better_sqlite3.node).Length) bytes" -ForegroundColor Cyan
+>>
+>> # 5. Arrancar
+>> schtasks /Run /TN "BuenaMezclaTotem"
+>> Start-Sleep -Seconds 12
+>>
+>> # 6. Test
+>> $session = $null
+>> $body = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>> try {
+>>   $login = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session
+>>   Write-Host "LOGIN OK: $($login.user.nombre)" -ForegroundColor Green
+>>   $cid = $login.user.casinoId
+>>   $m = Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/minutas/$cid" -WebSession $session
+>>   Write-Host "MINUTAS OK: $($m.Count) totales" -ForegroundColor Green
+>>   $today = (Get-Date).ToString("yyyy-MM-dd")
+>>   $hoy = $m | Where-Object { $_.fecha -eq $today -and $_.activo }
+>>   Write-Host "Hoy ($today): $($hoy.Count) minutas activas" -ForegroundColor $(if($hoy.Count -gt 0){"Green"}else{"Yellow"})
+>> } catch {
+>>   Write-Host "FAIL: $($_.Exception.Message)" -ForegroundColor Red
+>>   Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 15
+>> }
+>>
+>> Start-Process "C:\BuenaMezcla\scripts\start-kiosk.cmd"
+CORRECTO: la tarea programada "BuenaMezclaTotem" ha finalizado correctamente.
+
+changed 1 package in 2s
+Binario: 1911808 bytes
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+FAIL: Error en el servidor remoto: (500) Error interno del servidor.
+memory, and will not scale past a single process.
+^CWarning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+Login error: SqliteError: no such column: "fecha_nacimiento" - should this be a string literal in single-quotes?
+    at Database.prepare (C:\BuenaMezcla\node_modules\better-sqlite3\lib\methods\wrappers.js:5:21)
+    at BetterSQLiteSession.prepareQuery (C:\BuenaMezcla\node_modules\drizzle-orm\better-sqlite3\session.cjs:42:30)
+    at BetterSQLiteSession.prepareOneTimeQuery (C:\BuenaMezcla\node_modules\drizzle-orm\sqlite-core\session.cjs:91:17)
+    at SQLiteSelectBase._prepare (C:\BuenaMezcla\node_modules\drizzle-orm\sqlite-core\query-builders\select.cjs:595:88)
+    at SQLiteSelectBase.all (C:\BuenaMezcla\node_modules\drizzle-orm\sqlite-core\query-builders\select.cjs:611:17)
+    at SQLiteSelectBase.execute (C:\BuenaMezcla\node_modules\drizzle-orm\sqlite-core\query-builders\select.cjs:620:17)
+    at SQLiteSelectBase.then (C:\BuenaMezcla\node_modules\drizzle-orm\query-promise.cjs:44:17)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+  code: 'SQLITE_ERROR'
+}
+PS C:\BuenaMezcla>
