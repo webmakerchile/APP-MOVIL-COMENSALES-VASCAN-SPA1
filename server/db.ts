@@ -50,3 +50,16 @@ export const db = _db;
 export const pool = _pool; // undefined in totem mode
 export const sqlite = _sqlite; // undefined in cloud mode
 export const schema = _schema;
+
+// Re-export individual tables from the active schema so storage.ts can use
+// them with the correct column metadata for the active driver. In cloud mode
+// these come from "@shared/schema" (Postgres pgTable). In totem mode from
+// "@shared/schema-sqlite" (sqliteTable) — critical so drizzle knows to coerce
+// booleans → 0/1 and Date → epoch ms when binding parameters.
+export const users           = _schema.users;
+export const casinos         = _schema.casinos;
+export const familias        = _schema.familias;
+export const minutas         = _schema.minutas;
+export const pedidos         = _schema.pedidos;
+export const periodos        = _schema.periodos;
+export const usuarioCasinos  = _schema.usuarioCasinos;

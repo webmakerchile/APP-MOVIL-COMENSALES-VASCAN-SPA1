@@ -1,0 +1,127 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> # Ver últimos errores del runtime
+>> Write-Host "=== service.err.log (últimas 40 líneas) ===" -ForegroundColor Cyan
+>> Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 40
+>>
+>> Write-Host "`n=== service.out.log (últimas 30 líneas) ===" -ForegroundColor Cyan
+>> Get-Content C:\BuenaMezcla\logs\service.out.log -Tail 30
+>>
+>> # Disparar el endpoint de nuevo y mirar exactamente qué loggea
+>> Write-Host "`n=== Disparar /api/minutas con sesión ===" -ForegroundColor Cyan
+>> $session = $null
+>> $body = @{rut="12345678-5";password="123456"} | ConvertTo-Json
+>> Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/auth/login" -Method POST -ContentType "application/json" -Body $body -SessionVariable session | Out-Null
+>> try {
+>>   Invoke-WebRequest -Uri "http://127.0.0.1:5000/api/minutas/4eba24b0-4612-40ef-b96a-02d0d6e69036" -WebSession $session -UseBasicParsing
+>> } catch {
+>>   Write-Host "STATUS: $($_.Exception.Response.StatusCode.value__)"
+>>   Write-Host "BODY: $($_.ErrorDetails.Message)"
+>> }
+>>
+>> Start-Sleep -Seconds 1
+>> Write-Host "`n=== service.err.log DESPUÉS del request ===" -ForegroundColor Cyan
+>> Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 20
+=== service.err.log (últimas 40 líneas) ===
+memory, and will not scale past a single process.
+^CWarning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+Get casinos error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get casinos error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+
+=== service.out.log (últimas 30 líneas) ===
+GET /api/auth/me 401 in 19ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 5ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 7ms :: {"message":"No autenticado"}
+POST /api/auth/login 401 in 19ms :: [redacted]
+POST /api/auth/login 401 in 4ms :: [redacted]
+POST /api/auth/login 200 in 123ms :: [redacted]
+POST /api/auth/login 401 in 4ms :: [redacted]
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 13ms :: {"message":"No autenticado"}
+POST /api/auth/login 200 in 127ms :: [redacted]
+GET /api/casinos 500 in 9ms :: {"message":"Error interno del servidor"}
+GET /api/pedidos/082403e7-7669-4459-ae5c-dd14d8e03076 200 in 6ms :: []
+GET /api/minutas/4eba24b0-4612-40ef-b96a-02d0d6e69036 500 in 12ms :: {"message"â€¦
+POST /api/auth/login 200 in 128ms :: [redacted]
+GET /api/casinos 500 in 3ms :: {"message":"Error interno del servidor"}
+GET /api/minutas/4eba24b0-4612-40ef-b96a-02d0d6e69036 500 in 6ms :: {"message":â€¦
+GET /api/pedidos/082403e7-7669-4459-ae5c-dd14d8e03076 200 in 8ms :: []
+POST /api/auth/login 401 in 1ms :: [redacted]
+GET /api/minutas/ 401 in 3ms :: {"message":"No autenticado"}
+POST /api/auth/login 401 in 3ms :: [redacted]
+GET /api/minutas/ 401 in 4ms :: {"message":"No autenticado"}
+POST /api/auth/login 401 in 2ms :: [redacted]
+GET /api/minutas/ 401 in 2ms :: {"message":"No autenticado"}
+POST /api/auth/login 200 in 105ms :: [redacted]
+GET /api/minutas/4eba24b0-4612-40ef-b96a-02d0d6e69036 500 in 3ms :: {"message":â€¦
+POST /api/auth/login 200 in 108ms :: [redacted]
+GET /api/minutas/4eba24b0-4612-40ef-b96a-02d0d6e69036 500 in 3ms :: {"message":â€¦
+
+=== Disparar /api/minutas con sesión ===
+STATUS: 500
+BODY: {"message":"Error interno del servidor"}
+
+=== service.err.log DESPUÉS del request ===
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+PS C:\Windows\system32>

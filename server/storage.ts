@@ -1,5 +1,16 @@
 import { eq, and } from "drizzle-orm";
-import { db, DB_MODE, sqlite } from "./db";
+import {
+  db,
+  DB_MODE,
+  sqlite,
+  users,
+  casinos,
+  familias,
+  minutas,
+  pedidos,
+  periodos,
+  usuarioCasinos,
+} from "./db";
 
 // In totem mode, every local write of a pedido must be enqueued in the
 // sync_outbox so the background worker can push it to the cloud.
@@ -23,13 +34,6 @@ function enqueuePedidoOutboxSync(p: any, op: "insert" | "update") {
   ).run("pedidos", p.id, op, JSON.stringify(payload), Date.now());
 }
 import {
-  users,
-  casinos,
-  familias,
-  minutas,
-  pedidos,
-  periodos,
-  usuarioCasinos,
   type User,
   type InsertUser,
   type Casino,
