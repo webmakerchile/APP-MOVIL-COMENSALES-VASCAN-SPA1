@@ -1,0 +1,58 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> $nodeScript = @"
+>> const Database = require('better-sqlite3');
+>> const db = new Database('C:/BuenaMezcla/totem-data/totem.db');
+>> console.log('=== PEDIDOS LOCALES ===');
+>> const pedidos = db.prepare("SELECT id, user_id, minuta_id, opcion_seleccionada, codigo_qr, datetime(created_at/1000,'unixepoch') as fecha FROM pedidos ORDER BY created_at DESC LIMIT 5").all();
+>> console.log(JSON.stringify(pedidos, null, 2));
+>> console.log('=== OUTBOX (últimos 10) ===');
+>> const ob = db.prepare("SELECT id, table_name, record_id, op, attempts, acked, last_error, datetime(created_at/1000,'unixepoch') as fecha FROM sync_outbox ORDER BY id DESC LIMIT 10").all();
+>> console.log(JSON.stringify(ob, null, 2));
+>> console.log('=== Pendientes (no acked) ===');
+>> console.log('Total pendientes:', db.prepare("SELECT COUNT(*) as c FROM sync_outbox WHERE acked = 0").get().c);
+>> db.close();
+>> "@
+>> $nodeScript | Out-File -Encoding ASCII C:\BuenaMezcla\check-sync.js
+>> & "C:\BuenaMezcla\node\node.exe" C:\BuenaMezcla\check-sync.js
+>>
+>> Write-Host "=== LOGS sync push ===" -ForegroundColor Cyan
+>> Get-Content C:\BuenaMezcla\logs\service.out.log -Tail 40 | Select-String "push|outbox|sync"
+=== PEDIDOS LOCALES ===
+[
+  {
+    "id": "94f51daf-1062-4178-b6bd-675dbdd90227",
+    "user_id": "082403e7-7669-4459-ae5c-dd14d8e03076",
+    "minuta_id": "686f779f-9d7c-4130-bbf2-4701c78188d2",
+    "opcion_seleccionada": 1,
+    "codigo_qr": "VASCAN-1778723074716-gp5lj1yrd",
+    "fecha": null
+  }
+]
+=== OUTBOX (?ltimos 10) ===
+[
+  {
+    "id": 1,
+    "table_name": "pedidos",
+    "record_id": "94f51daf-1062-4178-b6bd-675dbdd90227",
+    "op": "insert",
+    "attempts": 0,
+    "acked": 1,
+    "last_error": null,
+    "fecha": "2026-05-14 01:44:34"
+  }
+]
+=== Pendientes (no acked) ===
+Total pendientes: 0
+=== LOGS sync push ===
+
+[sync] worker iniciado
+[sync] worker iniciado
+[sync] pull ok â€” 80 filas actualizadas
+[sync] push ok â€” 1/1 aceptados
+
+
+PS C:\Windows\system32>
