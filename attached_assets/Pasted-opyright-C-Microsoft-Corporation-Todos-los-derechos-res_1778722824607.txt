@@ -1,0 +1,119 @@
+opyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> $tid = "d737b0a8-0a73-4a91-adef-f56e1b508477"
+>> $tsec = "XZaDMdea8rRunrgZZwxRjXcmVmgcvg4dbQFudP2umU4jBgGM"
+>> $h = @{"x-totem-id"=$tid; "x-totem-secret"=$tsec; "content-type"="application/json"}
+>>
+>> # 1. Pull desde 0 (fuerza traer todo)
+>> Write-Host "=== PULL FRESCO (since=0) ===" -ForegroundColor Cyan
+>> $pull = Invoke-RestMethod -Uri "https://vascan.replit.app/api/totem/pull?since=0" -Headers $h
+>> Write-Host "Tablas devueltas: $(($pull.data | Get-Member -MemberType NoteProperty).Name -join ', ')"
+>> foreach ($t in @('casinos','familias','users','minutas','periodos')) {
+>>   $count = if ($pull.data.$t) { $pull.data.$t.Count } else { 0 }
+>>   Write-Host "  $t : $count filas"
+>> }
+>> Write-Host "nextCursor: $($pull.nextCursor)"
+>>
+>> # 2. Mostrar minutas devueltas (si las hay)
+>> if ($pull.data.minutas) {
+>>   Write-Host "=== MINUTAS recibidas ===" -ForegroundColor Yellow
+>>   $pull.data.minutas | Select-Object id, fecha, casinoId, opcion1, activo | Format-Table
+>> }
+>>
+>> # 3. Forzar reset del cursor para que pull aplique todo de nuevo
+>> $nodeScript = @"
+>> const Database = require('better-sqlite3');
+>> const db = new Database('C:/BuenaMezcla/totem-data/totem.db');
+>> db.prepare("DELETE FROM sync_state WHERE key = 'last_pull_ms'").run();
+>> console.log('cursor reset → siguiente pull traerá todo');
+>> console.log('minutas en DB local antes:', db.prepare('SELECT COUNT(*) as c FROM minutas').get().c);
+>> db.close();
+>> "@
+>> $nodeScript | Out-File -Encoding ASCII C:\BuenaMezcla\reset-cursor.js
+>> & "C:\BuenaMezcla\node\node.exe" C:\BuenaMezcla\reset-cursor.js
+>>
+>> # 4. Esperar al sync (corre cada 30s) o reiniciar para forzar runPull a los 7s
+>> Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+>> Start-Sleep 3
+>> schtasks /Run /TN "BuenaMezclaTotem"
+>> Write-Host "Esperando 15s para sync inicial..." -ForegroundColor Cyan
+>> Start-Sleep 15
+>>
+>> # 5. Ver logs y contar minutas
+>> Get-Content C:\BuenaMezcla\logs\service.out.log -Tail 15
+>> Write-Host "---"
+>> $nodeScript2 = @"
+>> const Database = require('better-sqlite3');
+>> const db = new Database('C:/BuenaMezcla/totem-data/totem.db');
+>> console.log('minutas en DB local DESPUÉS:', db.prepare('SELECT COUNT(*) as c FROM minutas').get().c);
+>> const today = new Date().toISOString().slice(0,10);
+>> const hoy = db.prepare("SELECT id, fecha, opcion_1, activo FROM minutas WHERE fecha = ?").all(today);
+>> console.log('minutas hoy (' + today + '):', JSON.stringify(hoy, null, 2));
+>> db.close();
+>> "@
+>> $nodeScript2 | Out-File -Encoding ASCII C:\BuenaMezcla\check-minutas.js
+>> & "C:\BuenaMezcla\node\node.exe" C:\BuenaMezcla\check-minutas.js
+=== PULL FRESCO (since=0) ===
+Tablas devueltas: casinos, familias, minutas, periodos, users
+  casinos : 1 filas
+  familias : 4 filas
+  users : 56 filas
+  minutas : 18 filas
+  periodos : 1 filas
+nextCursor: 1778704701783
+=== MINUTAS recibidas ===
+
+id                                   fecha      casinoId                             opcion1
+--                                   -----      --------                             -------
+ce2437e7-fe5e-4c9e-b473-9b6cf5b01271 2026-03-05 4eba24b0-4612-40ef-b96a-02d0d6e69036 Cazuela de vacuno con verduras
+83860aa5-2562-42d0-8195-1a91ddb1eb2d 2026-04-15 4eba24b0-4612-40ef-b96a-02d0d6e69036 Pollo al horno con arroz y ensa...
+2617b8f8-a234-43d5-a74c-7b8da6ad10a3 2026-04-20 4eba24b0-4612-40ef-b96a-02d0d6e69036 Estofado de res con papas
+1482c959-aea3-4590-af71-606fc1cc6fe5 2026-03-06 4eba24b0-4612-40ef-b96a-02d0d6e69036 Cazuela de vacuno con verduras
+1e01606b-a1ae-40e1-b01b-746074b82af5 2026-03-07 4eba24b0-4612-40ef-b96a-02d0d6e69036 Cazuela de vacuno con verduras
+faa9fdb8-2df0-44c8-987e-5faece097451 2026-04-16 4eba24b0-4612-40ef-b96a-02d0d6e69036 Pollo a la plancha con ensalada
+7d6a1871-3025-4c7f-bb26-4241e5255e12 2026-04-17 4eba24b0-4612-40ef-b96a-02d0d6e69036 Chuleta de cerdo con arroz
+61a095f7-ba34-40ac-a0ec-8a9cb0e0ed70 2026-03-08 4eba24b0-4612-40ef-b96a-02d0d6e69036 Cazuela de vacuno con verduras
+b7b92c7a-645d-4da9-b1ab-1dce334d505a 2026-03-09 4eba24b0-4612-40ef-b96a-02d0d6e69036 Cazuela de vacuno con verduras
+d247c325-ed36-4e1b-8279-118a091cf5b3 2026-03-03 4eba24b0-4612-40ef-b96a-02d0d6e69036 Cazuela de vacuno con verduras
+f42a80a2-e9eb-4c91-8bbd-c753b9ac6e3c 2026-03-04 4eba24b0-4612-40ef-b96a-02d0d6e69036 Cazuela de vacuno con verduras
+4e7592ce-9544-4a21-9bf7-de101661acf5 2026-04-20 4eba24b0-4612-40ef-b96a-02d0d6e69036 Estofado de res con papas
+32f82410-1a24-4123-9db5-eb7538328187 2026-05-13 4eba24b0-4612-40ef-b96a-02d0d6e69036 Albondigas en Salsa con Espiral...
+829ad7ac-75a8-46a9-a896-bdc291c819af 2026-05-18 4eba24b0-4612-40ef-b96a-02d0d6e69036 Estofado de res con ARROZ
+bc27cee7-9795-458e-b6e4-78e8a399e316 2026-05-12 4eba24b0-4612-40ef-b96a-02d0d6e69036 Strogonoff de cerdo con Pure
+208acd43-3064-44a4-8d48-a571cb250a29 2026-05-11 4eba24b0-4612-40ef-b96a-02d0d6e69036 Vacuno Burguiñon con arroz arabe
+686f779f-9d7c-4130-bbf2-4701c78188d2 2026-05-14 4eba24b0-4612-40ef-b96a-02d0d6e69036 Carbonada (plato unico)
+ccba207c-5635-4750-a156-384016b81430 2026-05-15 4eba24b0-4612-40ef-b96a-02d0d6e69036 Sandwich Pollo Crispy / Tomate ...
+
+
+cursor reset ? siguiente pull traer? todo
+minutas en DB local antes: 13
+CORRECTO: se ha intentado ejecutar la tarea programada "BuenaMezclaTotem".
+Esperando 15s para sync inicial...
+express server serving on port 5000
+[cron] Reportes diarios programados (03:00 y 04:00 UTC â†’ medianoche CL)
+POST /api/auth/login 200 in 143ms :: [redacted]
+GET /api/minutas/4eba24b0-4612-40ef-b96a-02d0d6e69036 200 in 6ms :: []
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+POST /api/auth/login 200 in 104ms :: [redacted]
+GET /api/minutas/4eba24b0-4612-40ef-b96a-02d0d6e69036 200 in 4ms :: []
+[sync] worker iniciado
+Serving PWA from pwa/dist
+express server serving on port 5000
+[cron] Reportes diarios programados (03:00 y 04:00 UTC â†’ medianoche CL)
+[sync] pull ok â€” 80 filas actualizadas
+---
+minutas en DB local DESPU?S: 31
+minutas hoy (2026-05-14): [
+  {
+    "id": "686f779f-9d7c-4130-bbf2-4701c78188d2",
+    "fecha": "2026-05-14",
+    "opcion_1": "Carbonada (plato unico)",
+    "activo": 1
+  }
+]
+PS C:\Windows\system32>
