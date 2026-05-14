@@ -1,4 +1,4 @@
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, isNotNull } from "drizzle-orm";
 import {
   db,
   DB_MODE,
@@ -85,6 +85,7 @@ export interface IStorage {
   getPedidoById(id: string): Promise<Pedido | undefined>;
   deletePedido(id: string): Promise<boolean>;
   getPedidosByMinuta(minutaId: string): Promise<Pedido[]>;
+  getAnuladosByMinuta(minutaId: string): Promise<Pedido[]>;
   getAllFamilias(): Promise<Familia[]>;
   createFamilia(familia: InsertFamilia): Promise<Familia>;
   updateFamilia(id: string, data: Partial<InsertFamilia & { activo?: boolean }>): Promise<Familia | undefined>;
@@ -194,7 +195,8 @@ export class DatabaseStorage implements IStorage {
 
   // ── Pedidos ──
   async getAllPedidos(): Promise<Pedido[]> {
-    return db.select().from(pedidos);
+    // Excluir tombstones (pedidos anulados). Para contar anulados usar getAnuladosByMinuta.
+    return db.select().from(pedidos).where(isNull(pedidos.deletedAt));
   }
   async getPedidosByUser(userId: string): Promise<Pedido[]> {
     // Excluir tombstones (pedidos anulados por admin) — el comensal puede volver a inscribirse.
@@ -254,7 +256,12 @@ export class DatabaseStorage implements IStorage {
     return pedido;
   }
   async getPedidosByMinuta(minutaId: string): Promise<Pedido[]> {
-    return db.select().from(pedidos).where(eq(pedidos.minutaId, minutaId));
+    // Excluir tombstones — un pedido anulado no debe contarse como inscripción activa.
+    return db.select().from(pedidos).where(and(eq(pedidos.minutaId, minutaId), isNull(pedidos.deletedAt)));
+  }
+  async getAnuladosByMinuta(minutaId: string): Promise<Pedido[]> {
+    // Devuelve solo pedidos anulados (tombstones) para mostrar el conteo en reportes.
+    return db.select().from(pedidos).where(and(eq(pedidos.minutaId, minutaId), isNotNull(pedidos.deletedAt)));
   }
   async getPedidoById(id: string): Promise<Pedido | undefined> {
     const [p] = await db.select().from(pedidos).where(eq(pedidos.id, id));

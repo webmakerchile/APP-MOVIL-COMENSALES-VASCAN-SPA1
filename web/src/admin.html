@@ -1532,7 +1532,8 @@
                         <th className="text-left pb-2 pr-4">Fecha</th>
                         <th className="text-left pb-2 pr-4">Casino</th>
                         <th className="text-right pb-2 pr-4">Comensales</th>
-                        <th className="text-right pb-2">No asisten</th>
+                        <th className="text-right pb-2 pr-4">No asisten</th>
+                        <th className="text-right pb-2">Anulados</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1541,7 +1542,8 @@
                           <td className="py-1.5 pr-4 font-mono text-xs text-white/60">{row.fecha}</td>
                           <td className="py-1.5 pr-4 text-white/80">{row.casinoNombre}</td>
                           <td className="py-1.5 pr-4 text-right font-semibold">{row.total}</td>
-                          <td className="py-1.5 text-right text-orange-400">{row.noAsiste > 0 ? row.noAsiste : '—'}</td>
+                          <td className="py-1.5 pr-4 text-right text-orange-400">{row.noAsiste > 0 ? row.noAsiste : '—'}</td>
+                          <td className="py-1.5 text-right text-red-400">{row.anulados > 0 ? row.anulados : '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1589,6 +1591,12 @@
                       <div className="flex justify-between items-center">
                         <span className="text-blue-400/80 text-sm">Vales de visita</span>
                         <span className="font-semibold text-blue-400">{report.totalVisitas}</span>
+                      </div>
+                    )}
+                    {report.totalAnulados > 0 && (
+                      <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                        <span className="text-red-400/80 text-sm">Anulados por admin (no cuentan en producción)</span>
+                        <span className="font-semibold text-red-400">{report.totalAnulados}</span>
                       </div>
                     )}
                   </div>

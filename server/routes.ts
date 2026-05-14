@@ -1612,23 +1612,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let totalPedidos = 0;
       let totalNoAsiste = 0;
       let totalVisitas = 0;
+      let totalAnulados = 0;
       const visitasList: { nombreVisita: string | null; codigoQr: string | null }[] = [];
-      const dailyRows: { fecha: string; casinoNombre: string; total: number; noAsiste: number }[] = [];
+      const dailyRows: { fecha: string; casinoNombre: string; total: number; noAsiste: number; anulados: number }[] = [];
 
       for (const casino of casinosList) {
         const allMinutasCasino = await storage.getAllMinutasByCasino(casino.id);
         for (const f of fechasToProcess) {
           const minuta = allMinutasCasino.find((m) => m.fecha === f);
           if (!minuta) continue;
-          const pedidosForMinuta = await storage.getPedidosByMinuta(minuta.id);
+          const [pedidosForMinuta, anuladosForMinuta] = await Promise.all([
+            storage.getPedidosByMinuta(minuta.id),
+            storage.getAnuladosByMinuta(minuta.id),
+          ]);
           const selPedidos = pedidosForMinuta.filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
           const noAsPedidos = pedidosForMinuta.filter(p => p.tipo === "no_asiste");
           const visPedidos = pedidosForMinuta.filter(p => p.tipo === "visita");
           totalPedidos += selPedidos.length;
           totalNoAsiste += noAsPedidos.length;
           totalVisitas += visPedidos.length;
+          totalAnulados += anuladosForMinuta.length;
           visPedidos.forEach(v => visitasList.push({ nombreVisita: v.nombreVisita || null, codigoQr: v.codigoQr || null }));
-          dailyRows.push({ fecha: f, casinoNombre: casino.nombre, total: selPedidos.length, noAsiste: noAsPedidos.length });
+          dailyRows.push({ fecha: f, casinoNombre: casino.nombre, total: selPedidos.length, noAsiste: noAsPedidos.length, anulados: anuladosForMinuta.length });
           const allOptions: (string | null)[] = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
           for (let i = 0; i < allOptions.length; i++) {
             if (!allOptions[i]) continue;
@@ -1655,6 +1660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalPedidos,
         totalNoAsiste,
         totalVisitas,
+        totalAnulados,
         visitas: visitasList,
         dailyRows: hasRange ? dailyRows : undefined,
       });
