@@ -1,0 +1,135 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> Write-Host "=== service.err.log (últimas 40 líneas) ===" -ForegroundColor Yellow
+>> if (Test-Path C:\BuenaMezcla\logs\service.err.log) { Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 40 }
+>> Write-Host ""
+>> Write-Host "=== service.out.log (últimas 30 líneas) ===" -ForegroundColor Yellow
+>> if (Test-Path C:\BuenaMezcla\logs\service.out.log) { Get-Content C:\BuenaMezcla\logs\service.out.log -Tail 30 }
+=== service.err.log (últimas 40 líneas) ===
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+[cron] Error al generar reporte (horario verano): TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401
+[sync] pull failed: 401                                                                                                 ^CWarning: connect.session() MemoryStore is not                                                                         designed for a production environment, as it will leak                                                                  memory, and will not scale past a single process.                                                                       ^C
+
+=== service.out.log (últimas 30 líneas) ===
+POST /api/auth/login 401 in 121ms :: [redacted]
+GET /api/auth/me 401 in 7ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+[sync] worker iniciado
+Serving PWA from pwa/dist
+express server serving on port 5000
+[cron] Reportes diarios programados (03:00 y 04:00 UTC â†’ medianoche CL)
+[sync] pull ok â€” 3 filas actualizadas
+GET /api/auth/me 401 in 19ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 3ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 3ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 6ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 3ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 3ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 2ms :: {"message":"No autenticado"}
+GET /api/auth/me 401 in 4ms :: {"message":"No autenticado"}
+PS C:\Windows\system32> Write-Host ""
+
+PS C:\Windows\system32> Write-Host "=== Probando conectividad a la nube ===" -ForegroundColor Yellow
+=== Probando conectividad a la nube ===
+PS C:\Windows\system32> try {
+>>   $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 https://vascan.replit.app/api/seed
+>>   Write-Host "OK conexión a nube: HTTP $($r.StatusCode)" -ForegroundColor Green
+>> } catch {
+>>   Write-Host "FALLA conectividad: $_" -ForegroundColor Red
+>> }
+OK conexión a nube: HTTP 200
+PS C:\Windows\system32> Write-Host ""
+
+PS C:\Windows\system32> Write-Host "=== Reiniciando servicio del tótem ===" -ForegroundColor Yellow
+=== Reiniciando servicio del tótem ===
+PS C:\Windows\system32> Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+>>   Where-Object { $_.ExecutablePath -like 'C:\BuenaMezcla\*' } |
+>>   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+PS C:\Windows\system32> Start-Sleep -Seconds 2
+PS C:\Windows\system32> schtasks /End /TN "BuenaMezclaTotem" 2>$null | Out-Null
+PS C:\Windows\system32> schtasks /Run /TN "BuenaMezclaTotem"
+Error: El sistema no puede encontrar el archivo especificado.
+PS C:\Windows\system32> Start-Sleep -Seconds 8
+PS C:\Windows\system32>
+PS C:\Windows\system32> Write-Host ""
+
+PS C:\Windows\system32> Write-Host "=== Reiniciando servicio del tótem ===" -ForegroundColor Yellow
+=== Reiniciando servicio del tótem ===
+PS C:\Windows\system32> Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+>>   Where-Object { $_.ExecutablePath -like 'C:\BuenaMezcla\*' } |
+>>   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+PS C:\Windows\system32> Start-Sleep -Seconds 2
+PS C:\Windows\system32> schtasks /End /TN "BuenaMezclaTotem" 2>$null | Out-Null
+PS C:\Windows\system32> schtasks /Run /TN "BuenaMezclaTotem"
+Error: El sistema no puede encontrar el archivo especificado.
+PS C:\Windows\system32> Start-Sleep -Seconds 8
+PS C:\Windows\system32>
+PS C:\Windows\system32> Write-Host ""
+>> Write-Host "=== Estado posterior ===" -ForegroundColor Yellow
+>> $running = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+>>   Where-Object { $_.ExecutablePath -like 'C:\BuenaMezcla\*' }
+>> if ($running) {
+>>   Write-Host "node.exe corriendo (PID $($running.ProcessId))" -ForegroundColor Green
+>> } else {
+>>   Write-Host "node.exe NO arrancó. Revisa el log de arriba." -ForegroundColor Red
+>> }
+>> try {
+>>   Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://127.0.0.1:5000/api/auth/me | Out-Null
+>>   Write-Host "Express local OK en :5000" -ForegroundColor Green
+>> } catch { Write-Host "Express local NO responde" -ForegroundColor Red }
+>> Write-Host ""
+>> Write-Host "Esperá ~60 segundos y refrescá el panel /admin > Tótems." -ForegroundColor Cyan
+>> Write-Host "Cuando aparezca 'online', esperá otros 30s y probá login con 12345678-5 / 123456" -ForegroundColor Cyan
+
+=== Estado posterior ===
+node.exe NO arrancó. Revisa el log de arriba.
