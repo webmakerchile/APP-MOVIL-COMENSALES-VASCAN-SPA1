@@ -1,0 +1,47 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> # Ver el ERROR exacto que está tirando ahora
+>> Write-Host "=== service.err.log (últimas 25 líneas, post-update) ===" -ForegroundColor Cyan
+>> Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 25
+>>
+>> # Verificar que el runtime.js es el nuevo (debería ser ~180kb, no ~7MB del viejo)
+>> Write-Host "`n=== Tamaño runtime.js ===" -ForegroundColor Cyan
+>> Get-Item C:\BuenaMezcla\totem\runtime.js | Select-Object Name, Length, LastWriteTime
+=== service.err.log (últimas 25 líneas, post-update) ===
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+^CWarning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+Get minutas error: TypeError: SQLite3 can only bind numbers, strings, bigints, buffers, and null
+    at PreparedQuery.values (C:\BuenaMezcla\totem\runtime.js:32222:32)
+    at PreparedQuery.all (C:\BuenaMezcla\totem\runtime.js:32197:27)
+    at SQLiteSelectBase2.all (C:\BuenaMezcla\totem\runtime.js:30182:32)
+    at SQLiteSelectBase2.execute (C:\BuenaMezcla\totem\runtime.js:30191:21)
+    at SQLiteSelectBase2.then (C:\BuenaMezcla\totem\runtime.js:5211:21)
+
+=== Tamaño runtime.js ===
+
+Name        Length LastWriteTime
+----        ------ -------------
+runtime.js 7208085 08/05/2026 0:07:21
+
+
+PS C:\Windows\system32>
