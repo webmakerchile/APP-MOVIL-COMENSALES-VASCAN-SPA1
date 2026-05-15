@@ -515,6 +515,8 @@ export default function Kiosk() {
         nombre: visitaNombre.trim(),
         rut: normalizeRutForApi(visitaRut),
       });
+      // Marcar impreso ANTES del logout (mismo motivo que en selectOption).
+      try { await apiRequest("POST", `/api/pedidos/${pedido.id}/marcar-impreso`, {}); } catch {}
       setStep("qr");
       try { await apiRequest("POST", "/api/auth/logout"); } catch {}
     } catch {
@@ -584,6 +586,11 @@ export default function Kiosk() {
         nombre: `${user.nombre} ${user.apellido}`,
         rut: formatRutDisplay(user.rut),
       });
+      // CRÍTICO: marcar impreso ANTES del logout. Si se hace después, el
+      // useEffect de impresión llama marcar-impreso ya sin sesión (401),
+      // `impresoEn` nunca queda en BD y el comensal puede re-imprimir
+      // re-logueándose. Ahora el segundo login muestra "ya_impreso".
+      try { await apiRequest("POST", `/api/pedidos/${pedido.id}/marcar-impreso`, {}); } catch {}
       setStep("qr");
       // Cerrar sesión silenciosamente para que el siguiente comensal parta limpio
       try { await apiRequest("POST", "/api/auth/logout"); } catch {}
