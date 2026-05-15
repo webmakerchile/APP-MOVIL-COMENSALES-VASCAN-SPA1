@@ -15,7 +15,7 @@ async function main() {
     const newPwd = digits.slice(0, 4);
     const hashed = await bcrypt.hash(newPwd, 10);
     await db.update(users)
-      .set({ password: hashed, passwordChangeRequired: false })
+      .set({ password: hashed, passwordChangeRequired: false, updatedAt: new Date() })
       .where(eq(users.id, u.id));
     updated++;
   }
