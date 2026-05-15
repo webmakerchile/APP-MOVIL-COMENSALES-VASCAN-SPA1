@@ -271,6 +271,30 @@ async function autoSeed() {
   }
 }
 
+// One-shot migration: backfill ALL users so their password = first 4 digits
+// of their RUT, and clear the legacy `passwordChangeRequired` flag. Idempotent
+// — only touches users that still have the flag set, so after running once it
+// becomes a no-op on subsequent startups. Skips the super admin (custom pwd).
+async function backfillRutPasswords() {
+  try {
+    const all = await storage.getAllUsers();
+    const targets = all.filter((u: any) => u.passwordChangeRequired && u.rut !== "21212011-1");
+    if (targets.length === 0) return;
+    console.log(`[migration] backfilling RUT-based passwords for ${targets.length} usuarios...`);
+    let ok = 0;
+    for (const u of targets) {
+      const digits = (u.rut || "").replace(/[^0-9]/g, "");
+      if (digits.length < 4) continue;
+      const hashed = await bcrypt.hash(digits.slice(0, 4), 10);
+      await storage.updateUser(u.id, { password: hashed, passwordChangeRequired: false } as any);
+      ok++;
+    }
+    console.log(`[migration] backfill OK: ${ok}/${targets.length}`);
+  } catch (err) {
+    console.error("[migration] backfill error:", err);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // In totem mode there is no Postgres pool, fall back to in-memory session
   // store. The totem only has one logged-in operator at a time so memory is fine.
@@ -297,6 +321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   if (process.env.DB_MODE !== "totem") {
     await autoSeed();
     await ensureSuperAdmin();
+    await backfillRutPasswords();
   }
 
   // ── Admin Panel ──
