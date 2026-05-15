@@ -231,6 +231,10 @@ export function registerSyncRoutes(app: Express) {
             tipo: p.tipo || "seleccion",
             nombreVisita: p.nombreVisita ?? null,
             codigoQr: p.codigoQr ?? null,
+            // impresoEn: monotonic — una vez marcado no debe volver a null.
+            // El cloud confía en el valor del tótem (es la fuente de verdad
+            // de la impresión física).
+            impresoEn: p.impresoEn ? new Date(p.impresoEn) : null,
             createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
             origenTotemId: t.id,
             updatedAt: new Date(),
@@ -244,6 +248,7 @@ export function registerSyncRoutes(app: Express) {
               tipo: payload.tipo,
               nombreVisita: payload.nombreVisita,
               codigoQr: payload.codigoQr,
+              impresoEn: payload.impresoEn,
               updatedAt: payload.updatedAt,
               syncVersion: payload.syncVersion,
               origenTotemId: t.id,

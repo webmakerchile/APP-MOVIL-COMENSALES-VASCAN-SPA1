@@ -42,6 +42,19 @@ if (DB_MODE === "cloud") {
   const ddl = fs.readFileSync(path.resolve(__dirname, "../shared/schema-sqlite.sql"), "utf-8");
   _sqlite.exec(ddl);
 
+  // Lightweight in-place migrations for columns added after the initial bootstrap.
+  // Keeps existing totem databases on older bundles forward-compatible without
+  // requiring re-registration or data loss.
+  function ensureColumn(table: string, column: string, ddlFragment: string) {
+    try {
+      const cols = _sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[];
+      if (!cols.some(c => c.name === column)) {
+        _sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${ddlFragment}`);
+      }
+    } catch {/* swallow — table may not exist on first boot */}
+  }
+  ensureColumn("pedidos", "impreso_en", "impreso_en INTEGER");
+
   _db = drizzle(_sqlite, { schema });
   _schema = schema;
 }

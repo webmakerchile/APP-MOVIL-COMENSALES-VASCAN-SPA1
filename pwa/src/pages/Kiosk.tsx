@@ -38,6 +38,7 @@ interface Pedido {
   minutaId: string;
   opcionSeleccionada: number;
   codigoQr: string | null;
+  impresoEn?: string | null;
 }
 
 type Step =
@@ -54,7 +55,8 @@ type Step =
   | "vale_visita_nombre"
   | "vale_visita_opcion"
   | "reimp_rut"
-  | "reimp_list";
+  | "reimp_list"
+  | "ya_impreso";
 
 // ── RUT helpers (same logic as PWA) ────────────────────────────────────────
 function formatRutDisplay(raw: string): string {
@@ -186,6 +188,7 @@ export default function Kiosk() {
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState("");
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [qrPedidoId, setQrPedidoId] = useState<string | null>(null);
   const [qrMeta, setQrMeta] = useState<{ familia: string; opcion: string; nombre: string; rut: string } | null>(null);
   const [casino, setCasino] = useState<KioskCasino | null>(null);
   const [newPwd, setNewPwd] = useState("");
@@ -212,6 +215,7 @@ export default function Kiosk() {
     setBusy(false);
     setErrMsg("");
     setQrCode(null);
+    setQrPedidoId(null);
     setQrMeta(null);
     setCasino(null);
     setNewPwd("");
@@ -242,9 +246,16 @@ export default function Kiosk() {
     printedRef.current = qrCode;
     const t = window.setTimeout(() => {
       try { window.print(); } catch {}
+      // Marca el pedido como impreso en BD para bloquear re-impresión por
+      // re-login del comensal. La llamada es best-effort: si falla la red
+      // (offline), el siguiente sync resuelve el estado.
+      const pid = qrPedidoId;
+      if (pid) {
+        apiRequest("POST", `/api/pedidos/${pid}/marcar-impreso`, {}).catch(() => {});
+      }
     }, 250);
     return () => window.clearTimeout(t);
-  }, [step, qrCode, qrMeta]);
+  }, [step, qrCode, qrMeta, qrPedidoId]);
   useEffect(() => {
     if (step !== "qr") printedRef.current = null;
   }, [step]);
@@ -366,6 +377,14 @@ export default function Kiosk() {
       const todayIds = new Set(todayMins.map(m => m.id));
       const existingToday = pedidosData.find(p => todayIds.has(p.minutaId) && p.opcionSeleccionada > 0);
       if (existingToday) {
+        // Si el vale ya fue impreso, NO re-imprimir. El comensal solo retira
+        // una comida por servicio. Si necesita una reimpresión debe pedírsela
+        // al encargado del casino (flujo Reimpresión del menú staff).
+        if (existingToday.impresoEn) {
+          setStep("ya_impreso");
+          try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+          return;
+        }
         const minuta = todayMins.find(m => m.id === existingToday.minutaId)!;
         const opt = getOptions(minuta).find(o => o.number === existingToday.opcionSeleccionada);
         setQrCode(existingToday.codigoQr || existingToday.id);
@@ -375,6 +394,7 @@ export default function Kiosk() {
           nombre: `${u!.nombre} ${u!.apellido}`,
           rut: formatRutDisplay(u!.rut),
         });
+        setQrPedidoId(existingToday.id);
         setStep("qr");
         try { await apiRequest("POST", "/api/auth/logout"); } catch {}
         return;
@@ -433,11 +453,18 @@ export default function Kiosk() {
         body.currentPassword = lastLoginPwd;
       }
       const res = await apiRequest("POST", "/api/auth/change-password", body);
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        let serverMsg = "";
+        try { const j = await res.json(); serverMsg = j?.message || ""; } catch {}
+        throw new Error(serverMsg || `HTTP ${res.status}`);
+      }
       setErrMsg("Clave actualizada. Vuelve a ingresar.");
       setTimeout(reset, 1500);
-    } catch {
-      setErrMsg("No se pudo cambiar la clave");
+    } catch (e: any) {
+      // Surface el mensaje real del servidor (clave actual incorrecta, sesión
+      // expirada, etc.) para que el operador pueda diagnosticar en sitio.
+      const msg = String(e?.message || "").trim();
+      setErrMsg(msg ? `No se pudo cambiar la clave: ${msg}` : "No se pudo cambiar la clave");
     } finally { setBusy(false); }
   }
 
@@ -473,6 +500,7 @@ export default function Kiosk() {
       });
       const pedido: Pedido = await res.json();
       setQrCode(pedido.codigoQr || pedido.id);
+      setQrPedidoId(pedido.id);
       setQrMeta({
         familia: minuta.familia || "Almuerzo",
         opcion: `Visita: ${visitaNombre.trim()}`,
@@ -508,6 +536,7 @@ export default function Kiosk() {
     if (!minuta) return;
     const opt = minuta ? getOptions(minuta).find(o => o.number === p.opcionSeleccionada) : null;
     setQrCode(p.codigoQr || p.id);
+    setQrPedidoId(p.id);
     setQrMeta({
       familia: minuta.familia || "Almuerzo",
       opcion: opt?.text || `Opción ${p.opcionSeleccionada}`,
@@ -540,6 +569,7 @@ export default function Kiosk() {
 
       const opt = getOptions(minuta).find((o) => o.number === pedido.opcionSeleccionada);
       setQrCode(pedido.codigoQr || pedido.id);
+      setQrPedidoId(pedido.id);
       setQrMeta({
         familia: minuta.familia || "Almuerzo",
         opcion: opt?.text || `Opción ${pedido.opcionSeleccionada}`,
@@ -979,21 +1009,26 @@ export default function Kiosk() {
               <p className="text-white text-xl font-semibold mt-1">{qrMeta.opcion}</p>
               <p className="text-white/40 text-xs mt-2 font-mono">{qrMeta.rut}</p>
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { try { window.print(); } catch {} }}
-                className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 font-semibold transition-all"
-              >
-                Reimprimir
-              </button>
-              <button
-                onClick={reset}
-                className="px-8 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold transition-all"
-              >
-                Terminar
-              </button>
+            <p className="text-white/40 text-sm">El vale se imprimió. Retira tu copia y acércate al casino.</p>
+            <p className="text-white/30 text-xs">Esta pantalla se cerrará automáticamente.</p>
+          </div>
+        )}
+
+        {step === "ya_impreso" && (
+          <div className="flex flex-col items-center gap-5 text-center max-w-md">
+            <div className="w-20 h-20 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center">
+              <Check className="w-10 h-10 text-green-400" />
             </div>
-            <p className="text-white/30 text-xs">El vale se imprimió. Esta pantalla se cerrará en 15s.</p>
+            <h2 className="text-2xl font-bold">Ya retiraste tu vale hoy</h2>
+            <p className="text-white/60">
+              Tu vale ya fue impreso. Si lo necesitas nuevamente, pídeselo al encargado del casino para una reimpresión.
+            </p>
+            <button
+              onClick={reset}
+              className="px-8 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold"
+            >
+              Volver al inicio
+            </button>
           </div>
         )}
 
@@ -1053,14 +1088,6 @@ export default function Kiosk() {
             <span className="pv-value">
               {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
             </span>
-          </div>
-          <hr className="pv-hr" />
-          <div className="pv-qr">
-            <QRCodeSVG value={qrCode} size={180} level="M" />
-          </div>
-          <div className="pv-foot">Presenta este vale al retirar tu comida</div>
-          <div className="pv-foot" style={{ fontFamily: "monospace", marginTop: "1mm" }}>
-            {qrCode.slice(0, 8).toUpperCase()}
           </div>
         </div>
       )}

@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
   asignado_por_defecto INTEGER NOT NULL DEFAULT 0,
   codigo_qr TEXT,
   origen_totem_id TEXT,
+  impreso_en INTEGER,
   created_at INTEGER,
   updated_at INTEGER NOT NULL,
   deleted_at INTEGER,

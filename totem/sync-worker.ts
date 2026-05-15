@@ -64,7 +64,7 @@ const COLUMN_MAPS: Record<string, Record<string, string>> = {
   // (tombstones con deleted_at). El tótem también pushea pedidos vía outbox; el upsert
   // por id es idempotente — si un pedido vuelve del cloud con datos más nuevos
   // (mayor updated_at), se sobreescribe el local con los valores autoritativos.
-  pedidos:  { id: "id", userId: "user_id", minutaId: "minuta_id", opcionSeleccionada: "opcion_seleccionada", tipo: "tipo", nombreVisita: "nombre_visita", asignadoPorDefecto: "asignado_por_defecto", codigoQr: "codigo_qr", origenTotemId: "origen_totem_id", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
+  pedidos:  { id: "id", userId: "user_id", minutaId: "minuta_id", opcionSeleccionada: "opcion_seleccionada", tipo: "tipo", nombreVisita: "nombre_visita", asignadoPorDefecto: "asignado_por_defecto", codigoQr: "codigo_qr", origenTotemId: "origen_totem_id", impresoEn: "impreso_en", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
 };
 
 function toEpoch(v: any): number | null {
@@ -81,7 +81,7 @@ function upsertRow(tbl: string, row: any) {
   const values = cols.map(k => {
     const v = row[k];
     if (k === "activo" || k === "asignadoPorDefecto") return toBool(v);
-    if (k.startsWith("created") || k.startsWith("updated") || k.startsWith("deleted") || k === "fechaInicio" || k === "fechaFin") {
+    if (k.startsWith("created") || k.startsWith("updated") || k.startsWith("deleted") || k === "fechaInicio" || k === "fechaFin" || k === "impresoEn") {
       return toEpoch(v);
     }
     return v ?? null;

@@ -139,6 +139,7 @@ export const pedidos = pgTable("pedidos", {
     .default(false),
   codigoQr: text("codigo_qr"),
   origenTotemId: varchar("origen_totem_id"),
+  impresoEn: timestamp("impreso_en"),
   createdAt: timestamp("created_at").defaultNow(),
   ...syncCols,
 });

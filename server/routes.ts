@@ -1148,6 +1148,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Marca un pedido como impreso. Lo invoca el tótem inmediatamente después
+  // de window.print() para bloquear re-impresiones cuando el comensal vuelve
+  // a loguearse en el mismo día. Idempotente: si ya tiene timestamp lo
+  // sobreescribe (no daña nada). No requiere auth admin: el dueño del pedido
+  // o cualquier sesión activa del tótem puede marcarlo.
+  app.post("/api/pedidos/:id/marcar-impreso", async (req: Request, res: Response) => {
+    try {
+      const userId = (req.session as any).userId;
+      if (!userId) return res.status(401).json({ message: "No autenticado" });
+      const { id } = req.params;
+      const pedido = await storage.getPedidoById(id);
+      if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
+      // Autorización: el dueño del pedido, o staff (admin/interlocutor/encargado_casino)
+      // del mismo casino. Esto bloquea ataques donde un usuario A marca como
+      // impreso el pedido de otro usuario B.
+      const requester = await storage.getUser(userId);
+      if (!requester) return res.status(401).json({ message: "Usuario no encontrado" });
+      const isOwner = pedido.userId === requester.id;
+      const isStaff = ["admin", "interlocutor", "encargado_casino"].includes(requester.role);
+      if (!isOwner && !isStaff) return res.status(403).json({ message: "Sin permisos" });
+      const updated = await storage.markPedidoImpreso(id);
+      if (!updated) return res.status(404).json({ message: "Pedido no encontrado" });
+      return res.json({ ok: true, impresoEn: updated.impresoEn });
+    } catch (error) {
+      console.error("Mark impreso error:", error);
+      return res.status(500).json({ message: "Error al marcar impreso" });
+    }
+  });
+
   // DELETE pedido — admin/interlocutor pueden anular un vale para que el comensal vuelva a inscribirse
   app.delete("/api/pedidos/:id", requireAdmin, async (req: Request, res: Response) => {
     try {

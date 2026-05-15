@@ -28,6 +28,10 @@ function enqueuePedidoOutboxSync(p: any, op: "insert" | "update") {
     codigoQr: p.codigoQr,
     createdAt: typeof p.createdAt === "number" ? p.createdAt : new Date(p.createdAt || Date.now()).getTime(),
     origenTotemId: p.origenTotemId,
+    // impresoEn: timestamp en ms cuando el comensal retiró el vale impreso.
+    // Sin esto el cloud no aprende que el vale ya se entregó y permitiría
+    // que un re-login en otro dispositivo del mismo casino vuelva a imprimir.
+    impresoEn: p.impresoEn == null ? null : (typeof p.impresoEn === "number" ? p.impresoEn : new Date(p.impresoEn).getTime()),
   };
   sqlite.prepare(
     "INSERT INTO sync_outbox(table_name, record_id, op, payload, created_at) VALUES(?, ?, ?, ?, ?)"
@@ -86,6 +90,7 @@ export interface IStorage {
   deletePedido(id: string): Promise<boolean>;
   getPedidosByMinuta(minutaId: string): Promise<Pedido[]>;
   getAnuladosByMinuta(minutaId: string): Promise<Pedido[]>;
+  markPedidoImpreso(id: string): Promise<Pedido | undefined>;
   getAllFamilias(): Promise<Familia[]>;
   createFamilia(familia: InsertFamilia): Promise<Familia>;
   updateFamilia(id: string, data: Partial<InsertFamilia & { activo?: boolean }>): Promise<Familia | undefined>;
@@ -258,6 +263,27 @@ export class DatabaseStorage implements IStorage {
   async getPedidosByMinuta(minutaId: string): Promise<Pedido[]> {
     // Excluir tombstones — un pedido anulado no debe contarse como inscripción activa.
     return db.select().from(pedidos).where(and(eq(pedidos.minutaId, minutaId), isNull(pedidos.deletedAt)));
+  }
+  async markPedidoImpreso(id: string): Promise<Pedido | undefined> {
+    // Marca el pedido como impreso (vale ya entregado al comensal). Bloquea
+    // re-impresiones no autorizadas: el comensal no puede sacar otro vale,
+    // solo el staff puede reimprimir vía el flujo Reimpresión.
+    // En modo tótem se enqueua en sync_outbox dentro de la misma transacción
+    // para que el cloud aprenda del estado impreso (offline-first).
+    if (DB_MODE === "totem" && sqlite) {
+      const tx = sqlite.transaction(() => {
+        const data = touch({ impresoEn: new Date() } as any);
+        const [p] = (db.update(pedidos).set(data).where(eq(pedidos.id, id)).returning() as any).all
+          ? (db.update(pedidos).set(data).where(eq(pedidos.id, id)).returning() as any).all()
+          : [];
+        const updated = p ?? (sqlite!.prepare("SELECT * FROM pedidos WHERE id = ?").get(id) as any);
+        if (updated) enqueuePedidoOutboxSync(updated, "update");
+        return updated;
+      });
+      return tx() as Pedido | undefined;
+    }
+    const [pedido] = await db.update(pedidos).set(touch({ impresoEn: new Date() } as any)).where(eq(pedidos.id, id)).returning();
+    return pedido;
   }
   async getAnuladosByMinuta(minutaId: string): Promise<Pedido[]> {
     // Devuelve solo pedidos anulados (tombstones) para mostrar el conteo en reportes.
