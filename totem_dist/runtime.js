@@ -1,13 +1,10 @@
+"use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -23,6 +20,14 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // shared/schema.ts
@@ -47,142 +52,132 @@ __export(schema_exports, {
   users: () => users,
   usuarioCasinos: () => usuarioCasinos
 });
-import { sql } from "drizzle-orm";
-import {
-  pgTable,
-  text,
-  varchar,
-  integer,
-  bigint,
-  date,
-  timestamp,
-  boolean,
-  pgEnum
-} from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
-var userRoleEnum, syncCols, users, usuarioCasinos, casinos, familias, minutas, periodos, pedidos, totems, totemReleases, insertUserSchema, loginSchema, insertCasinoSchema, insertFamiliaSchema, insertMinutaSchema, insertPedidoSchema, insertPeriodoSchema, SYNC_TABLES;
+var import_drizzle_orm, import_pg_core, import_drizzle_zod, import_zod, userRoleEnum, syncCols, users, usuarioCasinos, casinos, familias, minutas, periodos, pedidos, totems, totemReleases, insertUserSchema, loginSchema, insertCasinoSchema, insertFamiliaSchema, insertMinutaSchema, insertPedidoSchema, insertPeriodoSchema, SYNC_TABLES;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
-    userRoleEnum = pgEnum("user_role", [
+    import_drizzle_orm = require("drizzle-orm");
+    import_pg_core = require("drizzle-orm/pg-core");
+    import_drizzle_zod = require("drizzle-zod");
+    import_zod = require("zod");
+    userRoleEnum = (0, import_pg_core.pgEnum)("user_role", [
       "admin",
       "comensal",
       "interlocutor",
       "encargado_casino"
     ]);
     syncCols = {
-      updatedAt: timestamp("updated_at").defaultNow().notNull(),
-      deletedAt: timestamp("deleted_at"),
-      syncVersion: bigint("sync_version", { mode: "number" }).notNull().default(0)
+      updatedAt: (0, import_pg_core.timestamp)("updated_at").defaultNow().notNull(),
+      deletedAt: (0, import_pg_core.timestamp)("deleted_at"),
+      syncVersion: (0, import_pg_core.bigint)("sync_version", { mode: "number" }).notNull().default(0)
     };
-    users = pgTable("users", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      rut: text("rut").notNull().unique(),
-      password: text("password").notNull(),
-      nombre: text("nombre").notNull(),
-      apellido: text("apellido").notNull(),
-      telefono: text("telefono"),
+    users = (0, import_pg_core.pgTable)("users", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      rut: (0, import_pg_core.text)("rut").notNull().unique(),
+      password: (0, import_pg_core.text)("password").notNull(),
+      nombre: (0, import_pg_core.text)("nombre").notNull(),
+      apellido: (0, import_pg_core.text)("apellido").notNull(),
+      telefono: (0, import_pg_core.text)("telefono"),
       role: userRoleEnum("role").notNull().default("comensal"),
-      casinoId: varchar("casino_id").references(() => casinos.id),
-      fechaNacimiento: date("fecha_nacimiento"),
-      passwordChangeRequired: boolean("password_change_required").notNull().default(true),
-      activo: boolean("activo").notNull().default(true),
-      createdAt: timestamp("created_at").defaultNow(),
+      casinoId: (0, import_pg_core.varchar)("casino_id").references(() => casinos.id),
+      fechaNacimiento: (0, import_pg_core.date)("fecha_nacimiento"),
+      passwordChangeRequired: (0, import_pg_core.boolean)("password_change_required").notNull().default(true),
+      activo: (0, import_pg_core.boolean)("activo").notNull().default(true),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
       ...syncCols
     });
-    usuarioCasinos = pgTable("usuario_casinos", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-      casinoId: varchar("casino_id").notNull().references(() => casinos.id, { onDelete: "cascade" }),
-      createdAt: timestamp("created_at").defaultNow()
+    usuarioCasinos = (0, import_pg_core.pgTable)("usuario_casinos", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      userId: (0, import_pg_core.varchar)("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      casinoId: (0, import_pg_core.varchar)("casino_id").notNull().references(() => casinos.id, { onDelete: "cascade" }),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow()
     });
-    casinos = pgTable("casinos", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      nombre: text("nombre").notNull(),
-      direccion: text("direccion"),
-      comensalesDiarios: integer("comensales_diarios").notNull().default(0),
-      permitirCambioClaveTotem: boolean("permitir_cambio_clave_totem").notNull().default(false),
-      activo: boolean("activo").notNull().default(true),
-      createdAt: timestamp("created_at").defaultNow(),
+    casinos = (0, import_pg_core.pgTable)("casinos", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      nombre: (0, import_pg_core.text)("nombre").notNull(),
+      direccion: (0, import_pg_core.text)("direccion"),
+      comensalesDiarios: (0, import_pg_core.integer)("comensales_diarios").notNull().default(0),
+      permitirCambioClaveTotem: (0, import_pg_core.boolean)("permitir_cambio_clave_totem").notNull().default(false),
+      activo: (0, import_pg_core.boolean)("activo").notNull().default(true),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
       ...syncCols
     });
-    familias = pgTable("familias", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      nombre: text("nombre").notNull().unique(),
-      color: text("color").notNull().default("#D4A843"),
-      activo: boolean("activo").notNull().default(true),
-      createdAt: timestamp("created_at").defaultNow(),
+    familias = (0, import_pg_core.pgTable)("familias", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      nombre: (0, import_pg_core.text)("nombre").notNull().unique(),
+      color: (0, import_pg_core.text)("color").notNull().default("#D4A843"),
+      activo: (0, import_pg_core.boolean)("activo").notNull().default(true),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
       ...syncCols
     });
-    minutas = pgTable("minutas", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      casinoId: varchar("casino_id").notNull().references(() => casinos.id),
-      fecha: date("fecha").notNull(),
-      familia: text("familia").notNull().default("almuerzo"),
-      opcion1: text("opcion_1").notNull(),
-      opcion2: text("opcion_2").notNull(),
-      opcion3: text("opcion_3").notNull(),
-      opcion4: text("opcion_4"),
-      opcion5: text("opcion_5"),
-      activo: boolean("activo").notNull().default(true),
-      createdAt: timestamp("created_at").defaultNow(),
+    minutas = (0, import_pg_core.pgTable)("minutas", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      casinoId: (0, import_pg_core.varchar)("casino_id").notNull().references(() => casinos.id),
+      fecha: (0, import_pg_core.date)("fecha").notNull(),
+      familia: (0, import_pg_core.text)("familia").notNull().default("almuerzo"),
+      opcion1: (0, import_pg_core.text)("opcion_1").notNull(),
+      opcion2: (0, import_pg_core.text)("opcion_2").notNull(),
+      opcion3: (0, import_pg_core.text)("opcion_3").notNull(),
+      opcion4: (0, import_pg_core.text)("opcion_4"),
+      opcion5: (0, import_pg_core.text)("opcion_5"),
+      activo: (0, import_pg_core.boolean)("activo").notNull().default(true),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
       ...syncCols
     });
-    periodos = pgTable("periodos", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      casinoId: varchar("casino_id").notNull().references(() => casinos.id),
-      nombre: text("nombre").notNull(),
-      fechaInicio: timestamp("fecha_inicio").notNull(),
-      fechaFin: timestamp("fecha_fin").notNull(),
-      fechaServicioInicio: date("fecha_servicio_inicio"),
-      fechaServicioFin: date("fecha_servicio_fin"),
-      activo: boolean("activo").notNull().default(true),
-      createdAt: timestamp("created_at").defaultNow(),
+    periodos = (0, import_pg_core.pgTable)("periodos", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      casinoId: (0, import_pg_core.varchar)("casino_id").notNull().references(() => casinos.id),
+      nombre: (0, import_pg_core.text)("nombre").notNull(),
+      fechaInicio: (0, import_pg_core.timestamp)("fecha_inicio").notNull(),
+      fechaFin: (0, import_pg_core.timestamp)("fecha_fin").notNull(),
+      fechaServicioInicio: (0, import_pg_core.date)("fecha_servicio_inicio"),
+      fechaServicioFin: (0, import_pg_core.date)("fecha_servicio_fin"),
+      activo: (0, import_pg_core.boolean)("activo").notNull().default(true),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
       ...syncCols
     });
-    pedidos = pgTable("pedidos", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      userId: varchar("user_id").notNull().references(() => users.id),
-      minutaId: varchar("minuta_id").notNull().references(() => minutas.id),
-      opcionSeleccionada: integer("opcion_seleccionada").notNull(),
-      tipo: text("tipo").notNull().default("seleccion"),
-      nombreVisita: text("nombre_visita"),
-      asignadoPorDefecto: boolean("asignado_por_defecto").notNull().default(false),
-      codigoQr: text("codigo_qr"),
-      origenTotemId: varchar("origen_totem_id"),
-      impresoEn: timestamp("impreso_en"),
-      createdAt: timestamp("created_at").defaultNow(),
+    pedidos = (0, import_pg_core.pgTable)("pedidos", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      userId: (0, import_pg_core.varchar)("user_id").notNull().references(() => users.id),
+      minutaId: (0, import_pg_core.varchar)("minuta_id").notNull().references(() => minutas.id),
+      opcionSeleccionada: (0, import_pg_core.integer)("opcion_seleccionada").notNull(),
+      tipo: (0, import_pg_core.text)("tipo").notNull().default("seleccion"),
+      nombreVisita: (0, import_pg_core.text)("nombre_visita"),
+      asignadoPorDefecto: (0, import_pg_core.boolean)("asignado_por_defecto").notNull().default(false),
+      codigoQr: (0, import_pg_core.text)("codigo_qr"),
+      origenTotemId: (0, import_pg_core.varchar)("origen_totem_id"),
+      impresoEn: (0, import_pg_core.timestamp)("impreso_en"),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow(),
       ...syncCols
     });
-    totems = pgTable("totems", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      nombre: text("nombre").notNull(),
-      casinoId: varchar("casino_id").notNull().references(() => casinos.id),
-      secretHash: text("secret_hash").notNull(),
-      version: text("version"),
-      ipPublica: text("ip_publica"),
-      ipLocal: text("ip_local"),
-      hostname: text("hostname"),
-      ultimaConexion: timestamp("ultima_conexion"),
-      ultimoSync: timestamp("ultimo_sync"),
-      pedidosPendientes: integer("pedidos_pendientes").notNull().default(0),
-      estado: text("estado").notNull().default("offline"),
-      notas: text("notas"),
-      activo: boolean("activo").notNull().default(true),
-      createdAt: timestamp("created_at").defaultNow()
+    totems = (0, import_pg_core.pgTable)("totems", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      nombre: (0, import_pg_core.text)("nombre").notNull(),
+      casinoId: (0, import_pg_core.varchar)("casino_id").notNull().references(() => casinos.id),
+      secretHash: (0, import_pg_core.text)("secret_hash").notNull(),
+      version: (0, import_pg_core.text)("version"),
+      ipPublica: (0, import_pg_core.text)("ip_publica"),
+      ipLocal: (0, import_pg_core.text)("ip_local"),
+      hostname: (0, import_pg_core.text)("hostname"),
+      ultimaConexion: (0, import_pg_core.timestamp)("ultima_conexion"),
+      ultimoSync: (0, import_pg_core.timestamp)("ultimo_sync"),
+      pedidosPendientes: (0, import_pg_core.integer)("pedidos_pendientes").notNull().default(0),
+      estado: (0, import_pg_core.text)("estado").notNull().default("offline"),
+      notas: (0, import_pg_core.text)("notas"),
+      activo: (0, import_pg_core.boolean)("activo").notNull().default(true),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow()
     });
-    totemReleases = pgTable("totem_releases", {
-      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      version: text("version").notNull().unique(),
-      url: text("url").notNull(),
-      sha256: text("sha256").notNull(),
-      notas: text("notas"),
-      obligatoria: boolean("obligatoria").notNull().default(false),
-      publicada: boolean("publicada").notNull().default(false),
-      createdAt: timestamp("created_at").defaultNow()
+    totemReleases = (0, import_pg_core.pgTable)("totem_releases", {
+      id: (0, import_pg_core.varchar)("id").primaryKey().default(import_drizzle_orm.sql`gen_random_uuid()`),
+      version: (0, import_pg_core.text)("version").notNull().unique(),
+      url: (0, import_pg_core.text)("url").notNull(),
+      sha256: (0, import_pg_core.text)("sha256").notNull(),
+      notas: (0, import_pg_core.text)("notas"),
+      obligatoria: (0, import_pg_core.boolean)("obligatoria").notNull().default(false),
+      publicada: (0, import_pg_core.boolean)("publicada").notNull().default(false),
+      createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow()
     });
-    insertUserSchema = createInsertSchema(users).pick({
+    insertUserSchema = (0, import_drizzle_zod.createInsertSchema)(users).pick({
       rut: true,
       password: true,
       nombre: true,
@@ -193,21 +188,21 @@ var init_schema = __esm({
       fechaNacimiento: true,
       passwordChangeRequired: true
     });
-    loginSchema = z.object({
-      rut: z.string().min(1),
-      password: z.string().min(1)
+    loginSchema = import_zod.z.object({
+      rut: import_zod.z.string().min(1),
+      password: import_zod.z.string().min(1)
     });
-    insertCasinoSchema = createInsertSchema(casinos).pick({
+    insertCasinoSchema = (0, import_drizzle_zod.createInsertSchema)(casinos).pick({
       nombre: true,
       direccion: true,
       comensalesDiarios: true,
       permitirCambioClaveTotem: true
     });
-    insertFamiliaSchema = createInsertSchema(familias).pick({
+    insertFamiliaSchema = (0, import_drizzle_zod.createInsertSchema)(familias).pick({
       nombre: true,
       color: true
     });
-    insertMinutaSchema = createInsertSchema(minutas).pick({
+    insertMinutaSchema = (0, import_drizzle_zod.createInsertSchema)(minutas).pick({
       casinoId: true,
       fecha: true,
       familia: true,
@@ -217,7 +212,7 @@ var init_schema = __esm({
       opcion4: true,
       opcion5: true
     });
-    insertPedidoSchema = createInsertSchema(pedidos).pick({
+    insertPedidoSchema = (0, import_drizzle_zod.createInsertSchema)(pedidos).pick({
       userId: true,
       minutaId: true,
       opcionSeleccionada: true,
@@ -225,7 +220,7 @@ var init_schema = __esm({
       tipo: true,
       nombreVisita: true
     });
-    insertPeriodoSchema = createInsertSchema(periodos).pick({
+    insertPeriodoSchema = (0, import_drizzle_zod.createInsertSchema)(periodos).pick({
       casinoId: true,
       nombre: true,
       fechaInicio: true,
@@ -251,196 +246,388 @@ __export(schema_sqlite_exports, {
   users: () => users2,
   usuarioCasinos: () => usuarioCasinos2
 });
-import { sqliteTable, text as text2, integer as integer2 } from "drizzle-orm/sqlite-core";
-var syncCols2, users2, usuarioCasinos2, casinos2, familias2, minutas2, periodos2, pedidos2, syncOutbox, syncState, totemConfig;
+var import_sqlite_core, syncCols2, users2, usuarioCasinos2, casinos2, familias2, minutas2, periodos2, pedidos2, syncOutbox, syncState, totemConfig;
 var init_schema_sqlite = __esm({
   "shared/schema-sqlite.ts"() {
     "use strict";
+    import_sqlite_core = require("drizzle-orm/sqlite-core");
     syncCols2 = {
-      updatedAt: integer2("updated_at", { mode: "timestamp_ms" }).notNull(),
-      deletedAt: integer2("deleted_at", { mode: "timestamp_ms" }),
-      syncVersion: integer2("sync_version").notNull().default(0)
+      updatedAt: (0, import_sqlite_core.integer)("updated_at", { mode: "timestamp_ms" }).notNull(),
+      deletedAt: (0, import_sqlite_core.integer)("deleted_at", { mode: "timestamp_ms" }),
+      syncVersion: (0, import_sqlite_core.integer)("sync_version").notNull().default(0)
     };
-    users2 = sqliteTable("users", {
-      id: text2("id").primaryKey(),
-      rut: text2("rut").notNull().unique(),
-      password: text2("password").notNull(),
-      nombre: text2("nombre").notNull(),
-      apellido: text2("apellido").notNull(),
-      telefono: text2("telefono"),
-      fechaNacimiento: text2("fecha_nacimiento"),
+    users2 = (0, import_sqlite_core.sqliteTable)("users", {
+      id: (0, import_sqlite_core.text)("id").primaryKey(),
+      rut: (0, import_sqlite_core.text)("rut").notNull().unique(),
+      password: (0, import_sqlite_core.text)("password").notNull(),
+      nombre: (0, import_sqlite_core.text)("nombre").notNull(),
+      apellido: (0, import_sqlite_core.text)("apellido").notNull(),
+      telefono: (0, import_sqlite_core.text)("telefono"),
+      fechaNacimiento: (0, import_sqlite_core.text)("fecha_nacimiento"),
       // YYYY-MM-DD
-      passwordChangeRequired: integer2("password_change_required", { mode: "boolean" }).notNull().default(true),
-      role: text2("role").notNull().default("comensal"),
-      casinoId: text2("casino_id"),
-      activo: integer2("activo", { mode: "boolean" }).notNull().default(true),
-      createdAt: integer2("created_at", { mode: "timestamp_ms" }),
+      passwordChangeRequired: (0, import_sqlite_core.integer)("password_change_required", { mode: "boolean" }).notNull().default(true),
+      role: (0, import_sqlite_core.text)("role").notNull().default("comensal"),
+      casinoId: (0, import_sqlite_core.text)("casino_id"),
+      activo: (0, import_sqlite_core.integer)("activo", { mode: "boolean" }).notNull().default(true),
+      createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp_ms" }),
       ...syncCols2
     });
-    usuarioCasinos2 = sqliteTable("usuario_casinos", {
-      id: text2("id").primaryKey(),
-      userId: text2("user_id").notNull(),
-      casinoId: text2("casino_id").notNull(),
-      createdAt: integer2("created_at", { mode: "timestamp_ms" }),
+    usuarioCasinos2 = (0, import_sqlite_core.sqliteTable)("usuario_casinos", {
+      id: (0, import_sqlite_core.text)("id").primaryKey(),
+      userId: (0, import_sqlite_core.text)("user_id").notNull(),
+      casinoId: (0, import_sqlite_core.text)("casino_id").notNull(),
+      createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp_ms" }),
       ...syncCols2
     });
-    casinos2 = sqliteTable("casinos", {
-      id: text2("id").primaryKey(),
-      nombre: text2("nombre").notNull(),
-      direccion: text2("direccion"),
-      comensalesDiarios: integer2("comensales_diarios").notNull().default(0),
-      permitirCambioClaveTotem: integer2("permitir_cambio_clave_totem", { mode: "boolean" }).notNull().default(false),
-      activo: integer2("activo", { mode: "boolean" }).notNull().default(true),
-      createdAt: integer2("created_at", { mode: "timestamp_ms" }),
+    casinos2 = (0, import_sqlite_core.sqliteTable)("casinos", {
+      id: (0, import_sqlite_core.text)("id").primaryKey(),
+      nombre: (0, import_sqlite_core.text)("nombre").notNull(),
+      direccion: (0, import_sqlite_core.text)("direccion"),
+      comensalesDiarios: (0, import_sqlite_core.integer)("comensales_diarios").notNull().default(0),
+      permitirCambioClaveTotem: (0, import_sqlite_core.integer)("permitir_cambio_clave_totem", { mode: "boolean" }).notNull().default(false),
+      activo: (0, import_sqlite_core.integer)("activo", { mode: "boolean" }).notNull().default(true),
+      createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp_ms" }),
       ...syncCols2
     });
-    familias2 = sqliteTable("familias", {
-      id: text2("id").primaryKey(),
-      nombre: text2("nombre").notNull().unique(),
-      color: text2("color").notNull().default("#D4A843"),
-      activo: integer2("activo", { mode: "boolean" }).notNull().default(true),
-      createdAt: integer2("created_at", { mode: "timestamp_ms" }),
+    familias2 = (0, import_sqlite_core.sqliteTable)("familias", {
+      id: (0, import_sqlite_core.text)("id").primaryKey(),
+      nombre: (0, import_sqlite_core.text)("nombre").notNull().unique(),
+      color: (0, import_sqlite_core.text)("color").notNull().default("#D4A843"),
+      activo: (0, import_sqlite_core.integer)("activo", { mode: "boolean" }).notNull().default(true),
+      createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp_ms" }),
       ...syncCols2
     });
-    minutas2 = sqliteTable("minutas", {
-      id: text2("id").primaryKey(),
-      casinoId: text2("casino_id").notNull(),
-      fecha: text2("fecha").notNull(),
+    minutas2 = (0, import_sqlite_core.sqliteTable)("minutas", {
+      id: (0, import_sqlite_core.text)("id").primaryKey(),
+      casinoId: (0, import_sqlite_core.text)("casino_id").notNull(),
+      fecha: (0, import_sqlite_core.text)("fecha").notNull(),
       // YYYY-MM-DD
-      familia: text2("familia").notNull().default("almuerzo"),
-      opcion1: text2("opcion_1").notNull(),
-      opcion2: text2("opcion_2").notNull(),
-      opcion3: text2("opcion_3").notNull(),
-      opcion4: text2("opcion_4"),
-      opcion5: text2("opcion_5"),
-      activo: integer2("activo", { mode: "boolean" }).notNull().default(true),
-      createdAt: integer2("created_at", { mode: "timestamp_ms" }),
+      familia: (0, import_sqlite_core.text)("familia").notNull().default("almuerzo"),
+      opcion1: (0, import_sqlite_core.text)("opcion_1").notNull(),
+      opcion2: (0, import_sqlite_core.text)("opcion_2").notNull(),
+      opcion3: (0, import_sqlite_core.text)("opcion_3").notNull(),
+      opcion4: (0, import_sqlite_core.text)("opcion_4"),
+      opcion5: (0, import_sqlite_core.text)("opcion_5"),
+      activo: (0, import_sqlite_core.integer)("activo", { mode: "boolean" }).notNull().default(true),
+      createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp_ms" }),
       ...syncCols2
     });
-    periodos2 = sqliteTable("periodos", {
-      id: text2("id").primaryKey(),
-      casinoId: text2("casino_id").notNull(),
-      nombre: text2("nombre").notNull(),
-      fechaInicio: integer2("fecha_inicio", { mode: "timestamp_ms" }).notNull(),
-      fechaFin: integer2("fecha_fin", { mode: "timestamp_ms" }).notNull(),
-      fechaServicioInicio: text2("fecha_servicio_inicio"),
+    periodos2 = (0, import_sqlite_core.sqliteTable)("periodos", {
+      id: (0, import_sqlite_core.text)("id").primaryKey(),
+      casinoId: (0, import_sqlite_core.text)("casino_id").notNull(),
+      nombre: (0, import_sqlite_core.text)("nombre").notNull(),
+      fechaInicio: (0, import_sqlite_core.integer)("fecha_inicio", { mode: "timestamp_ms" }).notNull(),
+      fechaFin: (0, import_sqlite_core.integer)("fecha_fin", { mode: "timestamp_ms" }).notNull(),
+      fechaServicioInicio: (0, import_sqlite_core.text)("fecha_servicio_inicio"),
       // YYYY-MM-DD
-      fechaServicioFin: text2("fecha_servicio_fin"),
+      fechaServicioFin: (0, import_sqlite_core.text)("fecha_servicio_fin"),
       // YYYY-MM-DD
-      activo: integer2("activo", { mode: "boolean" }).notNull().default(true),
-      createdAt: integer2("created_at", { mode: "timestamp_ms" }),
+      activo: (0, import_sqlite_core.integer)("activo", { mode: "boolean" }).notNull().default(true),
+      createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp_ms" }),
       ...syncCols2
     });
-    pedidos2 = sqliteTable("pedidos", {
-      id: text2("id").primaryKey(),
-      userId: text2("user_id").notNull(),
-      minutaId: text2("minuta_id").notNull(),
-      opcionSeleccionada: integer2("opcion_seleccionada").notNull(),
-      tipo: text2("tipo").notNull().default("seleccion"),
-      nombreVisita: text2("nombre_visita"),
-      asignadoPorDefecto: integer2("asignado_por_defecto", { mode: "boolean" }).notNull().default(false),
-      codigoQr: text2("codigo_qr"),
-      origenTotemId: text2("origen_totem_id"),
-      impresoEn: integer2("impreso_en", { mode: "timestamp_ms" }),
-      createdAt: integer2("created_at", { mode: "timestamp_ms" }),
+    pedidos2 = (0, import_sqlite_core.sqliteTable)("pedidos", {
+      id: (0, import_sqlite_core.text)("id").primaryKey(),
+      userId: (0, import_sqlite_core.text)("user_id").notNull(),
+      minutaId: (0, import_sqlite_core.text)("minuta_id").notNull(),
+      opcionSeleccionada: (0, import_sqlite_core.integer)("opcion_seleccionada").notNull(),
+      tipo: (0, import_sqlite_core.text)("tipo").notNull().default("seleccion"),
+      nombreVisita: (0, import_sqlite_core.text)("nombre_visita"),
+      asignadoPorDefecto: (0, import_sqlite_core.integer)("asignado_por_defecto", { mode: "boolean" }).notNull().default(false),
+      codigoQr: (0, import_sqlite_core.text)("codigo_qr"),
+      origenTotemId: (0, import_sqlite_core.text)("origen_totem_id"),
+      impresoEn: (0, import_sqlite_core.integer)("impreso_en", { mode: "timestamp_ms" }),
+      createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp_ms" }),
       ...syncCols2
     });
-    syncOutbox = sqliteTable("sync_outbox", {
-      id: integer2("id").primaryKey({ autoIncrement: true }),
-      tableName: text2("table_name").notNull(),
-      recordId: text2("record_id").notNull(),
-      op: text2("op").notNull(),
+    syncOutbox = (0, import_sqlite_core.sqliteTable)("sync_outbox", {
+      id: (0, import_sqlite_core.integer)("id").primaryKey({ autoIncrement: true }),
+      tableName: (0, import_sqlite_core.text)("table_name").notNull(),
+      recordId: (0, import_sqlite_core.text)("record_id").notNull(),
+      op: (0, import_sqlite_core.text)("op").notNull(),
       // upsert | delete
-      payload: text2("payload").notNull(),
+      payload: (0, import_sqlite_core.text)("payload").notNull(),
       // JSON of the full row
-      createdAt: integer2("created_at", { mode: "timestamp_ms" }).notNull(),
-      attempts: integer2("attempts").notNull().default(0),
-      lastError: text2("last_error"),
-      acked: integer2("acked", { mode: "boolean" }).notNull().default(false)
+      createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp_ms" }).notNull(),
+      attempts: (0, import_sqlite_core.integer)("attempts").notNull().default(0),
+      lastError: (0, import_sqlite_core.text)("last_error"),
+      acked: (0, import_sqlite_core.integer)("acked", { mode: "boolean" }).notNull().default(false)
     });
-    syncState = sqliteTable("sync_state", {
-      key: text2("key").primaryKey(),
-      value: text2("value").notNull()
+    syncState = (0, import_sqlite_core.sqliteTable)("sync_state", {
+      key: (0, import_sqlite_core.text)("key").primaryKey(),
+      value: (0, import_sqlite_core.text)("value").notNull()
     });
-    totemConfig = sqliteTable("totem_config", {
-      key: text2("key").primaryKey(),
-      value: text2("value").notNull()
+    totemConfig = (0, import_sqlite_core.sqliteTable)("totem_config", {
+      key: (0, import_sqlite_core.text)("key").primaryKey(),
+      value: (0, import_sqlite_core.text)("value").notNull()
     });
   }
 });
 
-// server/index.ts
-import express from "express";
-
-// server/routes.ts
-import { createServer } from "node:http";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import bcrypt2 from "bcryptjs";
-import multer from "multer";
-import * as XLSX from "xlsx";
-import ExcelJS from "exceljs";
-import * as path2 from "path";
-import * as fs2 from "fs";
-
-// server/storage.ts
-import { eq, and, isNull, isNotNull } from "drizzle-orm";
-
 // server/db.ts
-import * as fs from "fs";
-import * as path from "path";
-var DB_MODE = process.env.DB_MODE === "totem" ? "totem" : "cloud";
-var _db;
-var _pool;
-var _schema;
-var _sqlite;
-if (DB_MODE === "cloud") {
-  const { Pool } = __require("pg");
-  const { drizzle } = __require("drizzle-orm/node-postgres");
-  const schema = (init_schema(), __toCommonJS(schema_exports));
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL must be set in cloud mode");
-  }
-  _pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  _db = drizzle(_pool, { schema });
-  _schema = schema;
-} else {
-  let ensureColumn = function(table, column, ddlFragment) {
-    try {
-      const cols = _sqlite.prepare(`PRAGMA table_info(${table})`).all();
-      if (!cols.some((c) => c.name === column)) {
-        _sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${ddlFragment}`);
+var fs, path, DB_MODE, _db, _pool, _schema, _sqlite, ensureColumn2, db, pool, sqlite, users3, casinos3, familias3, minutas3, pedidos3, periodos3, usuarioCasinos3;
+var init_db = __esm({
+  "server/db.ts"() {
+    "use strict";
+    fs = __toESM(require("fs"));
+    path = __toESM(require("path"));
+    DB_MODE = process.env.DB_MODE === "totem" ? "totem" : "cloud";
+    if (DB_MODE === "cloud") {
+      const { Pool } = require("pg");
+      const { drizzle } = require("drizzle-orm/node-postgres");
+      const schema = (init_schema(), __toCommonJS(schema_exports));
+      if (!process.env.DATABASE_URL) {
+        throw new Error("DATABASE_URL must be set in cloud mode");
       }
-    } catch {
+      _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      _db = drizzle(_pool, { schema });
+      _schema = schema;
+    } else {
+      let ensureColumn = function(table, column, ddlFragment) {
+        try {
+          const cols = _sqlite.prepare(`PRAGMA table_info(${table})`).all();
+          if (!cols.some((c) => c.name === column)) {
+            _sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${ddlFragment}`);
+          }
+        } catch {
+        }
+      };
+      ensureColumn2 = ensureColumn;
+      const Database = require("better-sqlite3");
+      const { drizzle } = require("drizzle-orm/better-sqlite3");
+      const schema = (init_schema_sqlite(), __toCommonJS(schema_sqlite_exports));
+      const dbPath = process.env.TOTEM_DB_PATH || path.resolve(process.cwd(), "totem-data", "totem.db");
+      fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+      _sqlite = new Database(dbPath);
+      _sqlite.pragma("journal_mode = WAL");
+      _sqlite.pragma("foreign_keys = ON");
+      _sqlite.pragma("synchronous = NORMAL");
+      const ddl = fs.readFileSync(path.resolve(__dirname, "../shared/schema-sqlite.sql"), "utf-8");
+      _sqlite.exec(ddl);
+      ensureColumn("pedidos", "impreso_en", "impreso_en INTEGER");
+      _db = drizzle(_sqlite, { schema });
+      _schema = schema;
     }
-  };
-  ensureColumn2 = ensureColumn;
-  const Database = __require("better-sqlite3");
-  const { drizzle } = __require("drizzle-orm/better-sqlite3");
-  const schema = (init_schema_sqlite(), __toCommonJS(schema_sqlite_exports));
-  const dbPath = process.env.TOTEM_DB_PATH || path.resolve(process.cwd(), "totem-data", "totem.db");
-  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-  _sqlite = new Database(dbPath);
-  _sqlite.pragma("journal_mode = WAL");
-  _sqlite.pragma("foreign_keys = ON");
-  _sqlite.pragma("synchronous = NORMAL");
-  const ddl = fs.readFileSync(path.resolve(__dirname, "../shared/schema-sqlite.sql"), "utf-8");
-  _sqlite.exec(ddl);
-  ensureColumn("pedidos", "impreso_en", "impreso_en INTEGER");
-  _db = drizzle(_sqlite, { schema });
-  _schema = schema;
+    db = _db;
+    pool = _pool;
+    sqlite = _sqlite;
+    users3 = _schema.users;
+    casinos3 = _schema.casinos;
+    familias3 = _schema.familias;
+    minutas3 = _schema.minutas;
+    pedidos3 = _schema.pedidos;
+    periodos3 = _schema.periodos;
+    usuarioCasinos3 = _schema.usuarioCasinos;
+  }
+});
+
+// totem/sync-worker.ts
+var sync_worker_exports = {};
+__export(sync_worker_exports, {
+  checkUpdate: () => checkUpdate,
+  runHeartbeat: () => runHeartbeat,
+  runPull: () => runPull,
+  runPush: () => runPush
+});
+function getCfg(key) {
+  const row = sqlite.prepare("SELECT value FROM totem_config WHERE key = ?").get(key);
+  return row?.value ?? null;
 }
-var ensureColumn2;
-var db = _db;
-var pool = _pool;
-var sqlite = _sqlite;
-var users3 = _schema.users;
-var casinos3 = _schema.casinos;
-var familias3 = _schema.familias;
-var minutas3 = _schema.minutas;
-var pedidos3 = _schema.pedidos;
-var periodos3 = _schema.periodos;
-var usuarioCasinos3 = _schema.usuarioCasinos;
+function getState(key) {
+  const row = sqlite.prepare("SELECT value FROM sync_state WHERE key = ?").get(key);
+  return row?.value ?? null;
+}
+function setState(key, value) {
+  sqlite.prepare("INSERT OR REPLACE INTO sync_state(key, value) VALUES(?, ?)").run(key, value);
+}
+function cloudUrl() {
+  return process.env.CLOUD_URL || getCfg("cloud_url") || "https://app.buenamezcla.cl";
+}
+async function cloudFetch(pathRel, init = {}) {
+  const id = getCfg("totem_id");
+  const secret = getCfg("totem_secret");
+  if (!id || !secret) throw new Error("Totem no registrado todav\xEDa");
+  const headers = {
+    "content-type": "application/json",
+    "x-totem-id": id,
+    "x-totem-secret": secret,
+    ...init.headers || {}
+  };
+  const url = cloudUrl().replace(/\/$/, "") + pathRel;
+  return fetch(url, { ...init, headers });
+}
+function toEpoch(v) {
+  if (!v) return null;
+  if (typeof v === "number") return v;
+  return new Date(v).getTime();
+}
+function toBool(v) {
+  return v ? 1 : 0;
+}
+function upsertRow(tbl, row) {
+  const map = COLUMN_MAPS[tbl];
+  const cols = Object.keys(map);
+  const dbCols = cols.map((c) => map[c]);
+  const values = cols.map((k) => {
+    const v = row[k];
+    if (k === "activo" || k === "asignadoPorDefecto") return toBool(v);
+    if (k.startsWith("created") || k.startsWith("updated") || k.startsWith("deleted") || k === "fechaInicio" || k === "fechaFin" || k === "impresoEn") {
+      return toEpoch(v);
+    }
+    return v ?? null;
+  });
+  const placeholders = cols.map(() => "?").join(",");
+  const updates = dbCols.filter((c) => c !== "id").map((c) => `${c}=excluded.${c}`).join(",");
+  const sql3 = `INSERT INTO ${tbl} (${dbCols.join(",")}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${updates}`;
+  sqlite.prepare(sql3).run(...values);
+}
+async function runPull() {
+  if (!getCfg("totem_id")) return;
+  try {
+    const since = parseInt(getState("last_pull_ms") || "0", 10);
+    const res = await cloudFetch(`/api/totem/pull?since=${since}`);
+    if (!res.ok) {
+      console.warn("[sync] pull failed:", res.status);
+      return;
+    }
+    const json = await res.json();
+    const data = json.data || {};
+    const tx = sqlite.transaction((d) => {
+      for (const t of TABLES) {
+        const rows = d[t] || [];
+        for (const r of rows) upsertRow(t, r);
+      }
+    });
+    tx(data);
+    const cursor = json.nextCursor ?? json.since ?? 0;
+    setState("last_pull_ms", String(cursor));
+    setState("last_pull_at", (/* @__PURE__ */ new Date()).toISOString());
+    const total = TABLES.reduce((s, t) => s + (data[t] || []).length, 0);
+    if (total > 0) console.log(`[sync] pull ok \u2014 ${total} filas actualizadas`);
+  } catch (err) {
+    console.warn("[sync] pull network error:", err?.message);
+  }
+}
+async function runPush() {
+  if (!getCfg("totem_id")) return;
+  const batch = sqlite.prepare(
+    "SELECT id, table_name, record_id, op, payload, attempts FROM sync_outbox WHERE acked = 0 ORDER BY id ASC LIMIT 100"
+  ).all();
+  if (batch.length === 0) return;
+  const pedidoEntries = batch.filter((b) => b.table_name === "pedidos");
+  if (pedidoEntries.length === 0) return;
+  const pedidosPayload = pedidoEntries.map((b) => JSON.parse(b.payload));
+  try {
+    const res = await cloudFetch(`/api/totem/push`, {
+      method: "POST",
+      body: JSON.stringify({ pedidos: pedidosPayload })
+    });
+    if (!res.ok) {
+      const text3 = await res.text();
+      throw new Error(`HTTP ${res.status}: ${text3.slice(0, 120)}`);
+    }
+    const data = await res.json();
+    const acceptedSet = new Set(data.accepted || []);
+    const ackStmt = sqlite.prepare("UPDATE sync_outbox SET acked = 1, last_error = NULL WHERE id = ?");
+    const failStmt = sqlite.prepare("UPDATE sync_outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?");
+    const tx = sqlite.transaction(() => {
+      for (const entry of pedidoEntries) {
+        const payload = JSON.parse(entry.payload);
+        if (acceptedSet.has(payload.id)) ackStmt.run(entry.id);
+        else {
+          const rej = (data.rejected || []).find((r) => r.id === payload.id);
+          failStmt.run(rej?.reason || "rechazado", entry.id);
+        }
+      }
+      sqlite.prepare("DELETE FROM sync_outbox WHERE acked = 1 AND created_at < ?").run(Date.now() - 7 * 86400 * 1e3);
+    });
+    tx();
+    console.log(`[sync] push ok \u2014 ${acceptedSet.size}/${pedidoEntries.length} aceptados`);
+  } catch (err) {
+    console.warn("[sync] push network error:", err?.message);
+  }
+}
+async function runHeartbeat() {
+  if (!getCfg("totem_id")) return;
+  try {
+    const pending = sqlite.prepare("SELECT COUNT(*) as c FROM sync_outbox WHERE acked = 0").get().c;
+    const ifaces = require("os").networkInterfaces();
+    let ipLocal = "";
+    for (const k of Object.keys(ifaces)) {
+      for (const a of ifaces[k] || []) {
+        if (!a.internal && a.family === "IPv4") {
+          ipLocal = a.address;
+          break;
+        }
+      }
+      if (ipLocal) break;
+    }
+    await cloudFetch(`/api/totem/heartbeat`, {
+      method: "POST",
+      body: JSON.stringify({
+        version: getCfg("version") || "0.0.0",
+        pedidosPendientes: pending,
+        ipLocal,
+        hostname: require("os").hostname()
+      })
+    });
+  } catch {
+  }
+}
+async function checkUpdate() {
+  if (!getCfg("totem_id")) return;
+  try {
+    const res = await cloudFetch(`/api/totem/version/latest`);
+    if (!res.ok) return;
+    const json = await res.json();
+    if (!json.version) return;
+    const current = getCfg("version") || "0.0.0";
+    if (json.version === current) return;
+    console.log(`[sync] nueva versi\xF3n disponible: ${json.version} (actual ${current})`);
+    const marker = path2.join(process.cwd(), "totem-data", "update-pending.json");
+    fs2.mkdirSync(path2.dirname(marker), { recursive: true });
+    fs2.writeFileSync(marker, JSON.stringify(json, null, 2));
+  } catch {
+  }
+}
+function startWorker() {
+  console.log("[sync] worker iniciado");
+  setInterval(runPull, 30 * 1e3);
+  setInterval(runPush, 15 * 1e3);
+  setInterval(runHeartbeat, 60 * 1e3);
+  setInterval(checkUpdate, 30 * 60 * 1e3);
+  setTimeout(runHeartbeat, 5e3);
+  setTimeout(runPull, 7e3);
+  setTimeout(runPush, 1e4);
+  setTimeout(checkUpdate, 6e4);
+}
+var fs2, path2, TABLES, COLUMN_MAPS;
+var init_sync_worker = __esm({
+  "totem/sync-worker.ts"() {
+    "use strict";
+    fs2 = __toESM(require("fs"));
+    path2 = __toESM(require("path"));
+    init_db();
+    if (!sqlite) {
+      console.warn("[sync] sqlite handle not available \u2014 sync worker disabled (DB_MODE=cloud)");
+    } else {
+      startWorker();
+    }
+    TABLES = ["casinos", "familias", "users", "minutas", "periodos", "pedidos"];
+    COLUMN_MAPS = {
+      casinos: { id: "id", nombre: "nombre", direccion: "direccion", comensalesDiarios: "comensales_diarios", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
+      familias: { id: "id", nombre: "nombre", color: "color", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
+      users: { id: "id", rut: "rut", password: "password", nombre: "nombre", apellido: "apellido", telefono: "telefono", role: "role", casinoId: "casino_id", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
+      minutas: { id: "id", casinoId: "casino_id", fecha: "fecha", familia: "familia", opcion1: "opcion_1", opcion2: "opcion_2", opcion3: "opcion_3", opcion4: "opcion_4", opcion5: "opcion_5", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
+      periodos: { id: "id", casinoId: "casino_id", nombre: "nombre", fechaInicio: "fecha_inicio", fechaFin: "fecha_fin", activo: "activo", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" },
+      // Pedidos: mirror desde cloud para que las anulaciones del admin lleguen al tótem
+      // (tombstones con deleted_at). El tótem también pushea pedidos vía outbox; el upsert
+      // por id es idempotente — si un pedido vuelve del cloud con datos más nuevos
+      // (mayor updated_at), se sobreescribe el local con los valores autoritativos.
+      pedidos: { id: "id", userId: "user_id", minutaId: "minuta_id", opcionSeleccionada: "opcion_seleccionada", tipo: "tipo", nombreVisita: "nombre_visita", asignadoPorDefecto: "asignado_por_defecto", codigoQr: "codigo_qr", origenTotemId: "origen_totem_id", impresoEn: "impreso_en", createdAt: "created_at", updatedAt: "updated_at", deletedAt: "deleted_at", syncVersion: "sync_version" }
+    };
+  }
+});
 
 // server/storage.ts
 function enqueuePedidoOutboxSync(p, op) {
@@ -470,253 +657,255 @@ function touch(data) {
 function tombstone() {
   return { activo: false, deletedAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date(), syncVersion: Date.now() };
 }
-var DatabaseStorage = class {
-  // ── Users ──
-  async getUser(id) {
-    const [user] = await db.select().from(users3).where(eq(users3.id, id));
-    return user;
-  }
-  async getUserByRut(rut) {
-    const cleaned = (rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
-    const normalized = cleaned.length > 1 ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : cleaned;
-    const [user] = await db.select().from(users3).where(eq(users3.rut, normalized));
-    return user;
-  }
-  async getAllUsers() {
-    return db.select().from(users3);
-  }
-  async createUser(insertUser) {
-    const v = touch(insertUser);
-    if (!v.id) v.id = __require("crypto").randomUUID();
-    const [user] = await db.insert(users3).values(v).returning();
-    return user;
-  }
-  async updateUser(id, data) {
-    const [user] = await db.update(users3).set(touch(data)).where(eq(users3.id, id)).returning();
-    return user;
-  }
-  async deleteUser(id) {
-    const [u] = await db.update(users3).set(tombstone()).where(eq(users3.id, id)).returning();
-    return !!u;
-  }
-  // ── Casinos ──
-  async getCasinos() {
-    return db.select().from(casinos3).where(eq(casinos3.activo, true));
-  }
-  async getAllCasinos() {
-    return db.select().from(casinos3);
-  }
-  async getCasino(id) {
-    const [casino] = await db.select().from(casinos3).where(eq(casinos3.id, id));
-    return casino;
-  }
-  async createCasino(insertCasino) {
-    const v = touch(insertCasino);
-    if (!v.id) v.id = __require("crypto").randomUUID();
-    const [casino] = await db.insert(casinos3).values(v).returning();
-    return casino;
-  }
-  async updateCasino(id, data) {
-    const [casino] = await db.update(casinos3).set(touch(data)).where(eq(casinos3.id, id)).returning();
-    return casino;
-  }
-  async deleteCasino(id) {
-    const [casino] = await db.update(casinos3).set(tombstone()).where(eq(casinos3.id, id)).returning();
-    return !!casino;
-  }
-  async hardDeleteCasino(id) {
-    const [casino] = await db.delete(casinos3).where(eq(casinos3.id, id)).returning();
-    return !!casino;
-  }
-  // ── Minutas ──
-  async getMinutasByCasino(casinoId) {
-    return db.select().from(minutas3).where(and(eq(minutas3.casinoId, casinoId), eq(minutas3.activo, true)));
-  }
-  async getAllMinutasByCasino(casinoId) {
-    return db.select().from(minutas3).where(eq(minutas3.casinoId, casinoId));
-  }
-  async getAllMinutas() {
-    return db.select().from(minutas3);
-  }
-  async getMinuta(id) {
-    const [minuta] = await db.select().from(minutas3).where(eq(minutas3.id, id));
-    return minuta;
-  }
-  async createMinuta(insertMinuta) {
-    const v = touch(insertMinuta);
-    if (!v.id) v.id = __require("crypto").randomUUID();
-    const [minuta] = await db.insert(minutas3).values(v).returning();
-    return minuta;
-  }
-  async updateMinuta(id, data) {
-    const [minuta] = await db.update(minutas3).set(touch(data)).where(eq(minutas3.id, id)).returning();
-    return minuta;
-  }
-  async deleteMinuta(id) {
-    const [minuta] = await db.update(minutas3).set(tombstone()).where(eq(minutas3.id, id)).returning();
-    return !!minuta;
-  }
-  // ── Pedidos ──
-  async getAllPedidos() {
-    return db.select().from(pedidos3).where(isNull(pedidos3.deletedAt));
-  }
-  async getPedidosByUser(userId) {
-    return db.select().from(pedidos3).where(and(eq(pedidos3.userId, userId), isNull(pedidos3.deletedAt)));
-  }
-  async getPedidoByUserAndMinuta(userId, minutaId) {
-    const [pedido] = await db.select().from(pedidos3).where(and(eq(pedidos3.userId, userId), eq(pedidos3.minutaId, minutaId), isNull(pedidos3.deletedAt)));
-    return pedido;
-  }
-  async createPedido(insertPedido) {
-    const values = touch(insertPedido);
-    if (DB_MODE === "totem" && !values.id) values.id = __require("crypto").randomUUID();
-    if (DB_MODE === "totem" && !values.origenTotemId) {
-      try {
-        const row = sqlite.prepare("SELECT value FROM totem_config WHERE key = ?").get("totem_id");
-        if (row?.value) values.origenTotemId = row.value;
-      } catch {
+var import_drizzle_orm2, DatabaseStorage, storage;
+var init_storage = __esm({
+  "server/storage.ts"() {
+    "use strict";
+    import_drizzle_orm2 = require("drizzle-orm");
+    init_db();
+    DatabaseStorage = class {
+      // ── Users ──
+      async getUser(id) {
+        const [user] = await db.select().from(users3).where((0, import_drizzle_orm2.eq)(users3.id, id));
+        return user;
       }
-    }
-    if (DB_MODE === "totem" && sqlite) {
-      const tx = sqlite.transaction((v) => {
-        const [p] = db.insert(pedidos3).values(v).returning().all ? db.insert(pedidos3).values(v).returning().all() : [];
-        const inserted = p ?? sqlite.prepare("SELECT * FROM pedidos WHERE id = ?").get(v.id);
-        enqueuePedidoOutboxSync(inserted, "insert");
-        return inserted;
-      });
-      const pedido2 = tx(values);
-      return pedido2;
-    }
-    const [pedido] = await db.insert(pedidos3).values(values).returning();
-    return pedido;
+      async getUserByRut(rut) {
+        const cleaned = (rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
+        const normalized = cleaned.length > 1 ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : cleaned;
+        const [user] = await db.select().from(users3).where((0, import_drizzle_orm2.eq)(users3.rut, normalized));
+        return user;
+      }
+      async getAllUsers() {
+        return db.select().from(users3);
+      }
+      async createUser(insertUser) {
+        const v = touch(insertUser);
+        if (!v.id) v.id = require("crypto").randomUUID();
+        const [user] = await db.insert(users3).values(v).returning();
+        return user;
+      }
+      async updateUser(id, data) {
+        const [user] = await db.update(users3).set(touch(data)).where((0, import_drizzle_orm2.eq)(users3.id, id)).returning();
+        return user;
+      }
+      async deleteUser(id) {
+        const [u] = await db.update(users3).set(tombstone()).where((0, import_drizzle_orm2.eq)(users3.id, id)).returning();
+        return !!u;
+      }
+      // ── Casinos ──
+      async getCasinos() {
+        return db.select().from(casinos3).where((0, import_drizzle_orm2.eq)(casinos3.activo, true));
+      }
+      async getAllCasinos() {
+        return db.select().from(casinos3);
+      }
+      async getCasino(id) {
+        const [casino] = await db.select().from(casinos3).where((0, import_drizzle_orm2.eq)(casinos3.id, id));
+        return casino;
+      }
+      async createCasino(insertCasino) {
+        const v = touch(insertCasino);
+        if (!v.id) v.id = require("crypto").randomUUID();
+        const [casino] = await db.insert(casinos3).values(v).returning();
+        return casino;
+      }
+      async updateCasino(id, data) {
+        const [casino] = await db.update(casinos3).set(touch(data)).where((0, import_drizzle_orm2.eq)(casinos3.id, id)).returning();
+        return casino;
+      }
+      async deleteCasino(id) {
+        const [casino] = await db.update(casinos3).set(tombstone()).where((0, import_drizzle_orm2.eq)(casinos3.id, id)).returning();
+        return !!casino;
+      }
+      async hardDeleteCasino(id) {
+        const [casino] = await db.delete(casinos3).where((0, import_drizzle_orm2.eq)(casinos3.id, id)).returning();
+        return !!casino;
+      }
+      // ── Minutas ──
+      async getMinutasByCasino(casinoId) {
+        return db.select().from(minutas3).where((0, import_drizzle_orm2.and)((0, import_drizzle_orm2.eq)(minutas3.casinoId, casinoId), (0, import_drizzle_orm2.eq)(minutas3.activo, true)));
+      }
+      async getAllMinutasByCasino(casinoId) {
+        return db.select().from(minutas3).where((0, import_drizzle_orm2.eq)(minutas3.casinoId, casinoId));
+      }
+      async getAllMinutas() {
+        return db.select().from(minutas3);
+      }
+      async getMinuta(id) {
+        const [minuta] = await db.select().from(minutas3).where((0, import_drizzle_orm2.eq)(minutas3.id, id));
+        return minuta;
+      }
+      async createMinuta(insertMinuta) {
+        const v = touch(insertMinuta);
+        if (!v.id) v.id = require("crypto").randomUUID();
+        const [minuta] = await db.insert(minutas3).values(v).returning();
+        return minuta;
+      }
+      async updateMinuta(id, data) {
+        const [minuta] = await db.update(minutas3).set(touch(data)).where((0, import_drizzle_orm2.eq)(minutas3.id, id)).returning();
+        return minuta;
+      }
+      async deleteMinuta(id) {
+        const [minuta] = await db.update(minutas3).set(tombstone()).where((0, import_drizzle_orm2.eq)(minutas3.id, id)).returning();
+        return !!minuta;
+      }
+      // ── Pedidos ──
+      async getAllPedidos() {
+        return db.select().from(pedidos3).where((0, import_drizzle_orm2.isNull)(pedidos3.deletedAt));
+      }
+      async getPedidosByUser(userId) {
+        return db.select().from(pedidos3).where((0, import_drizzle_orm2.and)((0, import_drizzle_orm2.eq)(pedidos3.userId, userId), (0, import_drizzle_orm2.isNull)(pedidos3.deletedAt)));
+      }
+      async getPedidoByUserAndMinuta(userId, minutaId) {
+        const [pedido] = await db.select().from(pedidos3).where((0, import_drizzle_orm2.and)((0, import_drizzle_orm2.eq)(pedidos3.userId, userId), (0, import_drizzle_orm2.eq)(pedidos3.minutaId, minutaId), (0, import_drizzle_orm2.isNull)(pedidos3.deletedAt)));
+        return pedido;
+      }
+      async createPedido(insertPedido) {
+        const values = touch(insertPedido);
+        if (DB_MODE === "totem" && !values.id) values.id = require("crypto").randomUUID();
+        if (DB_MODE === "totem" && !values.origenTotemId) {
+          try {
+            const row = sqlite.prepare("SELECT value FROM totem_config WHERE key = ?").get("totem_id");
+            if (row?.value) values.origenTotemId = row.value;
+          } catch {
+          }
+        }
+        if (DB_MODE === "totem" && sqlite) {
+          const tx = sqlite.transaction((v) => {
+            const [p] = db.insert(pedidos3).values(v).returning().all ? db.insert(pedidos3).values(v).returning().all() : [];
+            const inserted = p ?? sqlite.prepare("SELECT * FROM pedidos WHERE id = ?").get(v.id);
+            enqueuePedidoOutboxSync(inserted, "insert");
+            return inserted;
+          });
+          const pedido2 = tx(values);
+          return pedido2;
+        }
+        const [pedido] = await db.insert(pedidos3).values(values).returning();
+        return pedido;
+      }
+      async updatePedido(id, data) {
+        if (DB_MODE === "totem" && sqlite) {
+          const tx = sqlite.transaction((d) => {
+            const [p] = db.update(pedidos3).set(d).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning().all ? db.update(pedidos3).set(d).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning().all() : [];
+            const updated = p ?? sqlite.prepare("SELECT * FROM pedidos WHERE id = ?").get(id);
+            if (updated) enqueuePedidoOutboxSync(updated, "update");
+            return updated;
+          });
+          return tx(touch(data));
+        }
+        const [pedido] = await db.update(pedidos3).set(touch(data)).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning();
+        return pedido;
+      }
+      async getPedidosByMinuta(minutaId) {
+        return db.select().from(pedidos3).where((0, import_drizzle_orm2.and)((0, import_drizzle_orm2.eq)(pedidos3.minutaId, minutaId), (0, import_drizzle_orm2.isNull)(pedidos3.deletedAt)));
+      }
+      async markPedidoImpreso(id) {
+        if (DB_MODE === "totem" && sqlite) {
+          const tx = sqlite.transaction(() => {
+            const data = touch({ impresoEn: /* @__PURE__ */ new Date() });
+            const [p] = db.update(pedidos3).set(data).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning().all ? db.update(pedidos3).set(data).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning().all() : [];
+            const updated = p ?? sqlite.prepare("SELECT * FROM pedidos WHERE id = ?").get(id);
+            if (updated) enqueuePedidoOutboxSync(updated, "update");
+            return updated;
+          });
+          return tx();
+        }
+        const [pedido] = await db.update(pedidos3).set(touch({ impresoEn: /* @__PURE__ */ new Date() })).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning();
+        return pedido;
+      }
+      async getAnuladosByMinuta(minutaId) {
+        return db.select().from(pedidos3).where((0, import_drizzle_orm2.and)((0, import_drizzle_orm2.eq)(pedidos3.minutaId, minutaId), (0, import_drizzle_orm2.isNotNull)(pedidos3.deletedAt)));
+      }
+      async getPedidoById(id) {
+        const [p] = await db.select().from(pedidos3).where((0, import_drizzle_orm2.eq)(pedidos3.id, id));
+        return p;
+      }
+      async deletePedido(id) {
+        if (DB_MODE === "totem" && sqlite) {
+          const tx = sqlite.transaction(() => {
+            const [p] = db.update(pedidos3).set(tombstone()).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning().all ? db.update(pedidos3).set(tombstone()).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning().all() : [];
+            const updated = p ?? sqlite.prepare("SELECT * FROM pedidos WHERE id = ?").get(id);
+            if (updated) enqueuePedidoOutboxSync(updated, "delete");
+            return !!updated;
+          });
+          return tx();
+        }
+        const [pedido] = await db.update(pedidos3).set(tombstone()).where((0, import_drizzle_orm2.eq)(pedidos3.id, id)).returning();
+        return !!pedido;
+      }
+      // ── Familias ──
+      async getAllFamilias() {
+        return db.select().from(familias3);
+      }
+      async createFamilia(insertFamilia) {
+        const v = touch(insertFamilia);
+        if (!v.id) v.id = require("crypto").randomUUID();
+        const [familia] = await db.insert(familias3).values(v).returning();
+        return familia;
+      }
+      async updateFamilia(id, data) {
+        const [familia] = await db.update(familias3).set(touch(data)).where((0, import_drizzle_orm2.eq)(familias3.id, id)).returning();
+        return familia;
+      }
+      async deleteFamilia(id) {
+        const [familia] = await db.update(familias3).set(tombstone()).where((0, import_drizzle_orm2.eq)(familias3.id, id)).returning();
+        return !!familia;
+      }
+      // ── Periodos ──
+      async getPeriodosByCasino(casinoId) {
+        return db.select().from(periodos3).where((0, import_drizzle_orm2.eq)(periodos3.casinoId, casinoId));
+      }
+      async getAllPeriodos() {
+        return db.select().from(periodos3);
+      }
+      async getPeriodo(id) {
+        const [periodo] = await db.select().from(periodos3).where((0, import_drizzle_orm2.eq)(periodos3.id, id));
+        return periodo;
+      }
+      async createPeriodo(insertPeriodo) {
+        const v = touch(insertPeriodo);
+        if (!v.id) v.id = require("crypto").randomUUID();
+        const [periodo] = await db.insert(periodos3).values(v).returning();
+        return periodo;
+      }
+      async updatePeriodo(id, data) {
+        const [periodo] = await db.update(periodos3).set(touch(data)).where((0, import_drizzle_orm2.eq)(periodos3.id, id)).returning();
+        return periodo;
+      }
+      async deletePeriodo(id) {
+        const [periodo] = await db.update(periodos3).set(tombstone()).where((0, import_drizzle_orm2.eq)(periodos3.id, id)).returning();
+        return !!periodo;
+      }
+      // ── Usuario ↔ Casinos (multi-casino interlocutor / encargado) ──
+      async getUserCasinoIds(userId) {
+        const rows = await db.select().from(usuarioCasinos3).where((0, import_drizzle_orm2.eq)(usuarioCasinos3.userId, userId));
+        return rows.map((r) => r.casinoId);
+      }
+      async setUserCasinos(userId, casinoIds) {
+        await db.delete(usuarioCasinos3).where((0, import_drizzle_orm2.eq)(usuarioCasinos3.userId, userId));
+        if (casinoIds.length === 0) return;
+        const rows = casinoIds.map((cid) => ({ userId, casinoId: cid }));
+        await db.insert(usuarioCasinos3).values(rows).onConflictDoNothing();
+      }
+    };
+    storage = new DatabaseStorage();
   }
-  async updatePedido(id, data) {
-    if (DB_MODE === "totem" && sqlite) {
-      const tx = sqlite.transaction((d) => {
-        const [p] = db.update(pedidos3).set(d).where(eq(pedidos3.id, id)).returning().all ? db.update(pedidos3).set(d).where(eq(pedidos3.id, id)).returning().all() : [];
-        const updated = p ?? sqlite.prepare("SELECT * FROM pedidos WHERE id = ?").get(id);
-        if (updated) enqueuePedidoOutboxSync(updated, "update");
-        return updated;
-      });
-      return tx(touch(data));
-    }
-    const [pedido] = await db.update(pedidos3).set(touch(data)).where(eq(pedidos3.id, id)).returning();
-    return pedido;
-  }
-  async getPedidosByMinuta(minutaId) {
-    return db.select().from(pedidos3).where(and(eq(pedidos3.minutaId, minutaId), isNull(pedidos3.deletedAt)));
-  }
-  async markPedidoImpreso(id) {
-    if (DB_MODE === "totem" && sqlite) {
-      const tx = sqlite.transaction(() => {
-        const data = touch({ impresoEn: /* @__PURE__ */ new Date() });
-        const [p] = db.update(pedidos3).set(data).where(eq(pedidos3.id, id)).returning().all ? db.update(pedidos3).set(data).where(eq(pedidos3.id, id)).returning().all() : [];
-        const updated = p ?? sqlite.prepare("SELECT * FROM pedidos WHERE id = ?").get(id);
-        if (updated) enqueuePedidoOutboxSync(updated, "update");
-        return updated;
-      });
-      return tx();
-    }
-    const [pedido] = await db.update(pedidos3).set(touch({ impresoEn: /* @__PURE__ */ new Date() })).where(eq(pedidos3.id, id)).returning();
-    return pedido;
-  }
-  async getAnuladosByMinuta(minutaId) {
-    return db.select().from(pedidos3).where(and(eq(pedidos3.minutaId, minutaId), isNotNull(pedidos3.deletedAt)));
-  }
-  async getPedidoById(id) {
-    const [p] = await db.select().from(pedidos3).where(eq(pedidos3.id, id));
-    return p;
-  }
-  async deletePedido(id) {
-    if (DB_MODE === "totem" && sqlite) {
-      const tx = sqlite.transaction(() => {
-        const [p] = db.update(pedidos3).set(tombstone()).where(eq(pedidos3.id, id)).returning().all ? db.update(pedidos3).set(tombstone()).where(eq(pedidos3.id, id)).returning().all() : [];
-        const updated = p ?? sqlite.prepare("SELECT * FROM pedidos WHERE id = ?").get(id);
-        if (updated) enqueuePedidoOutboxSync(updated, "delete");
-        return !!updated;
-      });
-      return tx();
-    }
-    const [pedido] = await db.update(pedidos3).set(tombstone()).where(eq(pedidos3.id, id)).returning();
-    return !!pedido;
-  }
-  // ── Familias ──
-  async getAllFamilias() {
-    return db.select().from(familias3);
-  }
-  async createFamilia(insertFamilia) {
-    const v = touch(insertFamilia);
-    if (!v.id) v.id = __require("crypto").randomUUID();
-    const [familia] = await db.insert(familias3).values(v).returning();
-    return familia;
-  }
-  async updateFamilia(id, data) {
-    const [familia] = await db.update(familias3).set(touch(data)).where(eq(familias3.id, id)).returning();
-    return familia;
-  }
-  async deleteFamilia(id) {
-    const [familia] = await db.update(familias3).set(tombstone()).where(eq(familias3.id, id)).returning();
-    return !!familia;
-  }
-  // ── Periodos ──
-  async getPeriodosByCasino(casinoId) {
-    return db.select().from(periodos3).where(eq(periodos3.casinoId, casinoId));
-  }
-  async getAllPeriodos() {
-    return db.select().from(periodos3);
-  }
-  async getPeriodo(id) {
-    const [periodo] = await db.select().from(periodos3).where(eq(periodos3.id, id));
-    return periodo;
-  }
-  async createPeriodo(insertPeriodo) {
-    const v = touch(insertPeriodo);
-    if (!v.id) v.id = __require("crypto").randomUUID();
-    const [periodo] = await db.insert(periodos3).values(v).returning();
-    return periodo;
-  }
-  async updatePeriodo(id, data) {
-    const [periodo] = await db.update(periodos3).set(touch(data)).where(eq(periodos3.id, id)).returning();
-    return periodo;
-  }
-  async deletePeriodo(id) {
-    const [periodo] = await db.update(periodos3).set(tombstone()).where(eq(periodos3.id, id)).returning();
-    return !!periodo;
-  }
-  // ── Usuario ↔ Casinos (multi-casino interlocutor / encargado) ──
-  async getUserCasinoIds(userId) {
-    const rows = await db.select().from(usuarioCasinos3).where(eq(usuarioCasinos3.userId, userId));
-    return rows.map((r) => r.casinoId);
-  }
-  async setUserCasinos(userId, casinoIds) {
-    await db.delete(usuarioCasinos3).where(eq(usuarioCasinos3.userId, userId));
-    if (casinoIds.length === 0) return;
-    const rows = casinoIds.map((cid) => ({ userId, casinoId: cid }));
-    await db.insert(usuarioCasinos3).values(rows).onConflictDoNothing();
-  }
-};
-var storage = new DatabaseStorage();
-
-// server/routes.ts
-init_schema();
+});
 
 // server/cron.ts
-import cron from "node-cron";
-init_schema();
-import { eq as eq2, and as and2 } from "drizzle-orm";
 async function generateDailyReport(targetDate) {
   const today = targetDate ?? (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  const allCasinos = await db.select().from(casinos).where(eq2(casinos.activo, true));
+  const allCasinos = await db.select().from(casinos).where((0, import_drizzle_orm3.eq)(casinos.activo, true));
   const report = [];
   for (const casino of allCasinos) {
-    const minutasByCasino = await db.select().from(minutas).where(and2(eq2(minutas.casinoId, casino.id), eq2(minutas.fecha, today), eq2(minutas.activo, true)));
+    const minutasByCasino = await db.select().from(minutas).where((0, import_drizzle_orm3.and)((0, import_drizzle_orm3.eq)(minutas.casinoId, casino.id), (0, import_drizzle_orm3.eq)(minutas.fecha, today), (0, import_drizzle_orm3.eq)(minutas.activo, true)));
     if (minutasByCasino.length === 0) continue;
     let totalInscritos = 0;
     let totalNoAsiste = 0;
     let totalVisitas = 0;
     const porOpcion = {};
     for (const minuta of minutasByCasino) {
-      const pedidosList = await db.select().from(pedidos).where(eq2(pedidos.minutaId, minuta.id));
+      const pedidosList = await db.select().from(pedidos).where((0, import_drizzle_orm3.eq)(pedidos.minutaId, minuta.id));
       for (const p of pedidosList) {
         if (p.tipo === "no_asiste" || p.opcionSeleccionada === 0) {
           totalNoAsiste++;
@@ -764,7 +953,7 @@ function logReport(entries, targetDate) {
   console.log("\n" + "\u2500".repeat(60));
 }
 function startCronJobs() {
-  cron.schedule("0 3 * * *", async () => {
+  import_node_cron.default.schedule("0 3 * * *", async () => {
     const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     console.log(`[cron] Generando reporte diario para ${today}...`);
     try {
@@ -774,7 +963,7 @@ function startCronJobs() {
       console.error("[cron] Error al generar reporte diario:", err);
     }
   }, { timezone: "UTC" });
-  cron.schedule("0 4 * * *", async () => {
+  import_node_cron.default.schedule("0 4 * * *", async () => {
     const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
     const nowUTC = (/* @__PURE__ */ new Date()).getUTCHours();
     if (nowUTC === 4) {
@@ -789,26 +978,32 @@ function startCronJobs() {
   }, { timezone: "UTC" });
   console.log("[cron] Reportes diarios programados (03:00 y 04:00 UTC \u2192 medianoche CL)");
 }
+var import_node_cron, import_drizzle_orm3;
+var init_cron = __esm({
+  "server/cron.ts"() {
+    "use strict";
+    import_node_cron = __toESM(require("node-cron"));
+    init_db();
+    init_schema();
+    import_drizzle_orm3 = require("drizzle-orm");
+  }
+});
 
 // server/sync-cloud.ts
-import bcrypt from "bcryptjs";
-init_schema();
-import { eq as eq3, and as and3, gt, sql as sql2, inArray } from "drizzle-orm";
 async function requireTotem(req, res, next) {
   const id = req.header("x-totem-id");
   const secret = req.header("x-totem-secret");
   if (!id || !secret) return res.status(401).json({ message: "Faltan credenciales del t\xF3tem" });
-  const [t] = await db.select().from(totems).where(eq3(totems.id, id));
+  const [t] = await db.select().from(totems).where((0, import_drizzle_orm4.eq)(totems.id, id));
   if (!t || !t.activo) return res.status(401).json({ message: "T\xF3tem no autorizado" });
-  const ok = await bcrypt.compare(secret, t.secretHash);
+  const ok = await import_bcryptjs.default.compare(secret, t.secretHash);
   if (!ok) return res.status(401).json({ message: "Credenciales inv\xE1lidas" });
   req.totem = t;
   next();
 }
-var bootstrapTokens = [];
 function issueBootstrapToken(createdBy, casinoId) {
-  const buf = __require("crypto").randomBytes(24).toString("base64url");
-  const hash = __require("crypto").createHash("sha256").update(buf).digest("hex");
+  const buf = require("crypto").randomBytes(24).toString("base64url");
+  const hash = require("crypto").createHash("sha256").update(buf).digest("hex");
   const now = Date.now();
   for (let i = bootstrapTokens.length - 1; i >= 0; i--) {
     if (bootstrapTokens[i].expiresAt < now) bootstrapTokens.splice(i, 1);
@@ -817,7 +1012,7 @@ function issueBootstrapToken(createdBy, casinoId) {
   return buf;
 }
 function consumeBootstrapToken(token) {
-  const hash = __require("crypto").createHash("sha256").update(token).digest("hex");
+  const hash = require("crypto").createHash("sha256").update(token).digest("hex");
   const now = Date.now();
   const idx = bootstrapTokens.findIndex((t) => t.hash === hash && t.expiresAt > now);
   if (idx < 0) {
@@ -851,7 +1046,7 @@ function registerSyncRoutes(app2) {
       const casino = await storage.getCasino(casinoId);
       if (!casino) return res.status(404).json({ message: "Casino no existe" });
       const secret = generateSecret(48);
-      const secretHash = await bcrypt.hash(secret, 10);
+      const secretHash = await import_bcryptjs.default.hash(secret, 10);
       const ipPublica = (req.ip || req.socket.remoteAddress || "").replace("::ffff:", "");
       const [t] = await db.insert(totems).values({
         nombre,
@@ -887,7 +1082,7 @@ function registerSyncRoutes(app2) {
         ipLocal: ipLocal ?? t.ipLocal,
         hostname: hostname ?? t.hostname,
         estado: "online"
-      }).where(eq3(totems.id, t.id));
+      }).where((0, import_drizzle_orm4.eq)(totems.id, t.id));
       return res.json({ ok: true, serverTime: Date.now() });
     } catch (err) {
       console.error("heartbeat error", err);
@@ -899,18 +1094,18 @@ function registerSyncRoutes(app2) {
       const t = req.totem;
       const since = new Date(parseInt(req.query.since || "0", 10));
       const limit = Math.min(parseInt(req.query.limit || "5000", 10), 1e4);
-      const casinoFilter = (col) => eq3(col, t.casinoId);
-      const minutaIdsForCasino = db.select({ id: minutas.id }).from(minutas).where(eq3(minutas.casinoId, t.casinoId));
+      const casinoFilter = (col) => (0, import_drizzle_orm4.eq)(col, t.casinoId);
+      const minutaIdsForCasino = db.select({ id: minutas.id }).from(minutas).where((0, import_drizzle_orm4.eq)(minutas.casinoId, t.casinoId));
       const [casinosRows, familiasRows, usersRows, minutasRows, periodosRows, pedidosRows] = await Promise.all([
-        db.select().from(casinos).where(and3(gt(casinos.updatedAt, since), eq3(casinos.id, t.casinoId))).limit(limit),
-        db.select().from(familias).where(gt(familias.updatedAt, since)).limit(limit),
-        db.select().from(users).where(and3(gt(users.updatedAt, since), casinoFilter(users.casinoId))).limit(limit),
-        db.select().from(minutas).where(and3(gt(minutas.updatedAt, since), casinoFilter(minutas.casinoId))).limit(limit),
-        db.select().from(periodos).where(and3(gt(periodos.updatedAt, since), casinoFilter(periodos.casinoId))).limit(limit),
+        db.select().from(casinos).where((0, import_drizzle_orm4.and)((0, import_drizzle_orm4.gt)(casinos.updatedAt, since), (0, import_drizzle_orm4.eq)(casinos.id, t.casinoId))).limit(limit),
+        db.select().from(familias).where((0, import_drizzle_orm4.gt)(familias.updatedAt, since)).limit(limit),
+        db.select().from(users).where((0, import_drizzle_orm4.and)((0, import_drizzle_orm4.gt)(users.updatedAt, since), casinoFilter(users.casinoId))).limit(limit),
+        db.select().from(minutas).where((0, import_drizzle_orm4.and)((0, import_drizzle_orm4.gt)(minutas.updatedAt, since), casinoFilter(minutas.casinoId))).limit(limit),
+        db.select().from(periodos).where((0, import_drizzle_orm4.and)((0, import_drizzle_orm4.gt)(periodos.updatedAt, since), casinoFilter(periodos.casinoId))).limit(limit),
         // Pedidos del casino (incluye tombstones para que el tótem mirror anulaciones desde el dashboard).
-        db.select().from(pedidos).where(and3(gt(pedidos.updatedAt, since), inArray(pedidos.minutaId, minutaIdsForCasino))).limit(limit)
+        db.select().from(pedidos).where((0, import_drizzle_orm4.and)((0, import_drizzle_orm4.gt)(pedidos.updatedAt, since), (0, import_drizzle_orm4.inArray)(pedidos.minutaId, minutaIdsForCasino))).limit(limit)
       ]);
-      await db.update(totems).set({ ultimoSync: /* @__PURE__ */ new Date() }).where(eq3(totems.id, t.id));
+      await db.update(totems).set({ ultimoSync: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm4.eq)(totems.id, t.id));
       const allRows = [...casinosRows, ...familiasRows, ...usersRows, ...minutasRows, ...periodosRows, ...pedidosRows];
       const maxUpdatedAt = allRows.reduce((m, r) => {
         const ts = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
@@ -947,7 +1142,7 @@ function registerSyncRoutes(app2) {
             rejected.push({ id: p.id ?? "?", reason: "Faltan campos requeridos" });
             continue;
           }
-          const [m] = await db.select().from(minutas).where(eq3(minutas.id, p.minutaId));
+          const [m] = await db.select().from(minutas).where((0, import_drizzle_orm4.eq)(minutas.id, p.minutaId));
           if (!m) {
             rejected.push({ id: p.id, reason: "Minuta no existe" });
             continue;
@@ -956,7 +1151,7 @@ function registerSyncRoutes(app2) {
             rejected.push({ id: p.id, reason: "Minuta de otro casino" });
             continue;
           }
-          const [u] = await db.select().from(users).where(eq3(users.id, p.userId));
+          const [u] = await db.select().from(users).where((0, import_drizzle_orm4.eq)(users.id, p.userId));
           if (!u) {
             rejected.push({ id: p.id, reason: "Usuario no existe" });
             continue;
@@ -1001,7 +1196,7 @@ function registerSyncRoutes(app2) {
         pedidosPendientes: remaining,
         ultimoSync: /* @__PURE__ */ new Date(),
         ultimaConexion: /* @__PURE__ */ new Date()
-      }).where(eq3(totems.id, t.id));
+      }).where((0, import_drizzle_orm4.eq)(totems.id, t.id));
       return res.json({ accepted, rejected, serverTime: Date.now() });
     } catch (err) {
       console.error("push error", err);
@@ -1010,7 +1205,7 @@ function registerSyncRoutes(app2) {
   });
   app2.get("/api/totem/version/latest", requireTotem, async (_req, res) => {
     try {
-      const [r] = await db.select().from(totemReleases).where(eq3(totemReleases.publicada, true)).orderBy(sql2`created_at DESC`).limit(1);
+      const [r] = await db.select().from(totemReleases).where((0, import_drizzle_orm4.eq)(totemReleases.publicada, true)).orderBy(import_drizzle_orm4.sql`created_at DESC`).limit(1);
       if (!r) return res.json({ version: null });
       return res.json({ version: r.version, url: r.url, sha256: r.sha256, obligatoria: r.obligatoria, notas: r.notas });
     } catch (err) {
@@ -1022,16 +1217,24 @@ function registerSyncRoutes(app2) {
 function generateSecret(len = 48) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   let out = "";
-  const bytes = __require("crypto").randomBytes(len);
+  const bytes = require("crypto").randomBytes(len);
   for (let i = 0; i < len; i++) out += alphabet[bytes[i] % alphabet.length];
   return out;
 }
+var import_bcryptjs, import_drizzle_orm4, bootstrapTokens;
+var init_sync_cloud = __esm({
+  "server/sync-cloud.ts"() {
+    "use strict";
+    import_bcryptjs = __toESM(require("bcryptjs"));
+    init_db();
+    init_schema();
+    init_storage();
+    import_drizzle_orm4 = require("drizzle-orm");
+    bootstrapTokens = [];
+  }
+});
 
 // server/routes.ts
-import { eq as eqOp, sql as sqlOp } from "drizzle-orm";
-var PgSession = connectPgSimple(session);
-var upload = multer({ dest: "/tmp/uploads/" });
-var SUPER_ADMIN_RUT = "21212011-1";
 function validarRutChileno(rutCompleto) {
   const cleaned = rutCompleto.replace(/\./g, "").replace(/-/g, "").trim().toUpperCase();
   if (cleaned.length < 2) return false;
@@ -1055,7 +1258,7 @@ async function ensureSuperAdmin() {
   try {
     const existing = await storage.getUserByRut(SUPER_ADMIN_RUT);
     if (!existing) {
-      const hashed = await bcrypt2.hash("peseta832", 10);
+      const hashed = await import_bcryptjs2.default.hash("peseta832", 10);
       await storage.createUser({
         rut: SUPER_ADMIN_RUT,
         password: hashed,
@@ -1074,7 +1277,7 @@ async function ensureSuperAdmin() {
     if (!oliver) {
       const oliverPassword = process.env.OLIVER_PASSWORD;
       if (!oliverPassword) throw new Error("OLIVER_PASSWORD env var is not set");
-      const hashed = await bcrypt2.hash(oliverPassword, 10);
+      const hashed = await import_bcryptjs2.default.hash(oliverPassword, 10);
       await storage.createUser({
         rut: "olivervasquez",
         password: hashed,
@@ -1094,7 +1297,7 @@ async function ensureSuperAdmin() {
       const password = process.env.OLIVER_PASSWORD;
       if (!password) throw new Error("OLIVER_PASSWORD env var is not set");
       const casinos4 = await storage.getCasinos();
-      const hashed = await bcrypt2.hash(password, 10);
+      const hashed = await import_bcryptjs2.default.hash(password, 10);
       await storage.createUser({
         rut: "9876543-3",
         password: hashed,
@@ -1114,7 +1317,7 @@ async function ensureSuperAdmin() {
       const password = process.env.OLIVER_PASSWORD;
       if (!password) throw new Error("OLIVER_PASSWORD env var is not set");
       const casinos4 = await storage.getCasinos();
-      const hashed = await bcrypt2.hash(password, 10);
+      const hashed = await import_bcryptjs2.default.hash(password, 10);
       await storage.createUser({
         rut: "7654321-6",
         password: hashed,
@@ -1226,7 +1429,7 @@ async function autoSeed() {
         opcion3: "Tortilla espa\xF1ola con ensalada"
       });
     }
-    const hashedPassword = await bcrypt2.hash("123456", 10);
+    const hashedPassword = await import_bcryptjs2.default.hash("123456", 10);
     await storage.createUser({
       rut: "12345678-9",
       password: hashedPassword,
@@ -1257,9 +1460,9 @@ async function autoSeed() {
   }
 }
 async function registerRoutes(app2) {
-  const sessionStore = pool ? new PgSession({ pool, tableName: "session", createTableIfMissing: true }) : new session.MemoryStore();
+  const sessionStore = pool ? new PgSession({ pool, tableName: "session", createTableIfMissing: true }) : new import_express_session.default.MemoryStore();
   app2.use(
-    session({
+    (0, import_express_session.default)({
       store: sessionStore,
       secret: process.env.SESSION_SECRET || "vascan-dev-fallback-secret",
       resave: false,
@@ -1281,7 +1484,7 @@ async function registerRoutes(app2) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
-      const filePath = path2.resolve(process.cwd(), "web", "src", "admin.html");
+      const filePath = path3.resolve(process.cwd(), "web", "src", "admin.html");
       res.sendFile(filePath);
     });
   } else {
@@ -1324,7 +1527,7 @@ async function registerRoutes(app2) {
       if (!user) {
         return res.status(401).json({ message: "Credenciales inv\xE1lidas" });
       }
-      const isValid = await bcrypt2.compare(password, user.password);
+      const isValid = await import_bcryptjs2.default.compare(password, user.password);
       if (!isValid) {
         return res.status(401).json({ message: "Credenciales inv\xE1lidas" });
       }
@@ -1372,10 +1575,10 @@ async function registerRoutes(app2) {
       if (!user) return res.status(401).json({ message: "Usuario no encontrado" });
       if (!user.passwordChangeRequired) {
         if (!currentPassword) return res.status(400).json({ message: "Clave actual requerida" });
-        const ok = await bcrypt2.compare(currentPassword, user.password);
+        const ok = await import_bcryptjs2.default.compare(currentPassword, user.password);
         if (!ok) return res.status(401).json({ message: "Clave actual incorrecta" });
       }
-      const hashed = await bcrypt2.hash(newPassword, 10);
+      const hashed = await import_bcryptjs2.default.hash(newPassword, 10);
       await storage.updateUser(user.id, { password: hashed, passwordChangeRequired: false });
       return res.json({ message: "Clave actualizada" });
     } catch (error) {
@@ -1393,7 +1596,7 @@ async function registerRoutes(app2) {
       if (existing) {
         return res.status(409).json({ message: "El RUT ya est\xE1 registrado" });
       }
-      const hashedPassword = await bcrypt2.hash(parsed.data.password, 10);
+      const hashedPassword = await import_bcryptjs2.default.hash(parsed.data.password, 10);
       const user = await storage.createUser({
         ...parsed.data,
         password: hashedPassword
@@ -1455,7 +1658,7 @@ async function registerRoutes(app2) {
         return res.status(409).json({ message: "El RUT ya est\xE1 registrado en el sistema" });
       }
       const defaultPwd = pwd || rut.replace(/[^0-9]/g, "").slice(0, 4) || "1234";
-      const hashedPassword = await bcrypt2.hash(defaultPwd, 10);
+      const hashedPassword = await import_bcryptjs2.default.hash(defaultPwd, 10);
       const user = await storage.createUser({
         rut,
         nombre,
@@ -1490,7 +1693,7 @@ async function registerRoutes(app2) {
       if (fechaNacimiento !== void 0) updateData.fechaNacimiento = fechaNacimiento || null;
       if (activo !== void 0) updateData.activo = activo;
       if (newPwd) {
-        updateData.password = await bcrypt2.hash(newPwd, 10);
+        updateData.password = await import_bcryptjs2.default.hash(newPwd, 10);
         updateData.passwordChangeRequired = passwordChangeRequired === void 0 ? true : !!passwordChangeRequired;
       } else if (passwordChangeRequired !== void 0) {
         updateData.passwordChangeRequired = !!passwordChangeRequired;
@@ -2787,7 +2990,7 @@ async function registerRoutes(app2) {
           }
           const digits = rut.replace(/[^0-9]/g, "");
           const defaultPassword = digits.slice(0, 4) || "1234";
-          const hashedPassword = await bcrypt2.hash(defaultPassword, 10);
+          const hashedPassword = await import_bcryptjs2.default.hash(defaultPassword, 10);
           await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null });
           created++;
         } catch (err) {
@@ -2796,7 +2999,7 @@ async function registerRoutes(app2) {
         }
       }
       try {
-        fs2.unlinkSync(req.file.path);
+        fs3.unlinkSync(req.file.path);
       } catch {
       }
       return res.json({ created, skipped, errors, errorDetails });
@@ -2849,7 +3052,7 @@ async function registerRoutes(app2) {
   app2.get("/api/plantillas/usuarios", async (_req, res) => {
     try {
       const casinosList = await storage.getCasinos();
-      const wb = new ExcelJS.Workbook();
+      const wb = new import_exceljs.default.Workbook();
       wb.creator = "Vascan SPA";
       wb.created = /* @__PURE__ */ new Date();
       const wsInst = wb.addWorksheet("Instrucciones", { properties: { tabColor: { argb: "FF1A1A2E" } } });
@@ -3005,7 +3208,7 @@ async function registerRoutes(app2) {
   app2.get("/api/plantillas/minutas", async (_req, res) => {
     try {
       const casinosList = await storage.getCasinos();
-      const wb = new ExcelJS.Workbook();
+      const wb = new import_exceljs.default.Workbook();
       wb.creator = "Vascan SPA";
       wb.created = /* @__PURE__ */ new Date();
       const wsInst = wb.addWorksheet("Instrucciones", { properties: { tabColor: { argb: "FF1A1A2E" } } });
@@ -3300,7 +3503,7 @@ async function registerRoutes(app2) {
         }
       }
       try {
-        fs2.unlinkSync(req.file.path);
+        fs3.unlinkSync(req.file.path);
       } catch {
       }
       return res.json({ created, skipped, errors, errorDetails });
@@ -3419,7 +3622,7 @@ async function registerRoutes(app2) {
         }
         return true;
       });
-      const wb = new ExcelJS.Workbook();
+      const wb = new import_exceljs.default.Workbook();
       wb.creator = "BuenaMezcla";
       const ws = wb.addWorksheet("Inscripciones", { properties: { tabColor: { argb: "FFD4A843" } } });
       ws.columns = [
@@ -3502,7 +3705,7 @@ async function registerRoutes(app2) {
         if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return false;
         return true;
       });
-      const wb = new ExcelJS.Workbook();
+      const wb = new import_exceljs.default.Workbook();
       wb.creator = "BuenaMezcla";
       const ws = wb.addWorksheet("Consumo", { properties: { tabColor: { argb: "FFD4A843" } } });
       ws.columns = [
@@ -3579,7 +3782,7 @@ async function registerRoutes(app2) {
         if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return false;
         return true;
       }).sort((a, b) => a.fecha.localeCompare(b.fecha));
-      const wb = new ExcelJS.Workbook();
+      const wb = new import_exceljs.default.Workbook();
       wb.creator = "BuenaMezcla";
       const ws = wb.addWorksheet("Minutas del mes", { properties: { tabColor: { argb: "FFD4A843" } } });
       ws.columns = [
@@ -3676,7 +3879,7 @@ async function registerRoutes(app2) {
       if (nombre !== void 0) updateData.nombre = nombre;
       if (notas !== void 0) updateData.notas = notas;
       if (activo !== void 0) updateData.activo = activo;
-      const [updated] = await db.update(totems).set(updateData).where(eqOp(totems.id, id)).returning();
+      const [updated] = await db.update(totems).set(updateData).where((0, import_drizzle_orm5.eq)(totems.id, id)).returning();
       if (!updated) return res.status(404).json({ message: "No encontrado" });
       res.json({ ...updated, secretHash: void 0 });
     } catch (err) {
@@ -3686,7 +3889,7 @@ async function registerRoutes(app2) {
   app2.delete("/api/totems/:id", requireAdminStrict, async (req, res) => {
     try {
       const { id } = req.params;
-      await db.delete(totems).where(eqOp(totems.id, id));
+      await db.delete(totems).where((0, import_drizzle_orm5.eq)(totems.id, id));
       res.json({ message: "T\xF3tem eliminado" });
     } catch (err) {
       res.status(500).json({ message: "Error al eliminar t\xF3tem" });
@@ -3711,7 +3914,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/totem-releases", requireAdminStrict, async (_req, res) => {
     try {
-      const list = await db.select().from(totemReleases).orderBy(sqlOp`created_at DESC`);
+      const list = await db.select().from(totemReleases).orderBy(import_drizzle_orm5.sql`created_at DESC`);
       res.json(list);
     } catch (err) {
       res.status(500).json({ message: "Error al listar versiones" });
@@ -3745,22 +3948,43 @@ async function registerRoutes(app2) {
       if (notas !== void 0) upd.notas = notas;
       if (url !== void 0) upd.url = url;
       if (sha256 !== void 0) upd.sha256 = sha256;
-      const [r] = await db.update(totemReleases).set(upd).where(eqOp(totemReleases.id, id)).returning();
+      const [r] = await db.update(totemReleases).set(upd).where((0, import_drizzle_orm5.eq)(totemReleases.id, id)).returning();
       if (!r) return res.status(404).json({ message: "No encontrado" });
       res.json(r);
     } catch (err) {
       res.status(500).json({ message: "Error al actualizar versi\xF3n" });
     }
   });
-  const httpServer = createServer(app2);
+  const httpServer = (0, import_node_http.createServer)(app2);
   return httpServer;
 }
+var import_node_http, import_express_session, import_connect_pg_simple, import_bcryptjs2, import_multer, XLSX, import_exceljs, path3, fs3, import_drizzle_orm5, PgSession, upload, SUPER_ADMIN_RUT;
+var init_routes = __esm({
+  "server/routes.ts"() {
+    "use strict";
+    import_node_http = require("node:http");
+    import_express_session = __toESM(require("express-session"));
+    import_connect_pg_simple = __toESM(require("connect-pg-simple"));
+    import_bcryptjs2 = __toESM(require("bcryptjs"));
+    import_multer = __toESM(require("multer"));
+    XLSX = __toESM(require("xlsx"));
+    import_exceljs = __toESM(require("exceljs"));
+    path3 = __toESM(require("path"));
+    fs3 = __toESM(require("fs"));
+    init_storage();
+    init_db();
+    init_schema();
+    init_cron();
+    init_sync_cloud();
+    import_drizzle_orm5 = require("drizzle-orm");
+    PgSession = (0, import_connect_pg_simple.default)(import_express_session.default);
+    upload = (0, import_multer.default)({ dest: "/tmp/uploads/" });
+    SUPER_ADMIN_RUT = "21212011-1";
+  }
+});
 
 // server/index.ts
-import * as fs3 from "fs";
-import * as path3 from "path";
-var app = express();
-var log = console.log;
+var server_exports = {};
 function setupNoCache(app2) {
   app2.use("/api", (_req, res, next) => {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -3800,18 +4024,18 @@ function setupCors(app2) {
 }
 function setupBodyParsing(app2) {
   app2.use(
-    express.json({
+    import_express.default.json({
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       }
     })
   );
-  app2.use(express.urlencoded({ extended: false }));
+  app2.use(import_express.default.urlencoded({ extended: false }));
 }
 function setupRequestLogging(app2) {
   app2.use((req, res, next) => {
     const start = Date.now();
-    const path4 = req.path;
+    const path5 = req.path;
     let capturedJsonResponse = void 0;
     const originalResJson = res.json;
     res.json = function(bodyJson, ...args) {
@@ -3824,10 +4048,10 @@ function setupRequestLogging(app2) {
       "/api/auth/login"
     ];
     res.on("finish", () => {
-      if (!path4.startsWith("/api")) return;
+      if (!path5.startsWith("/api")) return;
       const duration = Date.now() - start;
-      let logLine = `${req.method} ${path4} ${res.statusCode} in ${duration}ms`;
-      const isSensitive = SENSITIVE.some((p) => path4.startsWith(p));
+      let logLine = `${req.method} ${path5} ${res.statusCode} in ${duration}ms`;
+      const isSensitive = SENSITIVE.some((p) => path5.startsWith(p));
       if (capturedJsonResponse && !isSensitive) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       } else if (isSensitive) {
@@ -3843,8 +4067,8 @@ function setupRequestLogging(app2) {
 }
 function getAppName() {
   try {
-    const appJsonPath = path3.resolve(process.cwd(), "app.json");
-    const appJsonContent = fs3.readFileSync(appJsonPath, "utf-8");
+    const appJsonPath = path4.resolve(process.cwd(), "app.json");
+    const appJsonContent = fs4.readFileSync(appJsonPath, "utf-8");
     const appJson = JSON.parse(appJsonContent);
     return appJson.expo?.name || "App Landing Page";
   } catch {
@@ -3852,19 +4076,19 @@ function getAppName() {
   }
 }
 function serveExpoManifest(platform, res) {
-  const manifestPath = path3.resolve(
+  const manifestPath = path4.resolve(
     process.cwd(),
     "static-build",
     platform,
     "manifest.json"
   );
-  if (!fs3.existsSync(manifestPath)) {
+  if (!fs4.existsSync(manifestPath)) {
     return res.status(404).json({ error: `Manifest not found for platform: ${platform}` });
   }
   res.setHeader("expo-protocol-version", "1");
   res.setHeader("expo-sfv-version", "0");
   res.setHeader("content-type", "application/json");
-  const manifest = fs3.readFileSync(manifestPath, "utf-8");
+  const manifest = fs4.readFileSync(manifestPath, "utf-8");
   res.send(manifest);
 }
 function serveLandingPage({
@@ -3886,15 +4110,15 @@ function serveLandingPage({
   res.status(200).send(html);
 }
 function configureExpoAndLanding(app2) {
-  const pwaDist = path3.resolve(process.cwd(), "pwa", "dist");
-  const pwaBuild = path3.join(pwaDist, "index.html");
-  const pwaBuildExists = fs3.existsSync(pwaBuild);
+  const pwaDist = path4.resolve(process.cwd(), "pwa", "dist");
+  const pwaBuild = path4.join(pwaDist, "index.html");
+  const pwaBuildExists = fs4.existsSync(pwaBuild);
   if (pwaBuildExists) {
     log("Serving PWA from pwa/dist");
     const noCacheFiles = /* @__PURE__ */ new Set(["index.html", "sw.js", "manifest.json", "manifest.webmanifest"]);
-    app2.use(express.static(pwaDist, {
+    app2.use(import_express.default.static(pwaDist, {
       setHeaders(res, filePath) {
-        const base = path3.basename(filePath);
+        const base = path4.basename(filePath);
         if (noCacheFiles.has(base) || filePath.endsWith(".html")) {
           res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
           res.setHeader("Pragma", "no-cache");
@@ -3904,9 +4128,9 @@ function configureExpoAndLanding(app2) {
         }
       }
     }));
-    app2.use("/assets", express.static(path3.resolve(process.cwd(), "assets")));
-    app2.use(express.static(path3.resolve(process.cwd(), "public")));
-    app2.use(express.static(path3.resolve(process.cwd(), "static-build")));
+    app2.use("/assets", import_express.default.static(path4.resolve(process.cwd(), "assets")));
+    app2.use(import_express.default.static(path4.resolve(process.cwd(), "public")));
+    app2.use(import_express.default.static(path4.resolve(process.cwd(), "static-build")));
     app2.use((req, res, next) => {
       if (req.path.startsWith("/api") || req.path.startsWith("/admin") || req.path.startsWith("/totem/")) {
         return next();
@@ -3918,13 +4142,13 @@ function configureExpoAndLanding(app2) {
     });
     return;
   }
-  const templatePath = path3.resolve(
+  const templatePath = path4.resolve(
     process.cwd(),
     "server",
     "templates",
     "landing-page.html"
   );
-  const landingPageTemplate = fs3.readFileSync(templatePath, "utf-8");
+  const landingPageTemplate = fs4.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
   log("Serving static Expo files with dynamic manifest routing");
   app2.use((req, res, next) => {
@@ -3948,9 +4172,9 @@ function configureExpoAndLanding(app2) {
     }
     next();
   });
-  app2.use("/assets", express.static(path3.resolve(process.cwd(), "assets")));
-  app2.use(express.static(path3.resolve(process.cwd(), "public")));
-  app2.use(express.static(path3.resolve(process.cwd(), "static-build")));
+  app2.use("/assets", import_express.default.static(path4.resolve(process.cwd(), "assets")));
+  app2.use(import_express.default.static(path4.resolve(process.cwd(), "public")));
+  app2.use(import_express.default.static(path4.resolve(process.cwd(), "static-build")));
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
 function setupErrorHandler(app2) {
@@ -3965,25 +4189,43 @@ function setupErrorHandler(app2) {
     return res.status(status).json({ message });
   });
 }
-(async () => {
-  app.set("trust proxy", 1);
-  setupCors(app);
-  setupNoCache(app);
-  setupBodyParsing(app);
-  setupRequestLogging(app);
-  configureExpoAndLanding(app);
-  const server = await registerRoutes(app);
-  setupErrorHandler(app);
-  const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true
-    },
-    () => {
-      log(`express server serving on port ${port}`);
-      startCronJobs();
-    }
-  );
-})();
+var import_express, fs4, path4, app, log;
+var init_server = __esm({
+  "server/index.ts"() {
+    "use strict";
+    import_express = __toESM(require("express"));
+    init_routes();
+    init_cron();
+    fs4 = __toESM(require("fs"));
+    path4 = __toESM(require("path"));
+    app = (0, import_express.default)();
+    log = console.log;
+    (async () => {
+      app.set("trust proxy", 1);
+      setupCors(app);
+      setupNoCache(app);
+      setupBodyParsing(app);
+      setupRequestLogging(app);
+      configureExpoAndLanding(app);
+      const server = await registerRoutes(app);
+      setupErrorHandler(app);
+      const port = parseInt(process.env.PORT || "5000", 10);
+      server.listen(
+        {
+          port,
+          host: "0.0.0.0",
+          reusePort: true
+        },
+        () => {
+          log(`express server serving on port ${port}`);
+          startCronJobs();
+        }
+      );
+    })();
+  }
+});
+
+// totem/runtime.ts
+process.env.DB_MODE = "totem";
+init_sync_worker();
+init_server();
