@@ -235,6 +235,17 @@ export default function Kiosk() {
   // Auto-return after 15s on QR screen (specific shorter timer).
   useIdleReset(reset, step === "qr" ? 15000 : 60000, step !== "login_rut");
 
+  // Cuenta regresiva visible en la pantalla del vale (15 → 0).
+  const [qrCountdown, setQrCountdown] = useState(15);
+  useEffect(() => {
+    if (step !== "qr") { setQrCountdown(15); return; }
+    setQrCountdown(15);
+    const iv = window.setInterval(() => {
+      setQrCountdown((s) => (s > 0 ? s - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(iv);
+  }, [step]);
+
   // Auto-impresión del vale al llegar al paso QR. La impresora térmica USB
   // del tótem está configurada en Chrome `--kiosk-printing` para imprimir
   // sin diálogo. El layout imprimible vive en el div `.print-vale` al final
@@ -990,24 +1001,21 @@ export default function Kiosk() {
         )}
 
         {step === "qr" && qrCode && qrMeta && (
-          <div className="flex flex-col items-center gap-5 max-w-2xl">
+          <div className="flex flex-col items-center gap-6 max-w-2xl">
+            <div className="w-28 h-28 rounded-full bg-green-500/15 border-2 border-green-500/40 flex items-center justify-center">
+              <Check className="w-16 h-16 text-green-400" />
+            </div>
             <div className="text-center">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/15 text-green-400 text-sm font-semibold mb-3">
-                <Check className="w-4 h-4" /> Inscripción confirmada
-              </div>
-              <h2 className="text-3xl font-bold">¡Listo, {qrMeta.nombre.split(" ")[0]}!</h2>
-              <p className="text-white/60 mt-1">Muestra este código al recibir tu comida</p>
+              <h2 className="text-4xl font-bold">¡Listo, {qrMeta.nombre.split(" ")[0]}!</h2>
+              <p className="text-white/60 mt-2 text-lg">Tu vale ya se imprimió. Retíralo y acércate al casino.</p>
             </div>
-            <div className="bg-white p-5 rounded-2xl">
-              <QRCodeSVG value={qrCode} size={320} level="M" />
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 w-full text-center">
+            <div className="bg-white/5 border border-white/10 rounded-2xl px-8 py-6 w-full text-center">
               <p className="text-vascan-goldLight text-sm uppercase tracking-wide">{qrMeta.familia}</p>
-              <p className="text-white text-xl font-semibold mt-1">{qrMeta.opcion}</p>
-              <p className="text-white/40 text-xs mt-2 font-mono">{qrMeta.rut}</p>
+              <p className="text-white text-2xl font-semibold mt-2">{qrMeta.opcion}</p>
             </div>
-            <p className="text-white/40 text-sm">El vale se imprimió. Retira tu copia y acércate al casino.</p>
-            <p className="text-white/30 text-xs">Esta pantalla se cerrará automáticamente.</p>
+            <p className="text-white/50 text-base">
+              Volviendo a la pantalla principal en <span className="text-vascan-gold font-bold text-xl">{qrCountdown}s</span>
+            </p>
           </div>
         )}
 

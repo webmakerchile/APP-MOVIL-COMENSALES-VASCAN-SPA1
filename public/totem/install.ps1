@@ -202,10 +202,10 @@ goto waitloop
 set "CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 if not exist "%CHROME%" set "CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
 if exist "%CHROME%" (
-  start "" "%CHROME%" --kiosk --no-first-run --noerrdialogs --disable-translate --disable-pinch --user-data-dir="%PROFILE%" "%URL%"
+  start "" "%CHROME%" --kiosk --kiosk-printing --no-first-run --noerrdialogs --disable-translate --disable-pinch --user-data-dir="%PROFILE%" "%URL%"
 ) else (
   set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
-  if exist "%EDGE%" start "" "%EDGE%" --kiosk "%URL%" --edge-kiosk-type=fullscreen --no-first-run
+  if exist "%EDGE%" start "" "%EDGE%" --kiosk --kiosk-printing "%URL%" --edge-kiosk-type=fullscreen --no-first-run
 )
 "@ | Set-Content -Encoding ASCII $kioskCmd
 
