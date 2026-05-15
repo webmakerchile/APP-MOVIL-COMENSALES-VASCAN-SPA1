@@ -312,14 +312,11 @@ export default function Kiosk() {
         : null;
       setCasino(casinoData);
 
-      // ¿Cambio de clave forzado en primer login? (Independiente del toggle del casino:
-      // el toggle solo controla si el botón "Cambio de clave" está disponible
-      // como acción opcional dentro del menú staff.)
-      if (u!.passwordChangeRequired) {
-        setStep("change_pwd");
-        setBusy(false);
-        return;
-      }
+      // Cambio de clave forzado DESHABILITADO en el tótem por decisión del cliente:
+      // la clave del comensal es siempre los primeros 4 dígitos de su RUT y no
+      // necesita cambiarse. Se ignora `passwordChangeRequired` aquí. (El botón
+      // opcional "Cambio de clave" del menú staff sigue disponible si el casino
+      // tiene `permitirCambioClaveTotem` activo.)
 
       // Roles staff → menú con 5 botones (Vale propio, Vale visita, Cambio
       // de clave, Resumen del día, Reimpresión).
