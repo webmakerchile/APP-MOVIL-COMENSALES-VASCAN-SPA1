@@ -1256,6 +1256,25 @@ async function autoSeed() {
     console.error("Auto-seed error:", err);
   }
 }
+async function backfillRutPasswords() {
+  try {
+    const all = await storage.getAllUsers();
+    const targets = all.filter((u) => u.passwordChangeRequired && u.rut !== "21212011-1");
+    if (targets.length === 0) return;
+    console.log(`[migration] backfilling RUT-based passwords for ${targets.length} usuarios...`);
+    let ok = 0;
+    for (const u of targets) {
+      const digits = (u.rut || "").replace(/[^0-9]/g, "");
+      if (digits.length < 4) continue;
+      const hashed = await bcrypt2.hash(digits.slice(0, 4), 10);
+      await storage.updateUser(u.id, { password: hashed, passwordChangeRequired: false });
+      ok++;
+    }
+    console.log(`[migration] backfill OK: ${ok}/${targets.length}`);
+  } catch (err) {
+    console.error("[migration] backfill error:", err);
+  }
+}
 async function registerRoutes(app2) {
   const sessionStore = pool ? new PgSession({ pool, tableName: "session", createTableIfMissing: true }) : new session.MemoryStore();
   app2.use(
@@ -1275,6 +1294,7 @@ async function registerRoutes(app2) {
   if (process.env.DB_MODE !== "totem") {
     await autoSeed();
     await ensureSuperAdmin();
+    await backfillRutPasswords();
   }
   if (process.env.DB_MODE !== "totem") {
     app2.get("/admin", (_req, res) => {
@@ -1465,7 +1485,7 @@ async function registerRoutes(app2) {
         role: role || "comensal",
         casinoId: casinoId || null,
         fechaNacimiento: fechaNacimiento || null,
-        passwordChangeRequired: true
+        passwordChangeRequired: false
       });
       if (Array.isArray(casinoIds) && casinoIds.length > 0) {
         await storage.setUserCasinos(user.id, casinoIds);
@@ -1491,7 +1511,7 @@ async function registerRoutes(app2) {
       if (activo !== void 0) updateData.activo = activo;
       if (newPwd) {
         updateData.password = await bcrypt2.hash(newPwd, 10);
-        updateData.passwordChangeRequired = passwordChangeRequired === void 0 ? true : !!passwordChangeRequired;
+        updateData.passwordChangeRequired = passwordChangeRequired === void 0 ? false : !!passwordChangeRequired;
       } else if (passwordChangeRequired !== void 0) {
         updateData.passwordChangeRequired = !!passwordChangeRequired;
       }
@@ -2788,7 +2808,7 @@ async function registerRoutes(app2) {
           const digits = rut.replace(/[^0-9]/g, "");
           const defaultPassword = digits.slice(0, 4) || "1234";
           const hashedPassword = await bcrypt2.hash(defaultPassword, 10);
-          await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null });
+          await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null, passwordChangeRequired: false });
           created++;
         } catch (err) {
           errorDetails.push({ row: rowNum, error: err.message || "Error desconocido" });
