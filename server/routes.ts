@@ -530,7 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: role || "comensal",
         casinoId: casinoId || null,
         fechaNacimiento: fechaNacimiento || null,
-        passwordChangeRequired: true,
+        passwordChangeRequired: false,
       } as any);
 
       if (Array.isArray(casinoIds) && casinoIds.length > 0) {
@@ -560,8 +560,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (activo !== undefined) updateData.activo = activo;
       if (newPwd) {
         updateData.password = await bcrypt.hash(newPwd, 10);
-        // si admin resetea clave, forzar cambio en próximo login (a menos que se pase explícito)
-        updateData.passwordChangeRequired = passwordChangeRequired === undefined ? true : !!passwordChangeRequired;
+        // Cliente decidió: la clave es siempre los 4 primeros dígitos del RUT,
+        // no se fuerza cambio en próximo login.
+        updateData.passwordChangeRequired = passwordChangeRequired === undefined ? false : !!passwordChangeRequired;
       } else if (passwordChangeRequired !== undefined) {
         updateData.passwordChangeRequired = !!passwordChangeRequired;
       }
@@ -2054,7 +2055,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const defaultPassword = digits.slice(0, 4) || "1234";
           const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-          await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null });
+          await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null, passwordChangeRequired: false } as any);
           created++;
         } catch (err: any) {
           errorDetails.push({ row: rowNum, error: err.message || "Error desconocido" });
