@@ -1,0 +1,85 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> Get-Content C:\BuenaMezcla\package.json | Select-String version; Write-Host "---"; Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" | Select-Object Name, ProcessId, CommandLine | Format-List
+
+  "version": "1.0.1",
+---
+
+
+
+
+Name        : chrome.exe
+ProcessId   : 4960
+CommandLine : "C:\Program Files\Google\Chrome\Application\chrome.exe" --single-argument http://127.0.0.1:5000/kiosk
+
+Name        : chrome.exe
+ProcessId   : 8436
+CommandLine : "C:\Program Files\Google\Chrome\Application\chrome.exe" --type=crashpad-handler
+              "--user-data-dir=C:\Users\buena\AppData\Local\Google\Chrome\User Data" /prefetch:4
+              --monitor-self-annotation=ptype=crashpad-handler
+              "--database=C:\Users\buena\AppData\Local\Google\Chrome\User Data\Crashpad"
+              "--metrics-dir=C:\Users\buena\AppData\Local\Google\Chrome\User Data"
+              --url=https://clients2.google.com/cr/report --annotation=channel= --annotation=plat=Win64
+              --annotation=prod=Chrome --annotation=ver=148.0.7778.168
+              --initial-client-data=0x214,0x218,0x21c,0x1f0,0x220,0x7ffa70c5d9c0,0x7ffa70c5d9cc,0x7ffa70c5d9d8
+
+Name        : chrome.exe
+ProcessId   : 9744
+CommandLine : "C:\Program Files\Google\Chrome\Application\chrome.exe" --type=gpu-process --no-pre-read-main-dll --gpu-p
+              references=SAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAAQAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAA
+              AACAAAAAAAAAAIAAAAAAAAAA== --metrics-shmem-handle=1824,i,17778723782459406286,814962564166474113,262144
+              --field-trial-handle=2000,i,2142226354344164471,930393000301624528,262144
+              --variations-seed-version=20260514-170130.285000-production
+              --pseudonymization-salt-handle=2016,i,8032532849272161489,17841378194621633137,4
+              --trace-process-track-uuid=3190708988185955192 --mojo-platform-channel-handle=1992 /prefetch:2
+
+Name        : chrome.exe
+ProcessId   : 4280
+CommandLine : "C:\Program Files\Google\Chrome\Application\chrome.exe" --type=utility
+              --utility-sub-type=network.mojom.NetworkService --lang=es-419 --service-sandbox-type=none
+              --metrics-shmem-handle=2288,i,7620788708094454156,14491399180813233938,524288
+              --field-trial-handle=2000,i,2142226354344164471,930393000301624528,262144
+              --variations-seed-version=20260514-170130.285000-production
+              --pseudonymization-salt-handle=2016,i,8032532849272161489,17841378194621633137,4
+              --trace-process-track-uuid=3190708989122997041 --mojo-platform-channel-handle=2300 /prefetch:3
+
+Name        : chrome.exe
+ProcessId   : 14560
+CommandLine : "C:\Program Files\Google\Chrome\Application\chrome.exe" --type=utility
+              --utility-sub-type=storage.mojom.StorageService --lang=es-419 --service-sandbox-type=service
+              --metrics-shmem-handle=2388,i,16364375886960999098,11563997424787365836,524288
+              --field-trial-handle=2000,i,2142226354344164471,930393000301624528,262144
+              --variations-seed-version=20260514-170130.285000-production
+              --pseudonymization-salt-handle=2016,i,8032532849272161489,17841378194621633137,4
+              --trace-process-track-uuid=3190708990060038890 --mojo-platform-channel-handle=2400 /prefetch:8
+
+Name        : chrome.exe
+ProcessId   : 14796
+CommandLine : "C:\Program Files\Google\Chrome\Application\chrome.exe" --type=renderer
+              --video-capture-use-gpu-memory-buffer --lang=es-419 --device-scale-factor=1 --num-raster-threads=2
+              --enable-main-frame-before-activation --renderer-client-id=5
+              --time-ticks-at-unix-epoch=-1778592554147772 --launch-time-ticks=228749939889
+              --metrics-shmem-handle=3340,i,5792728552040685282,8721801556048794308,2097152
+              --field-trial-handle=2000,i,2142226354344164471,930393000301624528,262144
+              --variations-seed-version=20260514-170130.285000-production
+              --pseudonymization-salt-handle=2016,i,8032532849272161489,17841378194621633137,4
+              --trace-process-track-uuid=3190708990997080739 --mojo-platform-channel-handle=3540 /prefetch:1
+
+Name        : chrome.exe
+ProcessId   : 14396
+CommandLine : "C:\Program Files\Google\Chrome\Application\chrome.exe" --type=renderer
+              --video-capture-use-gpu-memory-buffer --lang=es-419 --device-scale-factor=1 --num-raster-threads=2
+              --enable-main-frame-before-activation --renderer-client-id=11
+              --time-ticks-at-unix-epoch=-1778592554147772 --launch-time-ticks=228758411416
+              --metrics-shmem-handle=6124,i,381627344898009890,138154035897534317,2097152
+              --field-trial-handle=2000,i,2142226354344164471,930393000301624528,262144
+              --variations-seed-version=20260514-170130.285000-production
+              --pseudonymization-salt-handle=2016,i,8032532849272161489,17841378194621633137,4
+              --trace-process-track-uuid=3190708996619331833 --mojo-platform-channel-handle=6068 /prefetch:1
+
+
+
+PS C:\Windows\system32>
