@@ -39,6 +39,8 @@ interface Pedido {
   opcionSeleccionada: number;
   codigoQr: string | null;
   impresoEn?: string | null;
+  createdAt?: string | null;
+  tipo?: string | null;
 }
 
 type Step =
@@ -56,7 +58,8 @@ type Step =
   | "vale_visita_opcion"
   | "reimp_rut"
   | "reimp_list"
-  | "ya_impreso";
+  | "ya_impreso"
+  | "no_asiste_msg";
 
 // ── RUT helpers (same logic as PWA) ────────────────────────────────────────
 function formatRutDisplay(raw: string): string {
@@ -189,7 +192,7 @@ export default function Kiosk() {
   const [errMsg, setErrMsg] = useState("");
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [qrPedidoId, setQrPedidoId] = useState<string | null>(null);
-  const [qrMeta, setQrMeta] = useState<{ familia: string; opcion: string; nombre: string; rut: string } | null>(null);
+  const [qrMeta, setQrMeta] = useState<{ familia: string; opcion: string; nombre: string; rut: string; hora?: string; fecha?: string } | null>(null);
   const [casino, setCasino] = useState<KioskCasino | null>(null);
   const [newPwd, setNewPwd] = useState("");
   const [newPwd2, setNewPwd2] = useState("");
@@ -232,14 +235,16 @@ export default function Kiosk() {
   }, []);
 
   // Auto-logout after 60s of inactivity in any post-login step.
-  // Auto-return after 15s on QR screen (specific shorter timer).
-  useIdleReset(reset, step === "qr" ? 15000 : 60000, step !== "login_rut");
+  // Auto-return after 4s on QR screen (flujo continuo — el siguiente comensal
+  // en la fila debe poder usar el tótem de inmediato. Cliente pidió bajar de
+  // 15s a algo ágil; 4s da tiempo a leer el "¡Listo!" sin frenar la fila).
+  useIdleReset(reset, step === "qr" ? 4000 : 60000, step !== "login_rut");
 
-  // Cuenta regresiva visible en la pantalla del vale (15 → 0).
-  const [qrCountdown, setQrCountdown] = useState(15);
+  // Cuenta regresiva visible en la pantalla del vale (4 → 0).
+  const [qrCountdown, setQrCountdown] = useState(4);
   useEffect(() => {
-    if (step !== "qr") { setQrCountdown(15); return; }
-    setQrCountdown(15);
+    if (step !== "qr") { setQrCountdown(4); return; }
+    setQrCountdown(4);
     const iv = window.setInterval(() => {
       setQrCountdown((s) => (s > 0 ? s - 1 : 0));
     }, 1000);
@@ -381,26 +386,46 @@ export default function Kiosk() {
         return;
       }
 
-      // Auto-salto a QR si ya tiene pedido del día (no_asiste no se considera).
+      // ── Flujo de CONSUMO (módulo Tótem) ──
+      // El tótem es para retirar el vale, no para inscribirse. Tres casos:
+      //  1) Tiene pedido válido del día → mostrar QR (o "ya impreso" si corresponde).
+      //  2) Tiene pedido "no_asiste" → mensaje + sugerir vale visita al interlocutor.
+      //  3) No tiene pedido → auto-crear pedido con Opción 1 (asignación default).
       const todayIds = new Set(todayMins.map(m => m.id));
-      const existingToday = pedidosData.find(p => todayIds.has(p.minutaId) && p.opcionSeleccionada > 0);
-      if (existingToday) {
-        // Si el vale ya fue impreso, NO re-imprimir. El comensal solo retira
-        // una comida por servicio. Si necesita una reimpresión debe pedírsela
-        // al encargado del casino (flujo Reimpresión del menú staff).
+      const todayPedidos = pedidosData.filter(p => todayIds.has(p.minutaId));
+      // Priorizar pedido VÁLIDO (opcion>0) sobre "no_asiste". Si en el mismo día
+      // hay varias minutas/familias y al menos una tiene un pedido válido,
+      // mostramos el vale; no_asiste solo gana si TODOS los pedidos del día son 0.
+      const existingValid = todayPedidos.find(p => p.opcionSeleccionada > 0);
+      const existingNoAsiste = todayPedidos.find(p => p.opcionSeleccionada === 0);
+      const existingToday = existingValid || existingNoAsiste;
+
+      // Caso 2: solo no_asiste (sin ningún pedido válido).
+      if (!existingValid && existingNoAsiste) {
+        setStep("no_asiste_msg");
+        try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+        return;
+      }
+
+      // Caso 1: ya tiene pedido válido (con opción seleccionada > 0).
+      if (existingToday && existingToday.opcionSeleccionada > 0) {
         if (existingToday.impresoEn) {
+          // Vale ya fue retirado → NO re-imprimir; pedir reimpresión al encargado.
           setStep("ya_impreso");
           try { await apiRequest("POST", "/api/auth/logout"); } catch {}
           return;
         }
         const minuta = todayMins.find(m => m.id === existingToday.minutaId)!;
         const opt = getOptions(minuta).find(o => o.number === existingToday.opcionSeleccionada);
+        const nowDate = new Date();
         setQrCode(existingToday.codigoQr || existingToday.id);
         setQrMeta({
           familia: minuta.familia || "Almuerzo",
           opcion: opt?.text || `Opción ${existingToday.opcionSeleccionada}`,
           nombre: `${u!.nombre} ${u!.apellido}`,
           rut: formatRutDisplay(u!.rut),
+          fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
         });
         setQrPedidoId(existingToday.id);
         setStep("qr");
@@ -408,9 +433,38 @@ export default function Kiosk() {
         return;
       }
 
-      setMinutas(todayMins);
-      setExistingPedidos(pedidosData);
-      setStep("menu");
+      // Caso 3: no tiene pedido → auto-asignación opción 1 (la inscripción se
+      // hace en el módulo de inscripción, no aquí). El backend lo permite con
+      // tipo "seleccion" — si está fuera de periodo, igual el endpoint
+      // /api/pedidos/auto-totem fuerza la creación.
+      try {
+        const minuta = todayMins[0];
+        const res = await apiRequest("POST", "/api/pedidos/auto-totem", {
+          userId: u!.id,
+          minutaId: minuta.id,
+        });
+        const pedido: Pedido = await res.json();
+        const opt = getOptions(minuta).find(o => o.number === pedido.opcionSeleccionada);
+        const nowDate = new Date();
+        setQrCode(pedido.codigoQr || pedido.id);
+        setQrPedidoId(pedido.id);
+        setQrMeta({
+          familia: minuta.familia || "Almuerzo",
+          opcion: opt?.text || `Opción ${pedido.opcionSeleccionada}`,
+          nombre: `${u!.nombre} ${u!.apellido}`,
+          rut: formatRutDisplay(u!.rut),
+          fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+        });
+        try { await apiRequest("POST", `/api/pedidos/${pedido.id}/marcar-impreso`, {}); } catch {}
+        setStep("qr");
+        try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+        return;
+      } catch {
+        setErrMsg("No se pudo emitir tu vale. Intenta nuevamente.");
+        setStep("error");
+        return;
+      }
     } catch {
       setErrMsg("No se pudo cargar tu menú. Intenta nuevamente.");
       setStep("error");
@@ -476,7 +530,8 @@ export default function Kiosk() {
     } finally { setBusy(false); }
   }
 
-  // ── Staff: Vale propio (auto-opcion 1) ──
+  // ── Staff: Vale propio (auto-opcion 1, solo 1 por día) ──
+  // Cliente pidió: 1 vale propio por día. Si ya existe, reusar (o "ya_impreso").
   async function handleStaffValePropio() {
     if (!user) return;
     if (todayMinutas.length === 0) {
@@ -484,10 +539,52 @@ export default function Kiosk() {
       setStep("error");
       return;
     }
-    await selectOption(todayMinutas[0], 1);
+    setBusy(true);
+    try {
+      const minuta = todayMinutas[0];
+      const r = await fetch(`/api/pedidos/${user.id}?_t=${Date.now()}`, { credentials: "include" });
+      const pedidos: Pedido[] = r.ok ? await r.json() : [];
+      // Excluir visita Y no_asiste (opción 0): un staff "Mi vale" siempre quiere
+      // un vale válido. Si solo hay no_asiste, dejamos que selectOption cree
+      // uno nuevo con opción 1 (que sobrescribirá vía updatePedido si aplica).
+      const existing = pedidos.find(
+        p => p.minutaId === minuta.id && p.tipo !== "visita" && p.opcionSeleccionada > 0
+      );
+      if (existing) {
+        if (existing.impresoEn) {
+          setBusy(false);
+          setStep("ya_impreso");
+          try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+          return;
+        }
+        const opt = getOptions(minuta).find(o => o.number === existing.opcionSeleccionada);
+        const nowDate = new Date();
+        setQrCode(existing.codigoQr || existing.id);
+        setQrPedidoId(existing.id);
+        setQrMeta({
+          familia: minuta.familia || "Almuerzo",
+          opcion: opt?.text || `Opción ${existing.opcionSeleccionada}`,
+          nombre: `${user.nombre} ${user.apellido}`,
+          rut: formatRutDisplay(user.rut),
+          fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+        });
+        try { await apiRequest("POST", `/api/pedidos/${existing.id}/marcar-impreso`, {}); } catch {}
+        setBusy(false);
+        setStep("qr");
+        try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+        return;
+      }
+      setBusy(false);
+      await selectOption(minuta, 1);
+    } catch {
+      setBusy(false);
+      await selectOption(todayMinutas[0], 1);
+    }
   }
 
   // ── Staff: Vale visita ──
+  // Cliente pidió: eliminar el paso de pedir RUT del visitante. Ir directo a nombre.
   async function handleVisitaSubmit() {
     if (!user) return;
     if (!visitaRut || visitaRut.length < 2) { setErrMsg("Ingresa el RUT del visitante"); return; }
@@ -507,13 +604,16 @@ export default function Kiosk() {
         nombreVisita: visitaNombre.trim(),
       });
       const pedido: Pedido = await res.json();
+      const nowDate = new Date();
       setQrCode(pedido.codigoQr || pedido.id);
       setQrPedidoId(pedido.id);
       setQrMeta({
         familia: minuta.familia || "Almuerzo",
         opcion: `Visita: ${visitaNombre.trim()}`,
         nombre: visitaNombre.trim(),
-        rut: normalizeRutForApi(visitaRut),
+        rut: "—",
+        fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
       });
       // Marcar impreso ANTES del logout (mismo motivo que en selectOption).
       try { await apiRequest("POST", `/api/pedidos/${pedido.id}/marcar-impreso`, {}); } catch {}
@@ -545,6 +645,10 @@ export default function Kiosk() {
     const minuta = reimpResult.minutas.find(m => m.id === p.minutaId);
     if (!minuta) return;
     const opt = minuta ? getOptions(minuta).find(o => o.number === p.opcionSeleccionada) : null;
+    // Reimpresión: usar hora ORIGINAL del pedido (cliente pidió que la hora
+    // refleje cuándo se emitió el vale, no la hora de la reimpresión).
+    const ts = p.impresoEn || p.createdAt;
+    const origDate = ts ? new Date(ts) : new Date();
     setQrCode(p.codigoQr || p.id);
     setQrPedidoId(p.id);
     setQrMeta({
@@ -552,6 +656,8 @@ export default function Kiosk() {
       opcion: opt?.text || `Opción ${p.opcionSeleccionada}`,
       nombre: `${reimpResult.user.nombre} ${reimpResult.user.apellido}`,
       rut: formatRutDisplay(reimpResult.user.rut),
+      fecha: origDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      hora: origDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
     });
     setStep("qr");
   }
@@ -578,6 +684,7 @@ export default function Kiosk() {
       }
 
       const opt = getOptions(minuta).find((o) => o.number === pedido.opcionSeleccionada);
+      const nowDate = new Date();
       setQrCode(pedido.codigoQr || pedido.id);
       setQrPedidoId(pedido.id);
       setQrMeta({
@@ -585,6 +692,8 @@ export default function Kiosk() {
         opcion: opt?.text || `Opción ${pedido.opcionSeleccionada}`,
         nombre: `${user.nombre} ${user.apellido}`,
         rut: formatRutDisplay(user.rut),
+        fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
       });
       // CRÍTICO: marcar impreso ANTES del logout. Si se hace después, el
       // useEffect de impresión llama marcar-impreso ya sin sesión (401),
@@ -618,7 +727,7 @@ export default function Kiosk() {
           </div>
           <div>
             <p className="text-white font-bold text-xl leading-tight">BuenaMezcla</p>
-            <p className="text-vascan-goldLight text-xs leading-tight">Tótem de inscripción</p>
+            <p className="text-vascan-goldLight text-xs leading-tight">Tótem Casino</p>
           </div>
         </div>
         {step !== "login_rut" && (
@@ -744,13 +853,49 @@ export default function Kiosk() {
                 <p className="text-white/60 text-center py-6">No hay menú para hoy.</p>
               )}
             </div>
-            <div className="flex justify-center gap-3">
+            <div className="flex justify-center gap-3 flex-wrap">
               <button onClick={() => selectedCasinoId && loadResumen(selectedCasinoId)} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
                 Actualizar
+              </button>
+              <button
+                onClick={() => { document.body.classList.add("print-resumen-mode"); window.print(); setTimeout(() => document.body.classList.remove("print-resumen-mode"), 500); }}
+                className="px-6 py-3 rounded-xl bg-white/10 border border-white/20 text-white font-semibold hover:bg-white/15"
+              >
+                Imprimir
               </button>
               <button onClick={reset} className="px-6 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold">
                 Terminar
               </button>
+            </div>
+
+            {/* Layout imprimible del resumen (térmica 80mm). Solo visible cuando
+                body tiene .print-resumen-mode + @media print. */}
+            <div className="print-resumen" aria-hidden="true">
+              <div className="pv-center pv-brand">BuenaMezcla</div>
+              {casino?.nombre && <div className="pv-center pv-sub">{casino.nombre}</div>}
+              <div className="pv-center pv-sub">Resumen del día</div>
+              <div className="pv-center pv-sub">
+                {new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                {" · "}
+                {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
+              </div>
+              <hr className="pv-hr" />
+              {resumen?.minuta ? (
+                <>
+                  <div className="pv-row"><span className="pv-label">Selecciones</span><span className="pv-value">{resumen.totalSeleccion}</span></div>
+                  <div className="pv-row"><span className="pv-label">No asiste</span><span className="pv-value">{resumen.totalNoAsiste}</span></div>
+                  <div className="pv-row"><span className="pv-label">Visitas</span><span className="pv-value">{resumen.totalVisitas}</span></div>
+                  <hr className="pv-hr" />
+                  {(resumen.opciones || []).map((o: any) => (
+                    <div key={o.numero} className="pv-row">
+                      <span className="pv-label">Opc {o.numero}: {o.descripcion}</span>
+                      <span className="pv-value">{o.cantidad}</span>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="pv-center">Sin menú para hoy.</div>
+              )}
             </div>
           </div>
         )}
@@ -815,7 +960,7 @@ export default function Kiosk() {
                 <p className="text-sm font-normal opacity-80 mt-1">Vale propio del día</p>
               </button>
               <button
-                onClick={() => { setStep("vale_visita_rut"); setVisitaRut(""); setVisitaNombre(""); setErrMsg(""); }}
+                onClick={() => { setStep("vale_visita_nombre"); setVisitaRut(""); setVisitaNombre(""); setErrMsg(""); }}
                 disabled={todayMinutas.length === 0}
                 className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition disabled:opacity-40"
               >
@@ -887,7 +1032,7 @@ export default function Kiosk() {
             />
             {errMsg && <p className="text-red-400 text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {errMsg}</p>}
             <div className="flex gap-3 w-full">
-              <button onClick={() => setStep("vale_visita_rut")} className="flex-1 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10">
+              <button onClick={() => setStep("staff_menu")} className="flex-1 px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10">
                 Atrás
               </button>
               <button onClick={handleVisitaNombreSubmit} disabled={busy} className="flex-1 px-6 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold disabled:opacity-50">
@@ -1026,6 +1171,24 @@ export default function Kiosk() {
           </div>
         )}
 
+        {step === "no_asiste_msg" && (
+          <div className="flex flex-col items-center gap-5 text-center max-w-md">
+            <div className="w-20 h-20 rounded-full bg-orange-500/15 border border-orange-500/30 flex items-center justify-center">
+              <AlertCircle className="w-10 h-10 text-orange-300" />
+            </div>
+            <h2 className="text-2xl font-bold">Tu inscripción dice "No asisto"</h2>
+            <p className="text-white/60">
+              Si decides almorzar, acércate al interlocutor del casino para que te emita un vale de visita.
+            </p>
+            <button
+              onClick={reset}
+              className="px-8 py-3 rounded-xl bg-vascan-gold hover:bg-vascan-goldDark text-vascan-bg font-bold"
+            >
+              Volver al inicio
+            </button>
+          </div>
+        )}
+
         {step === "ya_impreso" && (
           <div className="flex flex-col items-center gap-5 text-center max-w-md">
             <div className="w-20 h-20 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center">
@@ -1092,13 +1255,13 @@ export default function Kiosk() {
           <div className="pv-row">
             <span className="pv-label">Fecha</span>
             <span className="pv-value">
-              {new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })}
+              {qrMeta.fecha || new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })}
             </span>
           </div>
           <div className="pv-row">
             <span className="pv-label">Hora</span>
             <span className="pv-value">
-              {new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
+              {qrMeta.hora || new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
         </div>

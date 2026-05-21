@@ -1335,6 +1335,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Auto-creación de pedido en el TÓTEM (módulo consumo).
+  // Cliente pidió: si un comensal llega al tótem sin inscripción previa, se le
+  // asigna automáticamente la Opción 1. Esta ruta NO valida periodo activo
+  // (a diferencia de POST /api/pedidos) porque el flujo de consumo ocurre
+  // durante el servicio — el cierre del periodo de inscripción no debe
+  // bloquear que un trabajador almuerce. Solo crea el pedido si todavía no
+  // existe; si existe, retorna el existente.
+  app.post("/api/pedidos/auto-totem", async (req: Request, res: Response) => {
+    try {
+      const sessionUserId = (req.session as any).userId;
+      if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+      const { userId, minutaId } = req.body || {};
+      if (!userId || !minutaId) return res.status(400).json({ message: "userId y minutaId requeridos" });
+      // El comensal solo puede auto-asignarse a sí mismo desde el tótem.
+      if (userId !== sessionUserId) return res.status(403).json({ message: "Solo puedes emitir tu propio vale" });
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+      const minuta = await storage.getMinuta(minutaId);
+      if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
+
+      // Seguridad: la minuta DEBE pertenecer al scope de casinos del usuario.
+      // Evita que un comensal con IDs ajenos cree pedidos en otros casinos.
+      const accessible = await getAccessibleCasinoIds(user);
+      if (accessible !== null && !accessible.includes(minuta.casinoId)) {
+        return res.status(403).json({ message: "Esta minuta no pertenece a tu casino" });
+      }
+      // Solo permite auto-asignación para el menú del DÍA (consumo en vivo).
+      const todayISO = new Date().toISOString().split("T")[0];
+      if (minuta.fecha !== todayISO) {
+        return res.status(403).json({ message: "Solo se puede emitir vale para el menú de hoy" });
+      }
+      if (!minuta.activo) {
+        return res.status(403).json({ message: "Minuta inactiva" });
+      }
+
+      const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
+      if (existing && existing.opcionSeleccionada > 0) {
+        return res.json(existing);
+      }
+      if (existing && existing.opcionSeleccionada === 0) {
+        // Tenía "no_asiste"; el tótem ya muestra mensaje separado, pero por
+        // robustez devolvemos 409 aquí también.
+        return res.status(409).json({ message: "no_asiste" });
+      }
+      const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const pedido = await storage.createPedido({
+        userId,
+        minutaId,
+        opcionSeleccionada: 1,
+        codigoQr,
+        tipo: "seleccion",
+      });
+      return res.status(201).json(pedido);
+    } catch (error) {
+      console.error("auto-totem error:", error);
+      return res.status(500).json({ message: "Error al emitir vale" });
+    }
+  });
+
   app.get("/api/periodo-activo/:casinoId", async (req: Request, res: Response) => {
     try {
       const { casinoId } = req.params;

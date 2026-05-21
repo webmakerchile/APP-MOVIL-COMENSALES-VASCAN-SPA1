@@ -61,6 +61,7 @@ body,
 
 /* ── Impresión vale térmico 80mm ───────────────────────────────────────── */
 .print-vale { display: none; }
+.print-resumen { display: none; }
 
 @media print {
   @page {
@@ -76,6 +77,24 @@ body,
   body * { visibility: hidden !important; }
   .print-vale, .print-vale * { visibility: visible !important; }
   .print-vale {
+    display: block !important;
+    position: absolute;
+    left: 0; top: 0;
+    width: 80mm;
+    padding: 4mm 4mm 8mm 4mm;
+    color: #000;
+    background: #fff;
+    font-family: "Helvetica", "Arial", sans-serif;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  /* Resumen del día imprimible — solo cuando body tiene .print-resumen-mode */
+  body.print-resumen-mode .print-vale,
+  body.print-resumen-mode .print-vale * { visibility: hidden !important; }
+  body.print-resumen-mode .print-vale { display: none !important; }
+  body.print-resumen-mode .print-resumen,
+  body.print-resumen-mode .print-resumen * { visibility: visible !important; }
+  body.print-resumen-mode .print-resumen {
     display: block !important;
     position: absolute;
     left: 0; top: 0;

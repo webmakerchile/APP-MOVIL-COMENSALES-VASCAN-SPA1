@@ -2159,6 +2159,49 @@ async function registerRoutes(app2) {
       return res.status(500).json({ message: "Error interno del servidor" });
     }
   });
+  app2.post("/api/pedidos/auto-totem", async (req, res) => {
+    try {
+      const sessionUserId = req.session.userId;
+      if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+      const { userId, minutaId } = req.body || {};
+      if (!userId || !minutaId) return res.status(400).json({ message: "userId y minutaId requeridos" });
+      if (userId !== sessionUserId) return res.status(403).json({ message: "Solo puedes emitir tu propio vale" });
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+      const minuta = await storage.getMinuta(minutaId);
+      if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
+      const accessible = await getAccessibleCasinoIds(user);
+      if (accessible !== null && !accessible.includes(minuta.casinoId)) {
+        return res.status(403).json({ message: "Esta minuta no pertenece a tu casino" });
+      }
+      const todayISO = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      if (minuta.fecha !== todayISO) {
+        return res.status(403).json({ message: "Solo se puede emitir vale para el men\xFA de hoy" });
+      }
+      if (!minuta.activo) {
+        return res.status(403).json({ message: "Minuta inactiva" });
+      }
+      const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
+      if (existing && existing.opcionSeleccionada > 0) {
+        return res.json(existing);
+      }
+      if (existing && existing.opcionSeleccionada === 0) {
+        return res.status(409).json({ message: "no_asiste" });
+      }
+      const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const pedido = await storage.createPedido({
+        userId,
+        minutaId,
+        opcionSeleccionada: 1,
+        codigoQr,
+        tipo: "seleccion"
+      });
+      return res.status(201).json(pedido);
+    } catch (error) {
+      console.error("auto-totem error:", error);
+      return res.status(500).json({ message: "Error al emitir vale" });
+    }
+  });
   app2.get("/api/periodo-activo/:casinoId", async (req, res) => {
     try {
       const { casinoId } = req.params;
