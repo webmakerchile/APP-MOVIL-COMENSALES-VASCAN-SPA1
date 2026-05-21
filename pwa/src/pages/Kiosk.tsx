@@ -238,13 +238,13 @@ export default function Kiosk() {
   // Auto-return after 4s on QR screen (flujo continuo — el siguiente comensal
   // en la fila debe poder usar el tótem de inmediato. Cliente pidió bajar de
   // 15s a algo ágil; 4s da tiempo a leer el "¡Listo!" sin frenar la fila).
-  useIdleReset(reset, step === "qr" ? 4000 : 60000, step !== "login_rut");
+  useIdleReset(reset, step === "qr" ? 8000 : 60000, step !== "login_rut");
 
   // Cuenta regresiva visible en la pantalla del vale (4 → 0).
-  const [qrCountdown, setQrCountdown] = useState(4);
+  const [qrCountdown, setQrCountdown] = useState(8);
   useEffect(() => {
-    if (step !== "qr") { setQrCountdown(4); return; }
-    setQrCountdown(4);
+    if (step !== "qr") { setQrCountdown(8); return; }
+    setQrCountdown(8);
     const iv = window.setInterval(() => {
       setQrCountdown((s) => (s > 0 ? s - 1 : 0));
     }, 1000);
