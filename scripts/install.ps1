@@ -127,22 +127,9 @@ if (-not (Test-Path $nodeExe)) {
 $nodeVer = & $nodeExe --version 2>&1
 Write-Host "Node listo: $nodeVer"
 
-# ── npm install solo better-sqlite3 (solo su JS wrapper, sin compilar) ──
-Step "4/8 Instalando paquete SQLite (~10 segundos)"
-$npmCmd = "$InstallDir\node\npm.cmd"
-Push-Location $InstallDir
-$npmOut = & $npmCmd install --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=warn 2>&1
-$npmRc  = $LASTEXITCODE
-Pop-Location
-if ($npmRc -ne 0) {
-  Write-Host ($npmOut | Out-String) -ForegroundColor Yellow
-  Fail "npm install fallo (codigo $npmRc). Revisa la salida de arriba."
-}
-Write-Host "Paquete instalado."
-
-# ── Prebuild nativo de better-sqlite3 para Windows ──
-Step "4b/8 Bajando modulo nativo SQLite para Windows (~2MB)"
-$bs3Dir = "$InstallDir\node_modules\better-sqlite3\build\Release"
+# ── Modulo nativo SQLite (bundle es self-contained, solo necesita el .node) ──
+Step "4/8 Bajando modulo nativo SQLite para Windows (~2MB)"
+$bs3Dir = "$InstallDir\build\Release"
 New-Item -ItemType Directory -Force -Path $bs3Dir | Out-Null
 try {
   Invoke-WebRequest -Uri "$Cloud/totem/bs3-win.node" -OutFile "$bs3Dir\better_sqlite3.node" -UseBasicParsing
