@@ -1,0 +1,67 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+                                                                                                                        Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6                                                                                                                                                                    PS C:\Windows\system32>                                                                                                 PS C:\Windows\system32> iwr https://vascan.replit.app/totem/install.ps1 -OutFile C:\BuenaMezcla\scripts\install.ps1 -UseBasicParsing
+>> powershell -ExecutionPolicy Bypass -File C:\BuenaMezcla\scripts\install.ps1 -IsUpdate
+
+Instalacion previa detectada en C:\BuenaMezcla.
+Modo: ACTUALIZACION (se preserva totem_id, totem_secret y pedidos locales).
+
+
+==> 1/8 Preparando carpetas (limpieza de instalacion previa si existe)
+  limpiando C:\BuenaMezcla\node_modules ...
+  limpiando C:\BuenaMezcla\totem ...
+  limpiando C:\BuenaMezcla\shared ...
+  limpiando C:\BuenaMezcla\public ...
+  limpiando C:\BuenaMezcla\pwa ...
+
+==> 2/8 Descargando bundle (~500KB)
+Extrayendo...
+
+==> 3/8 Verificando Node.js
+Node listo: v20.18.0
+
+==> 4/8 Bajando modulo nativo SQLite para Windows (~2MB)
+Modulo SQLite listo.
+
+==> 5/8 Saltando registro (actualizacion: se preserva totem_id existente)
+
+==> 6/8 Creando scripts de arranque
+
+==> 7/8 Registrando tareas de inicio automatico
+
+==> 8/8 Iniciando servicio
+Esperando que el servidor arranque...
+El servidor todavia no responde. Revisando log...
+    'C:\\BuenaMezcla\\build\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\build\\Debug\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\build\\Release\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\out\\Debug\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\Debug\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\out\\Release\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\Release\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\build\\default\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\compiled\\20.18.0\\win32\\x64\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\addon-build\\release\\install-root\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\addon-build\\debug\\install-root\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\addon-build\\default\\install-root\\better_sqlite3.node',
+    'C:\\BuenaMezcla\\lib\\binding\\node-v115-win32-x64\\better_sqlite3.node'
+  ]
+}
+
+Node.js v20.18.0
+Warning: connect.session() MemoryStore is not
+designed for a production environment, as it will leak
+memory, and will not scale past a single process.
+
+=================================================
+ INSTALACION COMPLETADA
+=================================================
+ Totem:
+ Carpeta: C:\BuenaMezcla
+ URL:     http://127.0.0.1:5000/kiosk
+ Logs:    C:\BuenaMezcla\logs\
+
+ Al reiniciar el PC el servicio arranca solo.
+ Chrome kiosko se abre al iniciar sesion.
+
+Presiona Enter para cerrar este instalador.
