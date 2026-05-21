@@ -238,18 +238,10 @@ export default function Kiosk() {
   // Auto-return after 4s on QR screen (flujo continuo — el siguiente comensal
   // en la fila debe poder usar el tótem de inmediato. Cliente pidió bajar de
   // 15s a algo ágil; 4s da tiempo a leer el "¡Listo!" sin frenar la fila).
-  useIdleReset(reset, step === "qr" ? 8000 : 60000, step !== "login_rut");
-
-  // Cuenta regresiva visible en la pantalla del vale (4 → 0).
-  const [qrCountdown, setQrCountdown] = useState(8);
-  useEffect(() => {
-    if (step !== "qr") { setQrCountdown(8); return; }
-    setQrCountdown(8);
-    const iv = window.setInterval(() => {
-      setQrCountdown((s) => (s > 0 ? s - 1 : 0));
-    }, 1000);
-    return () => window.clearInterval(iv);
-  }, [step]);
+  // Pantalla "¡Listo!" muy breve (1.5s) — al cliente le importa el ticket
+  // impreso, no el QR en pantalla. Flujo continuo: el siguiente comensal
+  // entra de inmediato.
+  useIdleReset(reset, step === "qr" ? 1500 : 60000, step !== "login_rut");
 
   // Auto-impresión del vale al llegar al paso QR. La impresora térmica USB
   // del tótem está configurada en Chrome `--kiosk-printing` para imprimir
@@ -260,17 +252,16 @@ export default function Kiosk() {
     if (step !== "qr" || !qrCode || !qrMeta) return;
     if (printedRef.current === qrCode) return;
     printedRef.current = qrCode;
-    const t = window.setTimeout(() => {
+    // Imprime inmediatamente (sin delay perceptible). Chrome --kiosk-printing
+    // requiere que el DOM esté pintado, así que usamos requestAnimationFrame.
+    const raf = window.requestAnimationFrame(() => {
       try { window.print(); } catch {}
-      // Marca el pedido como impreso en BD para bloquear re-impresión por
-      // re-login del comensal. La llamada es best-effort: si falla la red
-      // (offline), el siguiente sync resuelve el estado.
       const pid = qrPedidoId;
       if (pid) {
         apiRequest("POST", `/api/pedidos/${pid}/marcar-impreso`, {}).catch(() => {});
       }
-    }, 250);
-    return () => window.clearTimeout(t);
+    });
+    return () => window.cancelAnimationFrame(raf);
   }, [step, qrCode, qrMeta, qrPedidoId]);
   useEffect(() => {
     if (step !== "qr") printedRef.current = null;
@@ -1153,21 +1144,12 @@ export default function Kiosk() {
         )}
 
         {step === "qr" && qrCode && qrMeta && (
-          <div className="flex flex-col items-center gap-6 max-w-2xl">
-            <div className="w-28 h-28 rounded-full bg-green-500/15 border-2 border-green-500/40 flex items-center justify-center">
-              <Check className="w-16 h-16 text-green-400" />
+          <div className="flex flex-col items-center gap-5">
+            <div className="w-32 h-32 rounded-full bg-green-500/15 border-2 border-green-500/40 flex items-center justify-center">
+              <Check className="w-20 h-20 text-green-400" />
             </div>
-            <div className="text-center">
-              <h2 className="text-4xl font-bold">¡Listo, {qrMeta.nombre.split(" ")[0]}!</h2>
-              <p className="text-white/60 mt-2 text-lg">Tu vale ya se imprimió. Retíralo y acércate al casino.</p>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl px-8 py-6 w-full text-center">
-              <p className="text-vascan-goldLight text-sm uppercase tracking-wide">{qrMeta.familia}</p>
-              <p className="text-white text-2xl font-semibold mt-2">{qrMeta.opcion}</p>
-            </div>
-            <p className="text-white/50 text-base">
-              Volviendo a la pantalla principal en <span className="text-vascan-gold font-bold text-xl">{qrCountdown}s</span>
-            </p>
+            <h2 className="text-5xl font-bold text-center">¡Listo, {qrMeta.nombre.split(" ")[0]}!</h2>
+            <p className="text-white/70 text-xl">Retira tu vale impreso</p>
           </div>
         )}
 
