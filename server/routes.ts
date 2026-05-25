@@ -1434,11 +1434,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const minuta = await storage.getMinuta(minutaId);
       if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
 
-      // Seguridad: la minuta DEBE pertenecer al scope de casinos del usuario.
-      // Evita que un comensal con IDs ajenos cree pedidos en otros casinos.
-      const accessible = await getAccessibleCasinoIds(user);
-      if (accessible !== null && !accessible.includes(minuta.casinoId)) {
-        return res.status(403).json({ message: "Esta minuta no pertenece a tu casino" });
+      // Seguridad para comensales: la minuta debe pertenecer a su casino.
+      // Para staff (interlocutor/encargado/admin) la restricción se relaja:
+      // el `userId === sessionUserId` ya garantiza que sólo emiten su propio
+      // vale; el casino fue elegido en el menú del tótem (validado al login).
+      const staffRoles = ["admin", "interlocutor", "encargado_casino"];
+      if (!staffRoles.includes(user.role)) {
+        const accessible = await getAccessibleCasinoIds(user);
+        if (accessible !== null && !accessible.includes(minuta.casinoId)) {
+          return res.status(403).json({ message: "Esta minuta no pertenece a tu casino" });
+        }
       }
       // Solo permite auto-asignación para el menú del DÍA (consumo en vivo).
       const todayISO = new Date().toISOString().split("T")[0];
@@ -1549,11 +1554,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const target = allUsers.find(u => norm(u.rut) === rut);
       if (!target) return res.json({ user: null, pedidos: [], minutas: [] });
 
-      const me = (req as any).currentUser;
-      const accessible = await getAccessibleCasinoIds(me);
-      if (accessible !== null && target.casinoId && !accessible.includes(target.casinoId)) {
-        return res.status(403).json({ message: "Sin acceso a este comensal" });
-      }
+      // No restringimos por casino del comensal — el staff puede buscar a
+      // cualquier usuario del sistema. La seguridad es que solo ven los
+      // pedidos de sus casinos accesibles (filtro por minuta más abajo).
 
       const pedidos = await storage.getPedidosByUser(target.id);
       const allMinutas = await storage.getAllMinutas();
@@ -1575,11 +1578,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/reportes/resumen-dia/:casinoId", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { casinoId } = req.params;
-      const me = (req as any).currentUser;
-      const accessible = await getAccessibleCasinoIds(me);
-      if (accessible !== null && !accessible.includes(casinoId)) {
-        return res.status(403).json({ message: "Sin acceso a este casino" });
-      }
       const fecha = (req.query.fecha as string) || new Date().toISOString().split("T")[0];
       const minutas = await storage.getAllMinutasByCasino(casinoId);
       // Agregar TODAS las minutas activas del día (almuerzo + colación + VIP +

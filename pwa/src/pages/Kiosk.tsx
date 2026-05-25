@@ -494,7 +494,9 @@ export default function Kiosk() {
 
   async function loadResumen(casinoId: string) {
     try {
-      const r = await fetch(`/api/reportes/resumen-dia/${casinoId}?_t=${Date.now()}`, { credentials: "include" });
+      // Pasar fecha del cliente (timezone local) para evitar desfase UTC.
+      const fecha = todayISO();
+      const r = await fetch(`/api/reportes/resumen-dia/${casinoId}?fecha=${fecha}&_t=${Date.now()}`, { credentials: "include" });
       if (r.ok) setResumen(await r.json());
     } catch {}
   }
