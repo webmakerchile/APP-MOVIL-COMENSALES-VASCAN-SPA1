@@ -1247,6 +1247,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isOwner = pedido.userId === requester.id;
       const isStaff = ["admin", "interlocutor", "encargado_casino"].includes(requester.role);
       if (!isOwner && !isStaff) return res.status(403).json({ message: "Sin permisos" });
+      // Staff (no-owner) sólo puede marcar pedidos de casinos en su scope —
+      // evita que un interlocutor de Casino A marque vales de Casino B.
+      if (!isOwner && isStaff) {
+        const accessible = await getAccessibleCasinoIds(requester);
+        if (accessible !== null) {
+          const minuta = await storage.getMinuta(pedido.minutaId);
+          if (!minuta || !accessible.includes(minuta.casinoId)) {
+            return res.status(403).json({ message: "Sin acceso a este casino" });
+          }
+        }
+      }
       const updated = await storage.markPedidoImpreso(id);
       if (!updated) return res.status(404).json({ message: "Pedido no encontrado" });
       return res.json({ ok: true, impresoEn: updated.impresoEn });
@@ -1440,15 +1451,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
       if (existing && existing.opcionSeleccionada > 0) {
-        // Si ya estaba impreso, lo devolvemos pero el frontend mostrará "ya_impreso".
-        // Si no estaba impreso, lo marcamos AHORA mismo: garantiza que el
-        // próximo login vea impresoEn y bloquee la reimpresión (defiende contra
-        // race conditions y silenciamientos del marcar-impreso del frontend).
+        // Si ya estaba impreso ANTES de esta llamada → cliente debe mostrar
+        // "ya_impreso" (no re-imprimir). Si no estaba impreso, lo marcamos
+        // AHORA mismo y respondemos "marked" para que el cliente imprima.
+        // Esto evita la heurística temporal (5s) en el frontend.
         if (!existing.impresoEn) {
           const marked = await storage.markPedidoImpreso(existing.id);
-          return res.json(marked || existing);
+          return res.json({ ...(marked || existing), action: "marked_existing" });
         }
-        return res.json(existing);
+        return res.json({ ...existing, action: "already_printed" });
       }
       if (existing && existing.opcionSeleccionada === 0) {
         // Tenía "no_asiste" — cliente pidió que el tótem SIEMPRE pueda emitir
@@ -1461,7 +1472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           tipo: "seleccion",
         } as any);
         const marked = updated ? await storage.markPedidoImpreso(updated.id) : null;
-        return res.json(marked || updated || existing);
+        return res.json({ ...(marked || updated || existing), action: "created" });
       }
       const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const pedido = await storage.createPedido({
@@ -1472,7 +1483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tipo: "seleccion",
       });
       const marked = await storage.markPedidoImpreso(pedido.id);
-      return res.status(201).json(marked || pedido);
+      return res.status(201).json({ ...(marked || pedido), action: "created" });
     } catch (error) {
       console.error("auto-totem error:", error);
       return res.status(500).json({ message: "Error al emitir vale" });
@@ -2849,14 +2860,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return requested;
   }
 
+  // Versión multi-casino del scope: el interlocutor (y encargado_casino) puede
+  // estar asignado a MÁS DE UN casino. Esta función retorna el set de casinos
+  // permitidos para los reportes:
+  //  - admin → { allowedIds: null (= todos) , singleId: requested || null }
+  //  - interlocutor/encargado_casino:
+  //      · requested vacío / "all" → allowedIds = todos los casinos accesibles,
+  //        singleId = null (significa "agregar todos los accesibles")
+  //      · requested específico → validar que esté en accesibles; si sí,
+  //        allowedIds = Set([requested]); si no, allowedIds = Set() (vacío,
+  //        bloquea respuesta).
+  async function getScopedCasinoFilter(
+    req: Request,
+    requested: string | undefined,
+  ): Promise<{ allowedIds: Set<string> | null }> {
+    const sUser = (req as any).currentUser;
+    const accessible = await getAccessibleCasinoIds(sUser);
+    const specific = requested && requested !== "all" ? requested : null;
+    if (accessible === null) {
+      // admin global → si pide casino específico, filtrar por ese; si no, todos.
+      return { allowedIds: specific ? new Set([specific]) : null };
+    }
+    if (!specific) {
+      // staff multi-casino sin filtrar → ver todos los suyos.
+      return { allowedIds: new Set(accessible) };
+    }
+    if (!accessible.includes(specific)) {
+      // pidió un casino fuera de su scope → bloquear con set vacío.
+      return { allowedIds: new Set() };
+    }
+    return { allowedIds: new Set([specific]) };
+  }
+
   // JSON: detalle de inscripciones (para tabla en vivo del admin)
   app.get("/api/reportes/inscripciones-live", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { fechaDesde, fechaHasta } = req.query as any;
-      const casinoId = scopedCasinoId(req, req.query.casinoId as string);
-      if (casinoId && casinoId !== "all" && !(await assertCasinoAccess(req, res, casinoId as string))) return;
-      if ((!casinoId || casinoId === "all") && (req as any).currentUser?.role !== "admin") {
-        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      // Scope multi-casino: el interlocutor puede tener varios casinos
+      // asignados (Quimica + Quimica Ejecutivo). Si no especifica
+      // casinoId, ve agregada la información de TODOS sus casinos.
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId as string);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
       }
       if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
 
@@ -2879,9 +2924,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if ((p as any).deletedAt) return false;
         const created = p.createdAt ? new Date(p.createdAt) : null;
         if (!created || created < start || created > end) return false;
-        if (casinoId && casinoId !== "all") {
+        if (scope.allowedIds) {
           const m = minutaById.get(p.minutaId);
-          if (!m || m.casinoId !== casinoId) return false;
+          if (!m || !scope.allowedIds.has(m.casinoId)) return false;
         }
         return true;
       });
@@ -2928,10 +2973,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/reportes/inscripcion-detalle", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { fechaDesde, fechaHasta } = req.query as any;
-      const casinoId = scopedCasinoId(req, req.query.casinoId as string);
-      if (casinoId && casinoId !== "all" && !(await assertCasinoAccess(req, res, casinoId as string))) return;
-      if ((!casinoId || casinoId === "all") && (req as any).currentUser?.role !== "admin") {
-        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId as string);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
       }
       if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
 
@@ -2949,9 +2993,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filtered = allPedidos.filter(p => {
         const created = p.createdAt ? new Date(p.createdAt) : null;
         if (!created || created < start || created > end) return false;
-        if (casinoId && casinoId !== "all") {
+        if (scope.allowedIds) {
           const m = minutaById.get(p.minutaId);
-          if (!m || m.casinoId !== casinoId) return false;
+          if (!m || !scope.allowedIds.has(m.casinoId)) return false;
         }
         return true;
       });
@@ -3011,10 +3055,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/reportes/consumo-detalle", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { fechaDesde, fechaHasta } = req.query as any;
-      const casinoId = scopedCasinoId(req, req.query.casinoId as string);
-      if (casinoId && casinoId !== "all" && !(await assertCasinoAccess(req, res, casinoId as string))) return;
-      if ((!casinoId || casinoId === "all") && (req as any).currentUser?.role !== "admin") {
-        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId as string);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
       }
       if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
 
@@ -3039,7 +3082,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!m) return false;
         const fechaServ = new Date(m.fecha + "T12:00:00");
         if (fechaServ < start || fechaServ > end) return false;
-        if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return false;
+        if (scope.allowedIds && !scope.allowedIds.has(m.casinoId)) return false;
         return true;
       });
 
@@ -3105,10 +3148,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/reportes/minutas-detalle", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { mes } = req.query as any; // mes = YYYY-MM
-      const casinoId = scopedCasinoId(req, req.query.casinoId as string);
-      if (casinoId && casinoId !== "all" && !(await assertCasinoAccess(req, res, casinoId as string))) return;
-      if ((!casinoId || casinoId === "all") && (req as any).currentUser?.role !== "admin") {
-        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId as string);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
       }
       if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return res.status(400).json({ message: "mes requerido (YYYY-MM)" });
 
@@ -3118,7 +3160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const filtered = allMinutas.filter(m => {
         if (!m.fecha.startsWith(mes)) return false;
-        if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return false;
+        if (scope.allowedIds && !scope.allowedIds.has(m.casinoId)) return false;
         return true;
       }).sort((a, b) => a.fecha.localeCompare(b.fecha));
 

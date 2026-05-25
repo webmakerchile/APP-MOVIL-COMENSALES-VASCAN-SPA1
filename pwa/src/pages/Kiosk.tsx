@@ -424,6 +424,12 @@ export default function Kiosk() {
           hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
         });
         setQrPedidoId(existingToday.id);
+        // CRÍTICO anti-doble-impresión: marcar impreso ANTES del logout.
+        // Antes el useEffect de impresión llamaba marcar-impreso DESPUÉS del
+        // logout (sin sesión → 401, silenciosamente atrapado), por lo que
+        // impresoEn nunca quedaba en BD y el comensal podía re-loguearse
+        // y reimprimir indefinidamente ("almorzar mil veces" - docx 25/05).
+        try { await apiRequest("POST", `/api/pedidos/${existingToday.id}/marcar-impreso`, {}); } catch {}
         setStep("qr");
         try { await apiRequest("POST", "/api/auth/logout"); } catch {}
         return;
@@ -546,7 +552,13 @@ export default function Kiosk() {
   }
 
   // ── Staff: Vale propio (auto-opcion 1, solo 1 por día) ──
-  // Cliente pidió: 1 vale propio por día. Si ya existe, reusar (o "ya_impreso").
+  // Cliente pidió: 1 vale propio por día. Si no hay inscripción previa, debe
+  // emitirse opción 1 automáticamente SIN ERRORES (docx 25/05). Usa el mismo
+  // endpoint /api/pedidos/auto-totem que el flujo comensal — éste maneja:
+  //  · pedido nuevo: crea con opción 1 + marca impreso
+  //  · pedido existente sin imprimir: marca impreso y devuelve
+  //  · pedido existente impreso: devuelve impresoEn → UI muestra "ya_impreso"
+  //  · pedido no_asiste: lo flipea a opción 1 + marca impreso
   async function handleStaffValePropio() {
     if (!user) return;
     if (todayMinutas.length === 0) {
@@ -555,46 +567,41 @@ export default function Kiosk() {
       return;
     }
     setBusy(true);
+    setErrMsg("");
     try {
       const minuta = todayMinutas[0];
-      const r = await fetch(`/api/pedidos/${user.id}?_t=${Date.now()}`, { credentials: "include" });
-      const pedidos: Pedido[] = r.ok ? await r.json() : [];
-      // Excluir visita Y no_asiste (opción 0): un staff "Mi vale" siempre quiere
-      // un vale válido. Si solo hay no_asiste, dejamos que selectOption cree
-      // uno nuevo con opción 1 (que sobrescribirá vía updatePedido si aplica).
-      const existing = pedidos.find(
-        p => p.minutaId === minuta.id && p.tipo !== "visita" && p.opcionSeleccionada > 0
-      );
-      if (existing) {
-        if (existing.impresoEn) {
-          setBusy(false);
-          setStep("ya_impreso");
-          try { await apiRequest("POST", "/api/auth/logout"); } catch {}
-          return;
-        }
-        const opt = getOptions(minuta).find(o => o.number === existing.opcionSeleccionada);
-        const nowDate = new Date();
-        setQrCode(existing.codigoQr || existing.id);
-        setQrPedidoId(existing.id);
-        setQrMeta({
-          familia: minuta.familia || "Almuerzo",
-          opcion: opt?.text || `Opción ${existing.opcionSeleccionada}`,
-          nombre: `${user.nombre} ${user.apellido}`,
-          rut: formatRutDisplay(user.rut),
-          fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
-          hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
-        });
-        try { await apiRequest("POST", `/api/pedidos/${existing.id}/marcar-impreso`, {}); } catch {}
+      const res = await apiRequest("POST", "/api/pedidos/auto-totem", {
+        userId: user.id,
+        minutaId: minuta.id,
+      });
+      const pedido: Pedido & { action?: "created" | "marked_existing" | "already_printed" } = await res.json();
+      // Determinístico desde el server: si ya estaba impreso ANTES de esta
+      // llamada, mostrar "ya_impreso" — la reemisión va por flujo Reimpresión.
+      if (pedido.action === "already_printed") {
         setBusy(false);
-        setStep("qr");
+        setStep("ya_impreso");
         try { await apiRequest("POST", "/api/auth/logout"); } catch {}
         return;
       }
+      const opt = getOptions(minuta).find(o => o.number === pedido.opcionSeleccionada);
+      const nowDate = new Date();
+      setQrCode(pedido.codigoQr || pedido.id);
+      setQrPedidoId(pedido.id);
+      setQrMeta({
+        familia: minuta.familia || "Almuerzo",
+        opcion: opt?.text || `Opción ${pedido.opcionSeleccionada}`,
+        nombre: `${user.nombre} ${user.apellido}`,
+        rut: formatRutDisplay(user.rut),
+        fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+      });
       setBusy(false);
-      await selectOption(minuta, 1);
+      setStep("qr");
+      try { await apiRequest("POST", "/api/auth/logout"); } catch {}
     } catch {
       setBusy(false);
-      await selectOption(todayMinutas[0], 1);
+      setErrMsg("No se pudo emitir tu vale. Intenta nuevamente.");
+      setStep("error");
     }
   }
 

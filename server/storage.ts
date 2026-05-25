@@ -1,4 +1,4 @@
-import { eq, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, ne } from "drizzle-orm";
 import {
   db,
   DB_MODE,
@@ -214,7 +214,20 @@ export class DatabaseStorage implements IStorage {
   }
   async getPedidoByUserAndMinuta(userId: string, minutaId: string): Promise<Pedido | undefined> {
     // Excluir tombstones para que admin pueda anular y permitir nueva inscripción.
-    const [pedido] = await db.select().from(pedidos).where(and(eq(pedidos.userId, userId), eq(pedidos.minutaId, minutaId), isNull(pedidos.deletedAt)));
+    // IMPORTANTE: excluimos también pedidos de tipo "visita" — un staff puede
+    // emitir múltiples vales de visita en la misma minuta, y este lookup
+    // (usado por auto-totem y POST /api/pedidos para detectar "ya hay pedido
+    // propio") debe ignorarlos. El "vale propio" del staff/comensal SIEMPRE
+    // es tipo "seleccion" o "no_asiste".
+    const [pedido] = await db
+      .select()
+      .from(pedidos)
+      .where(and(
+        eq(pedidos.userId, userId),
+        eq(pedidos.minutaId, minutaId),
+        isNull(pedidos.deletedAt),
+        ne(pedidos.tipo, "visita"),
+      ));
     return pedido;
   }
   async createPedido(insertPedido: InsertPedido & { codigoQr?: string; id?: string; origenTotemId?: string; createdAt?: Date }): Promise<Pedido> {
