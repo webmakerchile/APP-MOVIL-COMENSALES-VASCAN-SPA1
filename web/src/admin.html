@@ -1374,11 +1374,12 @@
       useEffect(() => {
         apiFetch('/api/casinos').then(data => {
           setAllCasinos(data);
-          // Interlocutor: filter to their assigned casino only
-          if (user?.role === 'interlocutor' && user?.casinoId) {
-            const mine = data.filter(c => c.id === user.casinoId);
+          // Interlocutor: filtrar todos los casinos asignados (casinoId + casinoIds)
+          if (user?.role === 'interlocutor') {
+            const myIds = new Set([user.casinoId, ...(user.casinoIds || [])].filter(Boolean));
+            const mine = data.filter(c => myIds.has(c.id));
             setCasinos(mine);
-            setSelectedCasino(user.casinoId);
+            setSelectedCasino('all');
           } else {
             setCasinos(data);
             setSelectedCasino('all');
