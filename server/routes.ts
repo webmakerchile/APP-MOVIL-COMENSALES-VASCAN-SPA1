@@ -399,7 +399,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       (req.session as any).userId = user.id;
 
       const { password: _, ...userWithoutPassword } = user;
-      return res.json({ user: userWithoutPassword });
+      // Incluir casinoIds en la respuesta del login (mismos que /api/auth/me).
+      // El tótem usa esto para resolver multi-casino sin tener que hacer un
+      // round-trip extra a /me — antes faltaba y el staff con varios casinos
+      // siempre caía al casino base.
+      const casinoIds = await getAccessibleCasinoIds(user);
+      return res.json({ user: { ...userWithoutPassword, casinoIds: casinoIds || [] } });
     } catch (error) {
       console.error("Login error:", error);
       return res.status(500).json({ message: "Error interno del servidor" });
@@ -455,6 +460,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Change password error:", error);
       return res.status(500).json({ message: "Error al cambiar la clave" });
+    }
+  });
+
+  // Reset de clave por RUT desde el tótem (staff). Cliente pidió que el
+  // botón "Cambio de clave" en el menú staff permita modificar la clave de
+  // CUALQUIER comensal accesible al staff (flujo: ingresa RUT → nueva clave
+  // → repetir). No exige clave actual: el staff actúa como administrador del
+  // casino. Scope: solo usuarios cuyo casino esté dentro del scope del actor.
+  app.post("/api/auth/reset-password-by-rut", async (req: Request, res: Response) => {
+    try {
+      const sessionUserId = (req.session as any).userId;
+      if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+      const actor = await storage.getUser(sessionUserId);
+      if (!actor) return res.status(401).json({ message: "Usuario no encontrado" });
+      const isStaff = actor.role === "admin" || actor.role === "interlocutor" || actor.role === "encargado_casino";
+      if (!isStaff) return res.status(403).json({ message: "Solo staff puede resetear claves" });
+
+      const { rut, newPassword } = req.body || {};
+      if (!rut || !newPassword || String(newPassword).length < 4) {
+        return res.status(400).json({ message: "RUT y nueva clave (≥4 dígitos) son requeridos" });
+      }
+
+      const target = await storage.getUserByRut(rut);
+      if (!target) return res.status(404).json({ message: "No se encontró un usuario con ese RUT" });
+
+      // Bloquear reset del super admin desde el tótem.
+      if (target.rut === SUPER_ADMIN_RUT) {
+        return res.status(403).json({ message: "Este usuario no puede modificarse desde el tótem" });
+      }
+
+      // Scope: el target debe pertenecer al scope de casinos del actor.
+      // Admin global pasa. Para interlocutor/encargado, validar intersección
+      // entre casinos accesibles del actor y casinos del target.
+      const actorAccessible = await getAccessibleCasinoIds(actor);
+      if (actorAccessible !== null) {
+        const targetCasinos = new Set<string>(await storage.getUserCasinoIds(target.id));
+        if (target.casinoId) targetCasinos.add(target.casinoId);
+        const overlap = Array.from(targetCasinos).some(cid => actorAccessible.includes(cid));
+        if (!overlap) return res.status(403).json({ message: "Sin acceso a este usuario" });
+      }
+
+      const hashed = await bcrypt.hash(String(newPassword), 10);
+      await storage.updateUser(target.id, { password: hashed, passwordChangeRequired: false } as any);
+      console.log(`[audit] reset-password-by-rut: actor=${actor.rut} (${actor.role}) → target=${target.rut}`);
+      return res.json({ message: "Clave actualizada", user: { rut: target.rut, nombre: target.nombre, apellido: target.apellido } });
+    } catch (error) {
+      console.error("Reset password by rut error:", error);
+      return res.status(500).json({ message: "Error al resetear la clave" });
     }
   });
 
@@ -1518,19 +1571,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const fecha = (req.query.fecha as string) || new Date().toISOString().split("T")[0];
       const minutas = await storage.getAllMinutasByCasino(casinoId);
-      const minuta = minutas.find(m => m.fecha === fecha && m.activo);
-      if (!minuta) {
+      // Agregar TODAS las minutas activas del día (almuerzo + colación + VIP +
+      // desayuno, etc). Antes solo tomaba una y dejaba el resumen vacío cuando
+      // había varias familias el mismo día.
+      const dayMinutas = minutas.filter(m => m.fecha === fecha && m.activo);
+      if (dayMinutas.length === 0) {
         return res.json({ fecha, casinoId, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
       }
-      const pedidosList = await storage.getPedidosByMinuta(minuta.id);
-      const sel = pedidosList.filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
-      const noAsiste = pedidosList.filter(p => p.tipo === "no_asiste").length;
-      const visitas = pedidosList.filter(p => p.tipo === "visita").length;
-      const opts = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
-      const opciones = opts.map((d, i) => d ? { numero: i + 1, descripcion: d, cantidad: sel.filter(p => p.opcionSeleccionada === i + 1).length } : null).filter(Boolean);
+      // Acumular pedidos de todas las minutas del día.
+      const pedidosByMinuta = await Promise.all(dayMinutas.map(m => storage.getPedidosByMinuta(m.id)));
+      const allPedidos = pedidosByMinuta.flat();
+      const sel = allPedidos.filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
+      const noAsiste = allPedidos.filter(p => p.tipo === "no_asiste").length;
+      const visitas = allPedidos.filter(p => p.tipo === "visita").length;
+      // Opciones agregadas: agrupar por (familia + número + descripción) para
+      // diferenciar "Opción 1 - Almuerzo" de "Opción 1 - Colación".
+      const opcionesMap = new Map<string, { familia: string | null; numero: number; descripcion: string; cantidad: number }>();
+      for (let mi = 0; mi < dayMinutas.length; mi++) {
+        const m = dayMinutas[mi];
+        const pedidosOfM = pedidosByMinuta[mi].filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
+        const opts = [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5];
+        for (let i = 0; i < opts.length; i++) {
+          const d = opts[i];
+          if (!d) continue;
+          const numero = i + 1;
+          const key = `${m.familia || "—"}|${numero}|${d}`;
+          const prev = opcionesMap.get(key);
+          const cantidad = pedidosOfM.filter(p => p.opcionSeleccionada === numero).length;
+          if (prev) {
+            prev.cantidad += cantidad;
+          } else {
+            opcionesMap.set(key, { familia: m.familia ?? null, numero, descripcion: d, cantidad });
+          }
+        }
+      }
+      const opciones = Array.from(opcionesMap.values()).sort((a, b) => {
+        const fa = a.familia || "";
+        const fb = b.familia || "";
+        if (fa !== fb) return fa.localeCompare(fb);
+        return a.numero - b.numero;
+      });
       return res.json({
         fecha, casinoId,
-        minuta: { id: minuta.id, familia: minuta.familia },
+        minuta: { id: dayMinutas[0].id, familia: dayMinutas.map(m => m.familia).filter(Boolean).join(" + ") || null },
         opciones, totalSeleccion: sel.length, totalNoAsiste: noAsiste, totalVisitas: visitas,
       });
     } catch (error) {

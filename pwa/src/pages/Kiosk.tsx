@@ -47,6 +47,7 @@ type Step =
   | "login_rut"
   | "login_pwd"
   | "change_pwd"
+  | "change_pwd_rut"
   | "menu"
   | "qr"
   | "error"
@@ -197,6 +198,9 @@ export default function Kiosk() {
   const [newPwd, setNewPwd] = useState("");
   const [newPwd2, setNewPwd2] = useState("");
   const [pwdStage, setPwdStage] = useState<1 | 2>(1);
+  // RUT del comensal objetivo cuando el staff resetea claves desde el tótem.
+  // Si está vacío al hacer submit, se asume "cambiar mi propia clave".
+  const [resetTargetRut, setResetTargetRut] = useState("");
   const [resumen, setResumen] = useState<any>(null);
   const [reimpRut, setReimpRut] = useState("");
   const [reimpResult, setReimpResult] = useState<{ user: any; pedidos: Pedido[]; minutas: Minuta[] } | null>(null);
@@ -224,6 +228,7 @@ export default function Kiosk() {
     setNewPwd("");
     setNewPwd2("");
     setPwdStage(1);
+    setResetTargetRut("");
     setResumen(null);
     setReimpRut("");
     setReimpResult(null);
@@ -499,6 +504,25 @@ export default function Kiosk() {
     if (newPwd2 !== newPwd) { setErrMsg("Las claves no coinciden"); setNewPwd2(""); return; }
     setBusy(true); setErrMsg("");
     try {
+      // Dos modos:
+      //  a) `resetTargetRut` lleno → staff está reseteando la clave de OTRO
+      //     usuario (comensal o staff dentro de su scope). Usa endpoint
+      //     reset-password-by-rut, no pide clave actual.
+      //  b) vacío → cambio de clave propia (con currentPassword si no es forzado).
+      if (resetTargetRut) {
+        const res = await apiRequest("POST", "/api/auth/reset-password-by-rut", {
+          rut: normalizeRutForApi(resetTargetRut),
+          newPassword: newPwd,
+        });
+        if (!res.ok) {
+          let serverMsg = "";
+          try { const j = await res.json(); serverMsg = j?.message || ""; } catch {}
+          throw new Error(serverMsg || `HTTP ${res.status}`);
+        }
+        setErrMsg("Clave actualizada para el usuario.");
+        setTimeout(reset, 1800);
+        return;
+      }
       // Si NO es cambio forzado, el backend exige currentPassword.
       // Reutilizamos la clave que el usuario acaba de tipear al ingresar.
       const body: { newPassword: string; currentPassword?: string } = { newPassword: newPwd };
@@ -780,11 +804,46 @@ export default function Kiosk() {
           </div>
         )}
 
+        {step === "change_pwd_rut" && (
+          <div className="w-full max-w-md flex flex-col items-center gap-6">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold mb-2">RUT del usuario</h2>
+              <p className="text-white/50">Ingresa el RUT del comensal cuya clave quieres resetear</p>
+            </div>
+            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-center">
+              <p className="text-4xl font-mono font-bold tracking-wider text-vascan-gold min-h-[3rem]">
+                {resetTargetRut ? formatRutDisplay(resetTargetRut) : <span className="text-white/20">12.345.678-9</span>}
+              </p>
+            </div>
+            {errMsg && <p className="text-red-400 text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {errMsg}</p>}
+            <Keypad
+              value={resetTargetRut}
+              onChange={(v) => setResetTargetRut(v.slice(0, 9).toUpperCase())}
+              onSubmit={() => {
+                if (!resetTargetRut || resetTargetRut.length < 2) { setErrMsg("Ingresa un RUT válido"); return; }
+                setErrMsg("");
+                setNewPwd("");
+                setNewPwd2("");
+                setPwdStage(1);
+                setStep("change_pwd");
+              }}
+              withK
+            />
+            <button onClick={() => setStep("staff_menu")} className="flex items-center gap-2 text-white/40 hover:text-white/70 text-sm">
+              <ArrowLeft className="w-4 h-4" /> Cancelar
+            </button>
+          </div>
+        )}
+
         {step === "change_pwd" && (
           <div className="w-full max-w-md flex flex-col items-center gap-6">
             <div className="text-center">
-              <h2 className="text-3xl font-bold mb-2">{pwdStage === 1 ? "Crea tu nueva clave" : "Confirma tu nueva clave"}</h2>
-              <p className="text-white/50">Mínimo 4 dígitos · solo numérica</p>
+              <h2 className="text-3xl font-bold mb-2">{pwdStage === 1 ? "Crea la nueva clave" : "Confirma la nueva clave"}</h2>
+              {resetTargetRut ? (
+                <p className="text-white/50">Para RUT: <span className="text-vascan-gold font-mono">{formatRutDisplay(resetTargetRut)}</span></p>
+              ) : (
+                <p className="text-white/50">Mínimo 4 dígitos · solo numérica</p>
+              )}
             </div>
             <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-center">
               <p className="text-5xl font-bold tracking-[0.5em] text-vascan-gold min-h-[3rem]">
@@ -829,13 +888,16 @@ export default function Kiosk() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    {(resumen.opciones || []).map((o: any) => (
-                      <div key={o.numero} className="flex items-center justify-between bg-white/3 rounded-lg px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="w-8 h-8 rounded-full bg-vascan-gold/20 text-vascan-gold flex items-center justify-center font-bold">{o.numero}</span>
-                          <span className="text-white">{o.descripcion}</span>
+                    {(resumen.opciones || []).map((o: any, i: number) => (
+                      <div key={`${o.familia || "-"}:${o.numero}:${i}`} className="flex items-center justify-between bg-white/3 rounded-lg px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-8 h-8 shrink-0 rounded-full bg-vascan-gold/20 text-vascan-gold flex items-center justify-center font-bold">{o.numero}</span>
+                          <div className="min-w-0">
+                            {o.familia && <p className="text-xs text-white/40 uppercase tracking-wide">{o.familia}</p>}
+                            <span className="text-white truncate block">{o.descripcion}</span>
+                          </div>
                         </div>
-                        <span className="text-vascan-gold font-bold text-xl">{o.cantidad}</span>
+                        <span className="text-vascan-gold font-bold text-xl shrink-0 ml-3">{o.cantidad}</span>
                       </div>
                     ))}
                   </div>
@@ -877,9 +939,9 @@ export default function Kiosk() {
                   <div className="pv-row"><span className="pv-label">No asiste</span><span className="pv-value">{resumen.totalNoAsiste}</span></div>
                   <div className="pv-row"><span className="pv-label">Visitas</span><span className="pv-value">{resumen.totalVisitas}</span></div>
                   <hr className="pv-hr" />
-                  {(resumen.opciones || []).map((o: any) => (
-                    <div key={o.numero} className="pv-row">
-                      <span className="pv-label">Opc {o.numero}: {o.descripcion}</span>
+                  {(resumen.opciones || []).map((o: any, i: number) => (
+                    <div key={`${o.familia || "-"}:${o.numero}:${i}`} className="pv-row">
+                      <span className="pv-label">{o.familia ? `${o.familia} · ` : ""}Opc {o.numero}: {o.descripcion}</span>
                       <span className="pv-value">{o.cantidad}</span>
                     </div>
                   ))}
@@ -976,11 +1038,11 @@ export default function Kiosk() {
                   disponible para staff en el tótem, sin depender de la flag por
                   casino. */}
               <button
-                onClick={() => { setStep("change_pwd"); setNewPwd(""); setNewPwd2(""); setPwdStage(1); setErrMsg(""); }}
+                onClick={() => { setStep("change_pwd_rut"); setResetTargetRut(""); setNewPwd(""); setNewPwd2(""); setPwdStage(1); setErrMsg(""); }}
                 className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition sm:col-span-2"
               >
                 Cambio de clave
-                <p className="text-sm font-normal text-white/60 mt-1">Actualizar tu clave numérica</p>
+                <p className="text-sm font-normal text-white/60 mt-1">Resetear clave de un comensal por RUT</p>
               </button>
             </div>
             {errMsg && <p className="text-red-400 text-sm flex items-center gap-2 justify-center"><AlertCircle className="w-4 h-4" /> {errMsg}</p>}
