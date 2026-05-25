@@ -113,12 +113,17 @@ export class DatabaseStorage implements IStorage {
     // Normaliza RUT al formato canónico "12345678-5" antes de consultar.
     // Acepta entradas con/sin puntos y con/sin guion (ej. desde el kiosko que
     // solo permite teclado numérico, o desde Excel que viene con dots).
-    const cleaned = (rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
-    const normalized = cleaned.length > 1
+    const raw = (rut || "").trim();
+    const cleaned = raw.replace(/[^0-9kK]/g, "").toUpperCase();
+    const looksLikeRut = cleaned.length > 1 && /^[0-9]+[0-9kK]$/.test(cleaned);
+    const normalized = looksLikeRut
       ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1)
-      : cleaned;
+      : raw;
     const [user] = await db.select().from(users).where(eq(users.rut, normalized));
-    return user;
+    if (user) return user;
+    if (looksLikeRut) return undefined;
+    const [byRaw] = await db.select().from(users).where(eq(users.rut, raw));
+    return byRaw;
   }
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users);
