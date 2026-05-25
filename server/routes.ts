@@ -1290,11 +1290,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Minuta no encontrada" });
       }
 
-      const casinoPeriodos = await storage.getPeriodosByCasino(minuta.casinoId);
-      const now = new Date();
-      const activePeriodos = casinoPeriodos.filter(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
-      if (casinoPeriodos.filter(p => p.activo).length > 0 && activePeriodos.length === 0) {
-        return res.status(403).json({ message: "La inscripción no está disponible en este momento. Fuera del horario de inscripción." });
+      // Staff (admin/interlocutor/encargado_casino) puede emitir pedidos en
+      // cualquier momento — el cierre del periodo de inscripción no debe
+      // bloquearlos (escenario: emitir vale propio durante el servicio).
+      // CRÍTICO: el rol se evalúa con el ACTOR DE SESIÓN, no con el `userId`
+      // del body. Sino un comensal podría mandar el id de un staff para
+      // saltarse la validación de periodo.
+      const sessionUserId = (req.session as any).userId;
+      const actor = sessionUserId ? await storage.getUser(sessionUserId) : null;
+      const isStaff = !!actor && (actor.role === "admin" || actor.role === "interlocutor" || actor.role === "encargado_casino");
+      // Comensal solo puede crear pedidos para sí mismo.
+      if (!isStaff && (!actor || actor.id !== parsed.data.userId)) {
+        return res.status(403).json({ message: "Solo puedes registrar tu propio pedido" });
+      }
+      if (!isStaff) {
+        const casinoPeriodos = await storage.getPeriodosByCasino(minuta.casinoId);
+        const now = new Date();
+        const activePeriodos = casinoPeriodos.filter(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
+        if (casinoPeriodos.filter(p => p.activo).length > 0 && activePeriodos.length === 0) {
+          return res.status(403).json({ message: "La inscripción no está disponible en este momento. Fuera del horario de inscripción." });
+        }
       }
 
       const tipo = req.body.tipo || "seleccion";
@@ -1372,12 +1387,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
       if (existing && existing.opcionSeleccionada > 0) {
+        // Si ya estaba impreso, lo devolvemos pero el frontend mostrará "ya_impreso".
+        // Si no estaba impreso, lo marcamos AHORA mismo: garantiza que el
+        // próximo login vea impresoEn y bloquee la reimpresión (defiende contra
+        // race conditions y silenciamientos del marcar-impreso del frontend).
+        if (!existing.impresoEn) {
+          const marked = await storage.markPedidoImpreso(existing.id);
+          return res.json(marked || existing);
+        }
         return res.json(existing);
       }
       if (existing && existing.opcionSeleccionada === 0) {
-        // Tenía "no_asiste"; el tótem ya muestra mensaje separado, pero por
-        // robustez devolvemos 409 aquí también.
-        return res.status(409).json({ message: "no_asiste" });
+        // Tenía "no_asiste" — cliente pidió que el tótem SIEMPRE pueda emitir
+        // vale (opción 1) aunque el usuario haya declarado no asistir. Lo
+        // convertimos a selección normal y marcamos impreso.
+        const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const updated = await storage.updatePedido(existing.id, {
+          opcionSeleccionada: 1,
+          codigoQr,
+          tipo: "seleccion",
+        } as any);
+        const marked = updated ? await storage.markPedidoImpreso(updated.id) : null;
+        return res.json(marked || updated || existing);
       }
       const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const pedido = await storage.createPedido({
@@ -1387,7 +1418,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         codigoQr,
         tipo: "seleccion",
       });
-      return res.status(201).json(pedido);
+      const marked = await storage.markPedidoImpreso(pedido.id);
+      return res.status(201).json(marked || pedido);
     } catch (error) {
       console.error("auto-totem error:", error);
       return res.status(500).json({ message: "Error al emitir vale" });
@@ -1629,9 +1661,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Solo staff puede emitir vales de visita" });
       }
 
-      const { minutaId, nombreVisita } = req.body;
-      if (!minutaId || !nombreVisita) {
-        return res.status(400).json({ message: "minutaId y nombreVisita son requeridos" });
+      const { minutaId } = req.body;
+      // nombreVisita es opcional — cliente pidió emitir vale sin pedir nombre
+      // en el tótem (flujo "Vale visita" = un click, sin teclado táctil).
+      const nombreVisita = (req.body?.nombreVisita && String(req.body.nombreVisita).trim()) || "Visita";
+      if (!minutaId) {
+        return res.status(400).json({ message: "minutaId requerido" });
       }
 
       const minuta = await storage.getMinuta(minutaId);
@@ -2911,8 +2946,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const start = new Date(fechaDesde + "T00:00:00");
       const end = new Date(fechaHasta + "T23:59:59");
 
+      // Consumo = "ya pasó a comer". Filtramos por impresoEn (proxy real de
+      // consumo) y excluimos no_asiste. Si impresoEn está vacío significa que
+      // el comensal se inscribió pero NO pasó por el tótem, no debe contar.
       const filtered = allPedidos.filter(p => {
         if (p.tipo === "no_asiste") return false;
+        if (!p.impresoEn) return false;
         const m = minutaById.get(p.minutaId);
         if (!m) return false;
         const fechaServ = new Date(m.fecha + "T12:00:00");
@@ -2949,9 +2988,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const c = m ? casinoById.get(m.casinoId) : null;
         const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
         const opcionTexto = opciones[p.opcionSeleccionada - 1] || `Opción ${p.opcionSeleccionada}`;
-        const created = p.createdAt ? new Date(p.createdAt) : null;
-        const fechaConsumoStr = created
-          ? `${created.toLocaleDateString("es-CL")} ${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`
+        // Hora del vale = impresoEn (cuando se imprimió en el tótem), no createdAt.
+        const stamp = p.impresoEn ? new Date(p.impresoEn) : (p.createdAt ? new Date(p.createdAt) : null);
+        const fechaConsumoStr = stamp
+          ? `${stamp.toLocaleDateString("es-CL")} ${String(stamp.getHours()).padStart(2, "0")}:${String(stamp.getMinutes()).padStart(2, "0")}`
           : "—";
         const comensalLabel = p.tipo === "visita"
           ? `VISITA — ${p.nombreVisita || ""}`

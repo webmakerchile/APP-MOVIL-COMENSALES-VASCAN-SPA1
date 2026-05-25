@@ -582,8 +582,8 @@ export default function Kiosk() {
     setErrMsg("");
     setStep("vale_visita_nombre");
   }
-  async function handleVisitaNombreSubmit() {
-    if (!visitaNombre.trim()) { setErrMsg("Ingresa el nombre del visitante"); return; }
+  async function handleVisitaNombreSubmit(nombreOverride?: string) {
+    const nombreFinal = (nombreOverride ?? visitaNombre).trim() || "Visita";
     if (todayMinutas.length === 0) { setErrMsg("No hay minuta para hoy."); setStep("error"); return; }
     setErrMsg("");
     setBusy(true);
@@ -592,7 +592,7 @@ export default function Kiosk() {
       const res = await apiRequest("POST", "/api/pedidos/visita", {
         userId: user!.id,
         minutaId: minuta.id,
-        nombreVisita: visitaNombre.trim(),
+        nombreVisita: nombreFinal,
       });
       const pedido: Pedido = await res.json();
       const nowDate = new Date();
@@ -600,8 +600,8 @@ export default function Kiosk() {
       setQrPedidoId(pedido.id);
       setQrMeta({
         familia: minuta.familia || "Almuerzo",
-        opcion: `Visita: ${visitaNombre.trim()}`,
-        nombre: visitaNombre.trim(),
+        opcion: `Visita: ${nombreFinal}`,
+        nombre: nombreFinal,
         rut: "—",
         fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
         hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
@@ -951,8 +951,8 @@ export default function Kiosk() {
                 <p className="text-sm font-normal opacity-80 mt-1">Vale propio del día</p>
               </button>
               <button
-                onClick={() => { setStep("vale_visita_nombre"); setVisitaRut(""); setVisitaNombre(""); setErrMsg(""); }}
-                disabled={todayMinutas.length === 0}
+                onClick={() => { setVisitaRut(""); setVisitaNombre("Visita"); setErrMsg(""); handleVisitaNombreSubmit("Visita"); }}
+                disabled={busy || todayMinutas.length === 0}
                 className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition disabled:opacity-40"
               >
                 Vale visita
@@ -972,15 +972,16 @@ export default function Kiosk() {
                 Reimpresión
                 <p className="text-sm font-normal text-white/60 mt-1">Buscar vale por RUT</p>
               </button>
-              {casino?.permitirCambioClaveTotem && (
-                <button
-                  onClick={() => { setStep("change_pwd"); setNewPwd(""); setNewPwd2(""); setPwdStage(1); setErrMsg(""); }}
-                  className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition sm:col-span-2"
-                >
-                  Cambio de clave
-                  <p className="text-sm font-normal text-white/60 mt-1">Actualizar tu clave numérica</p>
-                </button>
-              )}
+              {/* Cliente pidió: el botón de cambio de clave debe estar SIEMPRE
+                  disponible para staff en el tótem, sin depender de la flag por
+                  casino. */}
+              <button
+                onClick={() => { setStep("change_pwd"); setNewPwd(""); setNewPwd2(""); setPwdStage(1); setErrMsg(""); }}
+                className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold text-xl transition sm:col-span-2"
+              >
+                Cambio de clave
+                <p className="text-sm font-normal text-white/60 mt-1">Actualizar tu clave numérica</p>
+              </button>
             </div>
             {errMsg && <p className="text-red-400 text-sm flex items-center gap-2 justify-center"><AlertCircle className="w-4 h-4" /> {errMsg}</p>}
             <div className="flex justify-center">
