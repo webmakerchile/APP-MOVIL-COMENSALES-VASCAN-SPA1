@@ -408,10 +408,15 @@ export default function Kiosk() {
       //  · Caso 1 (pedido existente, no impreso) → action "marked_existing" → imprimir
       //  · Caso 1 (pedido existente, ya impreso)  → action "already_printed" → ya_impreso
       //  · Caso 3 (sin pedido)                    → action "created"         → imprimir
-      // Enviar fecha LOCAL (Chile) para evitar desfase UTC: después de ~9pm Chile
-      // el servidor UTC ya es mañana, lo que causaba 403 en usuarios sin inscripción.
+      // CRÍTICO: si ya tiene pedido válido, usar SU minutaId — no siempre todayMins[0].
+      // Con varias minutas en el día (Almuerzo + Colación), todayMins[0] podría ser
+      // distinto al pedido inscrito, haciendo que el servidor no encontrara el pedido
+      // existente y creara uno nuevo → el comensal podía imprimir un segundo vale.
+      // Enviar fecha LOCAL (Chile) para evitar desfase UTC.
       try {
-        const minuta = todayMins[0];
+        const minuta = existingValid
+          ? (todayMins.find(m => m.id === existingValid.minutaId) ?? todayMins[0])
+          : todayMins[0];
         const res = await apiRequest("POST", "/api/pedidos/auto-totem", {
           userId: u!.id,
           minutaId: minuta.id,
