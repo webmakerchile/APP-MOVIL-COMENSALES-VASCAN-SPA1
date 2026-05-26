@@ -102,10 +102,28 @@ body,
     padding: 4mm 4mm 8mm 4mm;
     color: #000;
     background: #fff;
-    font-family: "Helvetica", "Arial", sans-serif;
-    font-size: 12px;
-    line-height: 1.35;
+    font-family: "Courier New", "Courier", monospace;
+    font-size: 11px;
+    line-height: 1.4;
   }
+  /* ── Ticket resumen clases ── */
+  .print-resumen .pr-center   { text-align: center; }
+  .print-resumen .pr-title    { font-size: 12px; font-weight: 800; letter-spacing: 2px; text-align: center; text-transform: uppercase; }
+  .print-resumen .pr-subtitle { font-size: 10px; text-align: center; margin: 0.3mm 0; letter-spacing: 0.5px; }
+  .print-resumen .pr-text     { font-size: 10px; margin: 0.3mm 0; }
+  .print-resumen .pr-hr       { border: 0; border-top: 1px dashed #000; margin: 2mm 0; }
+  .print-resumen .pr-section  { font-weight: 700; font-size: 11px; margin: 2mm 0 1mm; }
+  .print-resumen .pr-col-hdr  { display: flex; font-size: 10px; font-weight: 700; margin-bottom: 0.5mm; padding-bottom: 0.5mm; }
+  .print-resumen .pr-svc-row  { display: flex; font-size: 10px; margin: 0.4mm 0; }
+  .print-resumen .pr-col-svc  { flex: 1; }
+  .print-resumen .pr-col-qty  { width: 10mm; text-align: right; font-weight: 700; white-space: nowrap; }
+  .print-resumen .pr-total-row { display: flex; font-size: 11px; font-weight: 800; border-top: 1px solid #000; margin-top: 0.5mm; padding-top: 0.5mm; }
+  .print-resumen .pr-date-hdr { font-weight: 700; font-size: 11px; margin: 1.5mm 0 0.5mm; }
+  .print-resumen .pr-opt-row  { display: flex; font-size: 10px; margin: 0.4mm 0; align-items: flex-start; }
+  .print-resumen .pr-opt-num  { width: 5mm; font-weight: 700; flex-shrink: 0; }
+  .print-resumen .pr-opt-desc { flex: 1; font-size: 9px; padding-right: 1mm; word-break: break-word; }
+  .print-resumen .pr-opt-qty  { width: 10mm; text-align: right; font-weight: 700; flex-shrink: 0; }
+  .print-resumen .pr-opt-total { display: flex; font-size: 11px; font-weight: 800; border-top: 1px solid #000; margin-top: 0.5mm; padding-top: 0.5mm; }
   .print-vale .pv-center { text-align: center; }
   .print-vale .pv-brand { font-size: 18px; font-weight: 800; letter-spacing: 1px; }
   .print-vale .pv-sub   { font-size: 11px; margin-top: 1mm; }

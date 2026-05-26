@@ -1584,8 +1584,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // desayuno, etc). Antes solo tomaba una y dejaba el resumen vacío cuando
       // había varias familias el mismo día.
       const dayMinutas = minutas.filter(m => m.fecha === fecha && m.activo);
+      // Periodo activo para Desde/Hasta en el ticket imprimible.
+      const casinoPeriodos = await storage.getPeriodosByCasino(casinoId);
+      const fechaDate = new Date(fecha + "T12:00:00Z");
+      const activePeriodo = casinoPeriodos.find(p =>
+        p.activo && new Date(p.fechaInicio) <= fechaDate && new Date(p.fechaFin) >= fechaDate
+      ) || null;
+      const periodoOut = activePeriodo
+        ? { fechaInicio: activePeriodo.fechaInicio.toISOString(), fechaFin: activePeriodo.fechaFin.toISOString() }
+        : null;
       if (dayMinutas.length === 0) {
-        return res.json({ fecha, casinoId, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
+        return res.json({ fecha, casinoId, periodo: periodoOut, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
       }
       // Acumular pedidos de todas las minutas del día.
       const pedidosByMinuta = await Promise.all(dayMinutas.map(m => storage.getPedidosByMinuta(m.id)));
@@ -1621,7 +1630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return a.numero - b.numero;
       });
       return res.json({
-        fecha, casinoId,
+        fecha, casinoId, periodo: periodoOut,
         minuta: { id: dayMinutas[0].id, familia: dayMinutas.map(m => m.familia).filter(Boolean).join(" + ") || null },
         opciones, totalSeleccion: sel.length, totalNoAsiste: noAsiste, totalVisitas: visitas,
       });
