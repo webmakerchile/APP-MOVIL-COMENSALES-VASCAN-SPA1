@@ -202,6 +202,7 @@ export default function Kiosk() {
   // Si está vacío al hacer submit, se asume "cambiar mi propia clave".
   const [resetTargetRut, setResetTargetRut] = useState("");
   const [resumen, setResumen] = useState<any>(null);
+  const [printTime, setPrintTime] = useState<Date | null>(null);
   const [reimpRut, setReimpRut] = useState("");
   const [reimpResult, setReimpResult] = useState<{ user: any; pedidos: Pedido[]; minutas: Minuta[] } | null>(null);
   const [visitaRut, setVisitaRut] = useState("");
@@ -905,7 +906,7 @@ export default function Kiosk() {
                 Actualizar
               </button>
               <button
-                onClick={() => { document.body.classList.add("print-resumen-mode"); window.print(); setTimeout(() => document.body.classList.remove("print-resumen-mode"), 500); }}
+                onClick={() => { setPrintTime(new Date()); document.body.classList.add("print-resumen-mode"); window.print(); setTimeout(() => document.body.classList.remove("print-resumen-mode"), 500); }}
                 className="px-6 py-3 rounded-xl bg-white/10 border border-white/20 text-white font-semibold hover:bg-white/15"
               >
                 Imprimir
@@ -950,12 +951,14 @@ export default function Kiosk() {
                     <div className="pr-title">&gt;&gt; {(casino?.nombre || "CASINO").toUpperCase()} &lt;&lt;</div>
                     <div className="pr-subtitle">------ VALE DE CONTROL INTERNO ------</div>
                     <div className="pr-subtitle">*** Informe del {nowDate} {nowTime} ***</div>
-                    {resumen?.periodo && (
-                      <>
-                        <div className="pr-text">Desde el {fmtDate(resumen.periodo.fechaInicio)} a las {fmtTime(resumen.periodo.fechaInicio)} hrs.</div>
-                        <div className="pr-text">Hasta el {fmtDate(resumen.periodo.fechaFin)} a las {fmtTime(resumen.periodo.fechaFin)} hrs.</div>
-                      </>
-                    )}
+                    {/* Desde = inicio del día (00:00). Hasta = momento exacto en que
+                        se apretó Imprimir. Así cada impresión refleja "todo lo consumido
+                        hoy hasta este minuto" — pedido del cliente 26/05/2026. */}
+                    <div className="pr-text">Desde el {resumenDateStr} a las 00:00:00 hrs.</div>
+                    <div className="pr-text">Hasta el {nowDate} a las {(() => {
+                      const t = printTime || now;
+                      return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+                    })()} hrs.</div>
                     <hr className="pr-hr" />
                     {resumen?.minuta ? (
                       <>
