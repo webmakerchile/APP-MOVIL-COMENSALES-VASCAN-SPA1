@@ -1349,13 +1349,15 @@ export default function Kiosk() {
       {/* Layout imprimible (térmica 80mm). Solo visible en @media print. */}
       {qrCode && qrMeta && (
         <div className="print-vale" aria-hidden="true">
-          <div className="pv-center pv-brand">BuenaMezcla</div>
-          {casino?.nombre && <div className="pv-center pv-sub">{casino.nombre}</div>}
+          <div className="pv-title">&gt;&gt; CASINO &lt;&lt;</div>
+          {casino?.nombre && <div className="pv-sub">{casino.nombre}</div>}
+          <div className="pv-sub">VALE DE COMEDOR</div>
           <hr className="pv-hr" />
           <div className="pv-familia">{qrMeta.familia}</div>
           <div className="pv-opcion">{qrMeta.opcion}</div>
+          <hr className="pv-hr" />
           <div className="pv-row">
-            <span className="pv-label">Comensal</span>
+            <span className="pv-label">Nombre</span>
             <span className="pv-value">{qrMeta.nombre}</span>
           </div>
           <div className="pv-row">
@@ -1374,6 +1376,8 @@ export default function Kiosk() {
               {qrMeta.hora || new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
+          <hr className="pv-hr" />
+          <div className="pv-foot">BuenaMezcla · Vale no reimprimible</div>
         </div>
       )}
     </div>

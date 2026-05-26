@@ -2,7 +2,6 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vale de Comedor – BuenaMezcla</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,45 +14,21 @@
     min-height: 100vh;
     padding: 40px 20px;
     font-family: Arial, sans-serif;
-    gap: 40px;
+    gap: 20px;
   }
-  h1 {
-    font-size: 14px;
-    color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    font-weight: 600;
-  }
-  .ticket-wrapper {
-    display: flex;
-    gap: 40px;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  .ticket-label {
-    text-align: center;
-    font-size: 11px;
-    color: #9ca3af;
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-
-  /* ── Ticket vale (80mm térmico) ── */
+  h1 { font-size: 13px; color: #6b7280; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; }
   .ticket {
-    width: 302px; /* 80mm @ 96dpi */
+    width: 302px;
     background: #fff;
     padding: 15px 15px 30px 15px;
-    font-family: "Helvetica", "Arial", sans-serif;
+    font-family: "Courier New", "Courier", monospace;
     font-size: 12px;
-    line-height: 1.35;
+    line-height: 1.5;
     color: #000;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     position: relative;
     border-radius: 2px;
   }
-  /* Torn bottom edge */
   .ticket::after {
     content: "";
     position: absolute;
@@ -63,196 +38,54 @@
     background-size: 20px 14px;
     background-repeat: repeat-x;
   }
-  .pv-center { text-align: center; }
-  .pv-brand { font-size: 18px; font-weight: 800; letter-spacing: 1px; text-align: center; }
-  .pv-sub { font-size: 11px; margin-top: 2px; text-align: center; color: #444; }
-  .pv-hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-  .pv-familia {
-    text-align: center;
-    text-transform: uppercase;
-    font-weight: 700;
-    font-size: 11px;
-    letter-spacing: 2px;
-    color: #555;
+  .t-center   { text-align: center; }
+  .t-title    { font-size: 14px; font-weight: 800; letter-spacing: 3px; text-align: center; }
+  .t-sub      { font-size: 11px; text-align: center; margin: 1px 0; }
+  .t-hr       { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+  .t-familia  { font-size: 13px; font-weight: 800; text-align: center; letter-spacing: 2px; margin: 4px 0 2px; }
+  .t-opcion   {
+    font-size: 13px; font-weight: 800; text-align: center;
+    margin: 4px 0 8px;
+    padding: 5px 6px;
+    border: 2px solid #000;
+    line-height: 1.35;
   }
-  .pv-opcion {
-    text-align: center;
-    font-size: 16px;
-    font-weight: 800;
-    margin: 6px 0;
-    padding: 6px;
-    border: 1.5px solid #000;
-    border-radius: 4px;
-  }
-  .pv-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin: 2px 0;
-    font-size: 12px;
-  }
-  .pv-label { font-weight: 600; color: #333; }
-  .pv-value { text-align: right; font-weight: 700; }
-  .pv-qr { display: flex; justify-content: center; margin: 10px 0 4px; }
-  .pv-qr img { width: 110px; height: 110px; }
-  .pv-qr-code { font-size: 8px; text-align: center; color: #888; margin-bottom: 4px; font-family: monospace; }
-  .pv-foot { text-align: center; font-size: 10px; color: #666; margin-top: 6px; }
-
-  /* ── Resumen ticket ── */
-  .ticket-resumen {
-    width: 302px;
-    background: #fff;
-    padding: 15px 15px 30px 15px;
-    font-family: "Courier New", "Courier", monospace;
-    font-size: 11px;
-    line-height: 1.4;
-    color: #000;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.1);
-    position: relative;
-    border-radius: 2px;
-  }
-  .ticket-resumen::after {
-    content: "";
-    position: absolute;
-    bottom: -1px; left: -1px; right: -1px;
-    height: 14px;
-    background: radial-gradient(circle at 50% 0%, #e5e7eb 10px, transparent 10px);
-    background-size: 20px 14px;
-    background-repeat: repeat-x;
-  }
-  .pr-center { text-align: center; }
-  .pr-title { font-size: 12px; font-weight: 800; letter-spacing: 2px; text-align: center; text-transform: uppercase; }
-  .pr-subtitle { font-size: 10px; text-align: center; margin: 1px 0; letter-spacing: 0.5px; }
-  .pr-text { font-size: 10px; margin: 1px 0; }
-  .pr-hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
-  .pr-section { font-weight: 700; font-size: 11px; margin: 5px 0 2px; }
-  .pr-col-hdr { display: flex; font-size: 10px; font-weight: 700; margin-bottom: 1px; padding-bottom: 1px; }
-  .pr-svc-row { display: flex; font-size: 10px; margin: 1px 0; }
-  .pr-col-svc { flex: 1; }
-  .pr-col-qty { width: 38px; text-align: right; font-weight: 700; white-space: nowrap; }
-  .pr-total-row { display: flex; font-size: 11px; font-weight: 800; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
-  .pr-date-hdr { font-weight: 700; font-size: 11px; margin: 5px 0 2px; }
-  .pr-opt-row { display: flex; font-size: 10px; margin: 1px 0; align-items: flex-start; }
-  .pr-opt-num { width: 18px; font-weight: 700; flex-shrink: 0; }
-  .pr-opt-desc { flex: 1; font-size: 9px; padding-right: 3px; word-break: break-word; }
-  .pr-opt-qty { width: 38px; text-align: right; font-weight: 700; flex-shrink: 0; }
-  .pr-opt-total { display: flex; font-size: 11px; font-weight: 800; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
+  .t-row      { display: flex; justify-content: space-between; font-size: 11px; margin: 2px 0; }
+  .t-label    { font-weight: 400; }
+  .t-value    { font-weight: 700; text-align: right; }
+  .t-foot     { text-align: center; font-size: 10px; margin-top: 8px; color: #444; }
 </style>
 </head>
 <body>
 
-<h1>Comprobantes BuenaMezcla · Vista previa impresión (80 mm)</h1>
+<h1>Vale de comedor – impresión tótem (80 mm)</h1>
 
-<div class="ticket-wrapper">
-
-  <!-- ── VALE INDIVIDUAL ── -->
-  <div>
-    <div class="ticket-label">Vale de comedor (comensal)</div>
-    <div class="ticket">
-      <div class="pv-brand">BuenaMezcla</div>
-      <div class="pv-sub">Casino Unión Química</div>
-      <hr class="pv-hr">
-      <div class="pv-familia">Almuerzo</div>
-      <div class="pv-opcion">Opción 1 – Pollo al horno<br>con arroz y ensalada</div>
-      <hr class="pv-hr">
-      <div class="pv-row">
-        <span class="pv-label">Comensal</span>
-        <span class="pv-value">JuanCarlos Pérez</span>
-      </div>
-      <div class="pv-row">
-        <span class="pv-label">RUT</span>
-        <span class="pv-value">12.345.678-9</span>
-      </div>
-      <div class="pv-row">
-        <span class="pv-label">Fecha</span>
-        <span class="pv-value">26/05/2026</span>
-      </div>
-      <div class="pv-row">
-        <span class="pv-label">Hora</span>
-        <span class="pv-value">19:08</span>
-      </div>
-      <hr class="pv-hr">
-      <div class="pv-qr">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=VASCAN-1779822538142-rj8n5nbhj" alt="QR Vale">
-      </div>
-      <div class="pv-qr-code">VASCAN-1779822538142-rj8n5nbhj</div>
-      <div class="pv-foot">Presenta este vale en la caja · No reimprimible</div>
-    </div>
+<div class="ticket">
+  <div class="t-title">&gt;&gt; CASINO &lt;&lt;</div>
+  <div class="t-sub">Casino Unión Química</div>
+  <div class="t-sub">VALE DE COMEDOR</div>
+  <hr class="t-hr">
+  <div class="t-familia">ALMUERZO</div>
+  <div class="t-opcion">OPCIÓN 1<br>Pollo al horno con arroz<br>y ensalada</div>
+  <hr class="t-hr">
+  <div class="t-row">
+    <span class="t-label">Nombre</span>
+    <span class="t-value">JuanCarlos Pérez</span>
   </div>
-
-  <!-- ── RESUMEN DEL DÍA ── -->
-  <div>
-    <div class="ticket-label">Ticket resumen (encargado casino)</div>
-    <div class="ticket-resumen">
-      <div class="pr-title">&gt;&gt; CASINO &lt;&lt;</div>
-      <div class="pr-subtitle">Casino Unión Química</div>
-      <div class="pr-subtitle">VALE DE CONTROL INTERNO</div>
-      <hr class="pr-hr">
-      <div class="pr-text">Informe: 26/05/2026 19:08</div>
-      <div class="pr-text">Desde:   26/05/2026 07:00</div>
-      <div class="pr-text">Hasta:   26/05/2026 14:00</div>
-      <hr class="pr-hr">
-      <div class="pr-section">RESUMEN DE SERVICIOS</div>
-      <div class="pr-col-hdr">
-        <span class="pr-col-svc">Servicio</span>
-        <span class="pr-col-qty">Cant.</span>
-      </div>
-      <div class="pr-svc-row">
-        <span class="pr-col-svc">Almuerzo</span>
-        <span class="pr-col-qty">47</span>
-      </div>
-      <div class="pr-svc-row">
-        <span class="pr-col-svc">Colación</span>
-        <span class="pr-col-qty">12</span>
-      </div>
-      <div class="pr-svc-row">
-        <span class="pr-col-svc">VISITAS</span>
-        <span class="pr-col-qty">3</span>
-      </div>
-      <div class="pr-total-row">
-        <span class="pr-col-svc">TOTAL</span>
-        <span class="pr-col-qty">62</span>
-      </div>
-      <hr class="pr-hr">
-      <div class="pr-section">OPCIONES DE MENÚ</div>
-      <div class="pr-date-hdr">26/05/2026 – Almuerzo</div>
-      <div class="pr-opt-row">
-        <span class="pr-opt-num">1.</span>
-        <span class="pr-opt-desc">Pollo al horno con arroz y ensalada</span>
-        <span class="pr-opt-qty">28</span>
-      </div>
-      <div class="pr-opt-row">
-        <span class="pr-opt-num">2.</span>
-        <span class="pr-opt-desc">Pescado grilled con puré y vegetales</span>
-        <span class="pr-opt-qty">12</span>
-      </div>
-      <div class="pr-opt-row">
-        <span class="pr-opt-num">3.</span>
-        <span class="pr-opt-desc">Pastas a la boloñesa con pan</span>
-        <span class="pr-opt-qty">7</span>
-      </div>
-      <div class="pr-opt-total">
-        <span class="pr-col-svc">TOTAL</span>
-        <span class="pr-opt-qty">47</span>
-      </div>
-      <div class="pr-date-hdr">26/05/2026 – Colación</div>
-      <div class="pr-opt-row">
-        <span class="pr-opt-num">1.</span>
-        <span class="pr-opt-desc">Sándwich de ave con ensalada</span>
-        <span class="pr-opt-qty">8</span>
-      </div>
-      <div class="pr-opt-row">
-        <span class="pr-opt-num">2.</span>
-        <span class="pr-opt-desc">Wrap de pavo con hummus</span>
-        <span class="pr-opt-qty">4</span>
-      </div>
-      <div class="pr-opt-total">
-        <span class="pr-col-svc">TOTAL</span>
-        <span class="pr-opt-qty">12</span>
-      </div>
-    </div>
+  <div class="t-row">
+    <span class="t-label">RUT</span>
+    <span class="t-value">12.345.678-9</span>
   </div>
-
+  <div class="t-row">
+    <span class="t-label">Fecha</span>
+    <span class="t-value">26/05/2026</span>
+  </div>
+  <div class="t-row">
+    <span class="t-label">Hora</span>
+    <span class="t-value">19:08</span>
+  </div>
+  <hr class="t-hr">
+  <div class="t-foot">BuenaMezcla · Vale no reimprimible</div>
 </div>
 
 </body>
