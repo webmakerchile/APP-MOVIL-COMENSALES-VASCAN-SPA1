@@ -1,3 +1,4 @@
+import { createRequire } from 'module'; const require = createRequire(import.meta.url);
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -384,7 +385,7 @@ import * as path2 from "path";
 import * as fs2 from "fs";
 
 // server/storage.ts
-import { eq, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, ne } from "drizzle-orm";
 
 // server/db.ts
 import * as fs from "fs";
@@ -477,10 +478,15 @@ var DatabaseStorage = class {
     return user;
   }
   async getUserByRut(rut) {
-    const cleaned = (rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
-    const normalized = cleaned.length > 1 ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : cleaned;
+    const raw = (rut || "").trim();
+    const cleaned = raw.replace(/[^0-9kK]/g, "").toUpperCase();
+    const looksLikeRut2 = cleaned.length > 1 && /^[0-9]+[0-9kK]$/.test(cleaned);
+    const normalized = looksLikeRut2 ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : raw;
     const [user] = await db.select().from(users3).where(eq(users3.rut, normalized));
-    return user;
+    if (user) return user;
+    if (looksLikeRut2) return void 0;
+    const [byRaw] = await db.select().from(users3).where(eq(users3.rut, raw));
+    return byRaw;
   }
   async getAllUsers() {
     return db.select().from(users3);
@@ -564,7 +570,12 @@ var DatabaseStorage = class {
     return db.select().from(pedidos3).where(and(eq(pedidos3.userId, userId), isNull(pedidos3.deletedAt)));
   }
   async getPedidoByUserAndMinuta(userId, minutaId) {
-    const [pedido] = await db.select().from(pedidos3).where(and(eq(pedidos3.userId, userId), eq(pedidos3.minutaId, minutaId), isNull(pedidos3.deletedAt)));
+    const [pedido] = await db.select().from(pedidos3).where(and(
+      eq(pedidos3.userId, userId),
+      eq(pedidos3.minutaId, minutaId),
+      isNull(pedidos3.deletedAt),
+      ne(pedidos3.tipo, "visita")
+    ));
     return pedido;
   }
   async createPedido(insertPedido) {
@@ -1353,7 +1364,8 @@ async function registerRoutes(app2) {
       }
       req.session.userId = user.id;
       const { password: _, ...userWithoutPassword } = user;
-      return res.json({ user: userWithoutPassword });
+      const casinoIds = await getAccessibleCasinoIds(user);
+      return res.json({ user: { ...userWithoutPassword, casinoIds: casinoIds || [] } });
     } catch (error) {
       console.error("Login error:", error);
       return res.status(500).json({ message: "Error interno del servidor" });
@@ -1401,6 +1413,39 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Change password error:", error);
       return res.status(500).json({ message: "Error al cambiar la clave" });
+    }
+  });
+  app2.post("/api/auth/reset-password-by-rut", async (req, res) => {
+    try {
+      const sessionUserId = req.session.userId;
+      if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+      const actor = await storage.getUser(sessionUserId);
+      if (!actor) return res.status(401).json({ message: "Usuario no encontrado" });
+      const isStaff = actor.role === "admin" || actor.role === "interlocutor" || actor.role === "encargado_casino";
+      if (!isStaff) return res.status(403).json({ message: "Solo staff puede resetear claves" });
+      const { rut, newPassword } = req.body || {};
+      if (!rut || !newPassword || String(newPassword).length < 4) {
+        return res.status(400).json({ message: "RUT y nueva clave (\u22654 d\xEDgitos) son requeridos" });
+      }
+      const target = await storage.getUserByRut(rut);
+      if (!target) return res.status(404).json({ message: "No se encontr\xF3 un usuario con ese RUT" });
+      if (target.rut === SUPER_ADMIN_RUT) {
+        return res.status(403).json({ message: "Este usuario no puede modificarse desde el t\xF3tem" });
+      }
+      const actorAccessible = await getAccessibleCasinoIds(actor);
+      if (actorAccessible !== null) {
+        const targetCasinos = new Set(await storage.getUserCasinoIds(target.id));
+        if (target.casinoId) targetCasinos.add(target.casinoId);
+        const overlap = Array.from(targetCasinos).some((cid) => actorAccessible.includes(cid));
+        if (!overlap) return res.status(403).json({ message: "Sin acceso a este usuario" });
+      }
+      const hashed = await bcrypt2.hash(String(newPassword), 10);
+      await storage.updateUser(target.id, { password: hashed, passwordChangeRequired: false });
+      console.log(`[audit] reset-password-by-rut: actor=${actor.rut} (${actor.role}) \u2192 target=${target.rut}`);
+      return res.json({ message: "Clave actualizada", user: { rut: target.rut, nombre: target.nombre, apellido: target.apellido } });
+    } catch (error) {
+      console.error("Reset password by rut error:", error);
+      return res.status(500).json({ message: "Error al resetear la clave" });
     }
   });
   app2.post("/api/auth/register", async (req, res) => {
@@ -2040,6 +2085,15 @@ async function registerRoutes(app2) {
       const isOwner = pedido.userId === requester.id;
       const isStaff = ["admin", "interlocutor", "encargado_casino"].includes(requester.role);
       if (!isOwner && !isStaff) return res.status(403).json({ message: "Sin permisos" });
+      if (!isOwner && isStaff) {
+        const accessible = await getAccessibleCasinoIds(requester);
+        if (accessible !== null) {
+          const minuta = await storage.getMinuta(pedido.minutaId);
+          if (!minuta || !accessible.includes(minuta.casinoId)) {
+            return res.status(403).json({ message: "Sin acceso a este casino" });
+          }
+        }
+      }
       const updated = await storage.markPedidoImpreso(id);
       if (!updated) return res.status(404).json({ message: "Pedido no encontrado" });
       return res.json({ ok: true, impresoEn: updated.impresoEn });
@@ -2121,11 +2175,19 @@ async function registerRoutes(app2) {
       if (!minuta) {
         return res.status(404).json({ message: "Minuta no encontrada" });
       }
-      const casinoPeriodos = await storage.getPeriodosByCasino(minuta.casinoId);
-      const now = /* @__PURE__ */ new Date();
-      const activePeriodos = casinoPeriodos.filter((p) => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
-      if (casinoPeriodos.filter((p) => p.activo).length > 0 && activePeriodos.length === 0) {
-        return res.status(403).json({ message: "La inscripci\xF3n no est\xE1 disponible en este momento. Fuera del horario de inscripci\xF3n." });
+      const sessionUserId = req.session.userId;
+      const actor = sessionUserId ? await storage.getUser(sessionUserId) : null;
+      const isStaff = !!actor && (actor.role === "admin" || actor.role === "interlocutor" || actor.role === "encargado_casino");
+      if (!isStaff && (!actor || actor.id !== parsed.data.userId)) {
+        return res.status(403).json({ message: "Solo puedes registrar tu propio pedido" });
+      }
+      if (!isStaff) {
+        const casinoPeriodos = await storage.getPeriodosByCasino(minuta.casinoId);
+        const now = /* @__PURE__ */ new Date();
+        const activePeriodos = casinoPeriodos.filter((p) => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
+        if (casinoPeriodos.filter((p) => p.activo).length > 0 && activePeriodos.length === 0) {
+          return res.status(403).json({ message: "La inscripci\xF3n no est\xE1 disponible en este momento. Fuera del horario de inscripci\xF3n." });
+        }
       }
       const tipo = req.body.tipo || "seleccion";
       const nombreVisita = req.body.nombreVisita || null;
@@ -2163,19 +2225,22 @@ async function registerRoutes(app2) {
     try {
       const sessionUserId = req.session.userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
-      const { userId, minutaId } = req.body || {};
+      const { userId, minutaId, fecha: clientFecha } = req.body || {};
       if (!userId || !minutaId) return res.status(400).json({ message: "userId y minutaId requeridos" });
       if (userId !== sessionUserId) return res.status(403).json({ message: "Solo puedes emitir tu propio vale" });
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
       const minuta = await storage.getMinuta(minutaId);
       if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
-      const accessible = await getAccessibleCasinoIds(user);
-      if (accessible !== null && !accessible.includes(minuta.casinoId)) {
-        return res.status(403).json({ message: "Esta minuta no pertenece a tu casino" });
+      const staffRoles = ["admin", "interlocutor", "encargado_casino"];
+      if (!staffRoles.includes(user.role)) {
+        const accessible = await getAccessibleCasinoIds(user);
+        if (accessible !== null && !accessible.includes(minuta.casinoId)) {
+          return res.status(403).json({ message: "Esta minuta no pertenece a tu casino" });
+        }
       }
-      const todayISO = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-      if (minuta.fecha !== todayISO) {
+      const checkFecha = clientFecha || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      if (minuta.fecha !== checkFecha) {
         return res.status(403).json({ message: "Solo se puede emitir vale para el men\xFA de hoy" });
       }
       if (!minuta.activo) {
@@ -2183,10 +2248,21 @@ async function registerRoutes(app2) {
       }
       const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
       if (existing && existing.opcionSeleccionada > 0) {
-        return res.json(existing);
+        if (!existing.impresoEn) {
+          const marked2 = await storage.markPedidoImpreso(existing.id);
+          return res.json({ ...marked2 || existing, action: "marked_existing" });
+        }
+        return res.json({ ...existing, action: "already_printed" });
       }
       if (existing && existing.opcionSeleccionada === 0) {
-        return res.status(409).json({ message: "no_asiste" });
+        const codigoQr2 = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const updated = await storage.updatePedido(existing.id, {
+          opcionSeleccionada: 1,
+          codigoQr: codigoQr2,
+          tipo: "seleccion"
+        });
+        const marked2 = updated ? await storage.markPedidoImpreso(updated.id) : null;
+        return res.json({ ...marked2 || updated || existing, action: "created" });
       }
       const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const pedido = await storage.createPedido({
@@ -2196,7 +2272,8 @@ async function registerRoutes(app2) {
         codigoQr,
         tipo: "seleccion"
       });
-      return res.status(201).json(pedido);
+      const marked = await storage.markPedidoImpreso(pedido.id);
+      return res.status(201).json({ ...marked || pedido, action: "created" });
     } catch (error) {
       console.error("auto-totem error:", error);
       return res.status(500).json({ message: "Error al emitir vale" });
@@ -2254,11 +2331,6 @@ async function registerRoutes(app2) {
       const norm = (s) => s.replace(/[^0-9kK]/g, "").toUpperCase();
       const target = allUsers.find((u) => norm(u.rut) === rut);
       if (!target) return res.json({ user: null, pedidos: [], minutas: [] });
-      const me = req.currentUser;
-      const accessible = await getAccessibleCasinoIds(me);
-      if (accessible !== null && target.casinoId && !accessible.includes(target.casinoId)) {
-        return res.status(403).json({ message: "Sin acceso a este comensal" });
-      }
       const pedidos4 = await storage.getPedidosByUser(target.id);
       const allMinutas = await storage.getAllMinutas();
       const minutasByDate = allMinutas.filter((m) => m.fecha === fecha);
@@ -2277,27 +2349,53 @@ async function registerRoutes(app2) {
   app2.get("/api/reportes/resumen-dia/:casinoId", requireAdmin, async (req, res) => {
     try {
       const { casinoId } = req.params;
-      const me = req.currentUser;
-      const accessible = await getAccessibleCasinoIds(me);
-      if (accessible !== null && !accessible.includes(casinoId)) {
-        return res.status(403).json({ message: "Sin acceso a este casino" });
-      }
       const fecha = req.query.fecha || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
       const minutas4 = await storage.getAllMinutasByCasino(casinoId);
-      const minuta = minutas4.find((m) => m.fecha === fecha && m.activo);
-      if (!minuta) {
-        return res.json({ fecha, casinoId, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
+      const dayMinutas = minutas4.filter((m) => m.fecha === fecha && m.activo);
+      const casinoPeriodos = await storage.getPeriodosByCasino(casinoId);
+      const fechaDate = /* @__PURE__ */ new Date(fecha + "T12:00:00Z");
+      const activePeriodo = casinoPeriodos.find(
+        (p) => p.activo && new Date(p.fechaInicio) <= fechaDate && new Date(p.fechaFin) >= fechaDate
+      ) || null;
+      const periodoOut = activePeriodo ? { fechaInicio: activePeriodo.fechaInicio.toISOString(), fechaFin: activePeriodo.fechaFin.toISOString() } : null;
+      if (dayMinutas.length === 0) {
+        return res.json({ fecha, casinoId, periodo: periodoOut, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
       }
-      const pedidosList = await storage.getPedidosByMinuta(minuta.id);
-      const sel = pedidosList.filter((p) => p.tipo !== "no_asiste" && p.tipo !== "visita");
-      const noAsiste = pedidosList.filter((p) => p.tipo === "no_asiste").length;
-      const visitas = pedidosList.filter((p) => p.tipo === "visita").length;
-      const opts = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
-      const opciones = opts.map((d, i) => d ? { numero: i + 1, descripcion: d, cantidad: sel.filter((p) => p.opcionSeleccionada === i + 1).length } : null).filter(Boolean);
+      const pedidosByMinuta = await Promise.all(dayMinutas.map((m) => storage.getPedidosByMinuta(m.id)));
+      const allPedidos = pedidosByMinuta.flat();
+      const sel = allPedidos.filter((p) => p.tipo !== "no_asiste" && p.tipo !== "visita");
+      const noAsiste = allPedidos.filter((p) => p.tipo === "no_asiste").length;
+      const visitas = allPedidos.filter((p) => p.tipo === "visita").length;
+      const opcionesMap = /* @__PURE__ */ new Map();
+      for (let mi = 0; mi < dayMinutas.length; mi++) {
+        const m = dayMinutas[mi];
+        const pedidosOfM = pedidosByMinuta[mi].filter((p) => p.tipo !== "no_asiste" && p.tipo !== "visita");
+        const opts = [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5];
+        for (let i = 0; i < opts.length; i++) {
+          const d = opts[i];
+          if (!d) continue;
+          const numero = i + 1;
+          const key = `${m.familia || "\u2014"}|${numero}|${d}`;
+          const prev = opcionesMap.get(key);
+          const cantidad = pedidosOfM.filter((p) => p.opcionSeleccionada === numero).length;
+          if (prev) {
+            prev.cantidad += cantidad;
+          } else {
+            opcionesMap.set(key, { familia: m.familia ?? null, numero, descripcion: d, cantidad });
+          }
+        }
+      }
+      const opciones = Array.from(opcionesMap.values()).sort((a, b) => {
+        const fa = a.familia || "";
+        const fb = b.familia || "";
+        if (fa !== fb) return fa.localeCompare(fb);
+        return a.numero - b.numero;
+      });
       return res.json({
         fecha,
         casinoId,
-        minuta: { id: minuta.id, familia: minuta.familia },
+        periodo: periodoOut,
+        minuta: { id: dayMinutas[0].id, familia: dayMinutas.map((m) => m.familia).filter(Boolean).join(" + ") || null },
         opciones,
         totalSeleccion: sel.length,
         totalNoAsiste: noAsiste,
@@ -2404,9 +2502,10 @@ async function registerRoutes(app2) {
       if (actor.role !== "interlocutor" && actor.role !== "admin" && actor.role !== "encargado_casino") {
         return res.status(403).json({ message: "Solo staff puede emitir vales de visita" });
       }
-      const { minutaId, nombreVisita } = req.body;
-      if (!minutaId || !nombreVisita) {
-        return res.status(400).json({ message: "minutaId y nombreVisita son requeridos" });
+      const { minutaId } = req.body;
+      const nombreVisita = req.body?.nombreVisita && String(req.body.nombreVisita).trim() || "Visita";
+      if (!minutaId) {
+        return res.status(400).json({ message: "minutaId requerido" });
       }
       const minuta = await storage.getMinuta(minutaId);
       if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
@@ -3392,13 +3491,27 @@ async function registerRoutes(app2) {
     }
     return requested;
   }
+  async function getScopedCasinoFilter(req, requested) {
+    const sUser = req.currentUser;
+    const accessible = await getAccessibleCasinoIds(sUser);
+    const specific = requested && requested !== "all" ? requested : null;
+    if (accessible === null) {
+      return { allowedIds: specific ? /* @__PURE__ */ new Set([specific]) : null };
+    }
+    if (!specific) {
+      return { allowedIds: new Set(accessible) };
+    }
+    if (!accessible.includes(specific)) {
+      return { allowedIds: /* @__PURE__ */ new Set() };
+    }
+    return { allowedIds: /* @__PURE__ */ new Set([specific]) };
+  }
   app2.get("/api/reportes/inscripciones-live", requireAdmin, async (req, res) => {
     try {
       const { fechaDesde, fechaHasta } = req.query;
-      const casinoId = scopedCasinoId(req, req.query.casinoId);
-      if (casinoId && casinoId !== "all" && !await assertCasinoAccess(req, res, casinoId)) return;
-      if ((!casinoId || casinoId === "all") && req.currentUser?.role !== "admin") {
-        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
       }
       if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
       const [allPedidos, allMinutas, allUsers, allCasinos, allFamilias] = await Promise.all([
@@ -3418,9 +3531,9 @@ async function registerRoutes(app2) {
         if (p.deletedAt) return false;
         const created = p.createdAt ? new Date(p.createdAt) : null;
         if (!created || created < start || created > end) return false;
-        if (casinoId && casinoId !== "all") {
+        if (scope.allowedIds) {
           const m = minutaById.get(p.minutaId);
-          if (!m || m.casinoId !== casinoId) return false;
+          if (!m || !scope.allowedIds.has(m.casinoId)) return false;
         }
         return true;
       });
@@ -3458,10 +3571,9 @@ async function registerRoutes(app2) {
   app2.get("/api/reportes/inscripcion-detalle", requireAdmin, async (req, res) => {
     try {
       const { fechaDesde, fechaHasta } = req.query;
-      const casinoId = scopedCasinoId(req, req.query.casinoId);
-      if (casinoId && casinoId !== "all" && !await assertCasinoAccess(req, res, casinoId)) return;
-      if ((!casinoId || casinoId === "all") && req.currentUser?.role !== "admin") {
-        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
       }
       if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
       const allPedidos = await storage.getAllPedidos();
@@ -3476,9 +3588,9 @@ async function registerRoutes(app2) {
       const filtered = allPedidos.filter((p) => {
         const created = p.createdAt ? new Date(p.createdAt) : null;
         if (!created || created < start || created > end) return false;
-        if (casinoId && casinoId !== "all") {
+        if (scope.allowedIds) {
           const m = minutaById.get(p.minutaId);
-          if (!m || m.casinoId !== casinoId) return false;
+          if (!m || !scope.allowedIds.has(m.casinoId)) return false;
         }
         return true;
       });
@@ -3541,10 +3653,9 @@ async function registerRoutes(app2) {
   app2.get("/api/reportes/consumo-detalle", requireAdmin, async (req, res) => {
     try {
       const { fechaDesde, fechaHasta } = req.query;
-      const casinoId = scopedCasinoId(req, req.query.casinoId);
-      if (casinoId && casinoId !== "all" && !await assertCasinoAccess(req, res, casinoId)) return;
-      if ((!casinoId || casinoId === "all") && req.currentUser?.role !== "admin") {
-        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
       }
       if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
       const allPedidos = await storage.getAllPedidos();
@@ -3558,11 +3669,12 @@ async function registerRoutes(app2) {
       const end = /* @__PURE__ */ new Date(fechaHasta + "T23:59:59");
       const filtered = allPedidos.filter((p) => {
         if (p.tipo === "no_asiste") return false;
+        if (!p.impresoEn) return false;
         const m = minutaById.get(p.minutaId);
         if (!m) return false;
         const fechaServ = /* @__PURE__ */ new Date(m.fecha + "T12:00:00");
         if (fechaServ < start || fechaServ > end) return false;
-        if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return false;
+        if (scope.allowedIds && !scope.allowedIds.has(m.casinoId)) return false;
         return true;
       });
       const wb = new ExcelJS.Workbook();
@@ -3597,8 +3709,8 @@ async function registerRoutes(app2) {
         const c = m ? casinoById.get(m.casinoId) : null;
         const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
         const opcionTexto = opciones[p.opcionSeleccionada - 1] || `Opci\xF3n ${p.opcionSeleccionada}`;
-        const created = p.createdAt ? new Date(p.createdAt) : null;
-        const fechaConsumoStr = created ? `${created.toLocaleDateString("es-CL")} ${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}` : "\u2014";
+        const stamp = p.impresoEn ? new Date(p.impresoEn) : p.createdAt ? new Date(p.createdAt) : null;
+        const fechaConsumoStr = stamp ? `${stamp.toLocaleDateString("es-CL")} ${String(stamp.getHours()).padStart(2, "0")}:${String(stamp.getMinutes()).padStart(2, "0")}` : "\u2014";
         const comensalLabel = p.tipo === "visita" ? `VISITA \u2014 ${p.nombreVisita || ""}` : u ? `${u.rut} \u2014 ${u.nombre} ${u.apellido}` : "\u2014";
         const r = ws.addRow({
           fechaConsumo: fechaConsumoStr,
@@ -3628,10 +3740,9 @@ async function registerRoutes(app2) {
   app2.get("/api/reportes/minutas-detalle", requireAdmin, async (req, res) => {
     try {
       const { mes } = req.query;
-      const casinoId = scopedCasinoId(req, req.query.casinoId);
-      if (casinoId && casinoId !== "all" && !await assertCasinoAccess(req, res, casinoId)) return;
-      if ((!casinoId || casinoId === "all") && req.currentUser?.role !== "admin") {
-        return res.status(403).json({ message: "Debes seleccionar un casino" });
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
       }
       if (!mes || !/^\d{4}-\d{2}$/.test(mes)) return res.status(400).json({ message: "mes requerido (YYYY-MM)" });
       const allMinutas = await storage.getAllMinutas();
@@ -3639,7 +3750,7 @@ async function registerRoutes(app2) {
       const casinoById = new Map(allCasinos.map((c) => [c.id, c]));
       const filtered = allMinutas.filter((m) => {
         if (!m.fecha.startsWith(mes)) return false;
-        if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return false;
+        if (scope.allowedIds && !scope.allowedIds.has(m.casinoId)) return false;
         return true;
       }).sort((a, b) => a.fecha.localeCompare(b.fecha));
       const wb = new ExcelJS.Workbook();
