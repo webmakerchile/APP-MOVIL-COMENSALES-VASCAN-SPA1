@@ -1425,7 +1425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const sessionUserId = (req.session as any).userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
-      const { userId, minutaId } = req.body || {};
+      const { userId, minutaId, fecha: clientFecha } = req.body || {};
       if (!userId || !minutaId) return res.status(400).json({ message: "userId y minutaId requeridos" });
       // El comensal solo puede auto-asignarse a sí mismo desde el tótem.
       if (userId !== sessionUserId) return res.status(403).json({ message: "Solo puedes emitir tu propio vale" });
@@ -1446,8 +1446,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       // Solo permite auto-asignación para el menú del DÍA (consumo en vivo).
-      const todayISO = new Date().toISOString().split("T")[0];
-      if (minuta.fecha !== todayISO) {
+      // Usar fecha enviada por el cliente (timezone local Chile) — si no viene,
+      // fallback a UTC. Esto evita el desfase UTC-3/4 después de las ~9pm Chile.
+      const checkFecha = (clientFecha as string) || new Date().toISOString().split("T")[0];
+      if (minuta.fecha !== checkFecha) {
         return res.status(403).json({ message: "Solo se puede emitir vale para el menú de hoy" });
       }
       if (!minuta.activo) {

@@ -403,49 +403,34 @@ export default function Kiosk() {
         return;
       }
 
-      // Caso 1: ya tiene pedido válido (con opción seleccionada > 0).
-      if (existingToday && existingToday.opcionSeleccionada > 0) {
-        if (existingToday.impresoEn) {
-          // Vale ya fue retirado → NO re-imprimir; pedir reimpresión al encargado.
-          setStep("ya_impreso");
-          try { await apiRequest("POST", "/api/auth/logout"); } catch {}
-          return;
-        }
-        const minuta = todayMins.find(m => m.id === existingToday.minutaId)!;
-        const opt = getOptions(minuta).find(o => o.number === existingToday.opcionSeleccionada);
-        const nowDate = new Date();
-        setQrCode(existingToday.codigoQr || existingToday.id);
-        setQrMeta({
-          familia: minuta.familia || "Almuerzo",
-          opcion: opt?.text || `Opción ${existingToday.opcionSeleccionada}`,
-          nombre: `${u!.nombre} ${u!.apellido}`,
-          rut: formatRutDisplay(u!.rut),
-          fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
-          hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
-        });
-        setQrPedidoId(existingToday.id);
-        // CRÍTICO anti-doble-impresión: marcar impreso ANTES del logout.
-        // Antes el useEffect de impresión llamaba marcar-impreso DESPUÉS del
-        // logout (sin sesión → 401, silenciosamente atrapado), por lo que
-        // impresoEn nunca quedaba en BD y el comensal podía re-loguearse
-        // y reimprimir indefinidamente ("almorzar mil veces" - docx 25/05).
-        try { await apiRequest("POST", `/api/pedidos/${existingToday.id}/marcar-impreso`, {}); } catch {}
-        setStep("qr");
-        try { await apiRequest("POST", "/api/auth/logout"); } catch {}
-        return;
-      }
-
-      // Caso 3: no tiene pedido → auto-asignación opción 1 (la inscripción se
-      // hace en el módulo de inscripción, no aquí). El backend lo permite con
-      // tipo "seleccion" — si está fuera de periodo, igual el endpoint
-      // /api/pedidos/auto-totem fuerza la creación.
+      // Casos 1 + 3 unificados vía auto-totem:
+      //  · Caso 1 (pedido existente, no impreso) → action "marked_existing" → imprimir
+      //  · Caso 1 (pedido existente, ya impreso)  → action "already_printed" → ya_impreso
+      //  · Caso 3 (sin pedido)                    → action "created"         → imprimir
+      // Enviar fecha LOCAL (Chile) para evitar desfase UTC: después de ~9pm Chile
+      // el servidor UTC ya es mañana, lo que causaba 403 en usuarios sin inscripción.
       try {
         const minuta = todayMins[0];
         const res = await apiRequest("POST", "/api/pedidos/auto-totem", {
           userId: u!.id,
           minutaId: minuta.id,
+          fecha: todayISO(),
         });
-        const pedido: Pedido = await res.json();
+        const data = await res.json();
+        if (!res.ok) {
+          setErrMsg(data?.message || "No se pudo emitir tu vale. Intenta nuevamente.");
+          setStep("error");
+          try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+          return;
+        }
+        const pedido: Pedido & { action?: string } = data;
+        // Anti-doble-impresión: el servidor marca impresoEn al crear/marcar el
+        // pedido; si ya estaba impreso devuelve "already_printed".
+        if (pedido.action === "already_printed") {
+          setStep("ya_impreso");
+          try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+          return;
+        }
         const opt = getOptions(minuta).find(o => o.number === pedido.opcionSeleccionada);
         const nowDate = new Date();
         setQrCode(pedido.codigoQr || pedido.id);
@@ -458,7 +443,6 @@ export default function Kiosk() {
           fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
           hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
         });
-        try { await apiRequest("POST", `/api/pedidos/${pedido.id}/marcar-impreso`, {}); } catch {}
         setStep("qr");
         try { await apiRequest("POST", "/api/auth/logout"); } catch {}
         return;
@@ -575,6 +559,7 @@ export default function Kiosk() {
       const res = await apiRequest("POST", "/api/pedidos/auto-totem", {
         userId: user.id,
         minutaId: minuta.id,
+        fecha: todayISO(),
       });
       const pedido: Pedido & { action?: "created" | "marked_existing" | "already_printed" } = await res.json();
       // Determinístico desde el server: si ya estaba impreso ANTES de esta
