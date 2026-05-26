@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "V4BhHUipMjujlVtdqBD7G"
+uri = "file://public/ticket-preview.jpg"
+type = "image"
+title = "Comprobante de tickets – BuenaMezcla Casino"
