@@ -1216,6 +1216,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Pedidos (with Interlocutor logic) ──
+  // ── Vales (pedidos impresos) — listado enriquecido para admin panel ──
+  // Devuelve sólo pedidos con impresoEn != null, enriquecidos con datos de
+  // usuario, minuta y casino. Filtros: fechaDesde/fechaHasta (sobre fecha de
+  // minuta, formato YYYY-MM-DD), casinoId. Scope: admin = todos; interlocutor/
+  // encargado_casino = sólo sus casinos accesibles.
+  app.get("/api/vales", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const me = (req as any).currentUser;
+      const accessible = await getAccessibleCasinoIds(me);
+      const { fechaDesde, fechaHasta, casinoId } = req.query as Record<string, string>;
+
+      const [allPedidos, allMinutas, allCasinos, allUsers, allFamilias] = await Promise.all([
+        storage.getAllPedidos(),
+        storage.getAllMinutas(),
+        storage.getAllCasinos(),
+        storage.getAllUsers(),
+        storage.getAllFamilias().catch(() => [] as any[]),
+      ]);
+      const minutaById = new Map(allMinutas.map((m: any) => [m.id, m]));
+      const casinoById = new Map(allCasinos.map((c: any) => [c.id, c]));
+      const userById = new Map(allUsers.map((u: any) => [u.id, u]));
+      const familiaByName = new Map((allFamilias || []).map((f: any) => [String(f.nombre).toUpperCase(), f]));
+
+      const vales = allPedidos
+        .filter((p: any) => !!p.impresoEn && p.tipo !== "no_asiste")
+        .map((p: any) => {
+          const m: any = minutaById.get(p.minutaId);
+          if (!m) return null;
+          if (fechaDesde && m.fecha < fechaDesde) return null;
+          if (fechaHasta && m.fecha > fechaHasta) return null;
+          if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return null;
+          if (accessible !== null && !accessible.includes(m.casinoId)) return null;
+
+          const c: any = casinoById.get(m.casinoId);
+          const u: any = userById.get(p.userId);
+          const opNum = Number(p.opcionSeleccionada || 1);
+          const opcionTexto = m[`opcion${opNum}`] || "";
+          const famName = m.familia || "";
+          const familia = familiaByName.get(String(famName).toUpperCase());
+          const nombreCompleto = p.tipo === "visita"
+            ? (p.nombreVisita || "Visita")
+            : (u ? `${u.nombre || ""} ${u.apellido || ""}`.trim() : "Comensal");
+
+          return {
+            id: p.id,
+            impresoEn: p.impresoEn,
+            createdAt: p.createdAt,
+            tipo: p.tipo,
+            opcionNumero: opNum,
+            opcionTexto,
+            familia: famName,
+            familiaColor: familia?.color || null,
+            nombre: nombreCompleto,
+            rut: p.tipo === "visita" ? "" : (u?.rut || ""),
+            nombreVisita: p.nombreVisita || null,
+            emisorNombre: p.tipo === "visita" && u ? `${u.nombre || ""} ${u.apellido || ""}`.trim() : null,
+            emisorRut: p.tipo === "visita" ? (u?.rut || null) : null,
+            casinoId: m.casinoId,
+            casinoNombre: c?.nombre || "Casino",
+            minutaId: m.id,
+            minutaFecha: m.fecha,
+          };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => {
+          if (a.minutaFecha !== b.minutaFecha) return a.minutaFecha < b.minutaFecha ? 1 : -1;
+          return (b.impresoEn || 0) - (a.impresoEn || 0);
+        });
+
+      return res.json(vales);
+    } catch (error) {
+      console.error("Get vales error:", error);
+      return res.status(500).json({ message: "Error al listar vales" });
+    }
+  });
+
   app.get("/api/pedidos/:userId", async (req: Request, res: Response) => {
     try {
       const { userId } = req.params;
