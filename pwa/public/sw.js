@@ -1,4 +1,4 @@
-const CACHE_NAME = "vascan-v3";
+const CACHE_NAME = "vascan-v4";
 const STATIC_ASSETS = [
   "/icons/icon-192.png",
   "/icons/icon-512.png",
