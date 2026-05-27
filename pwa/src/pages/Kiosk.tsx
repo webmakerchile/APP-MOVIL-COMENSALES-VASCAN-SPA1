@@ -431,53 +431,81 @@ export default function Kiosk() {
       // distinto al pedido inscrito, haciendo que el servidor no encontrara el pedido
       // existente y creara uno nuevo → el comensal podía imprimir un segundo vale.
       // Enviar fecha LOCAL (Chile) para evitar desfase UTC.
+      // Bloque crítico: emisión del pedido. Lo separamos en dos fases para que
+      // un fallo POST-creación (ej: getOptions, preloadResumen, una excepción
+      // en setState) no muestre "Algo salió mal" cuando el pedido YA existe en
+      // el servidor — el comensal igual debe poder ver/imprimir su vale.
+      let pedido: (Pedido & { action?: string }) | null = null;
+      let minutaUsada: Minuta = todayMins[0];
       try {
-        const minuta = existingValid
+        minutaUsada = existingValid
           ? (todayMins.find(m => m.id === existingValid.minutaId) ?? todayMins[0])
           : todayMins[0];
         const res = await apiRequest("POST", "/api/pedidos/auto-totem", {
           userId: u!.id,
-          minutaId: minuta.id,
+          minutaId: minutaUsada.id,
           fecha: todayISO(),
         });
         const data = await res.json();
         if (!res.ok) {
-          setErrMsg(data?.message || "No se pudo emitir tu vale. Intenta nuevamente.");
+          // Mensaje detallado del servidor + código HTTP para que el cliente
+          // pueda enviarnos screenshot si vuelve a fallar.
+          const serverMsg = data?.message || data?.error || `HTTP ${res.status}`;
+          setErrMsg(`No se pudo emitir tu vale: ${serverMsg}`);
           setStep("error");
           try { await apiRequest("POST", "/api/auth/logout"); } catch {}
           return;
         }
-        const pedido: Pedido & { action?: string } = data;
-        // Anti-doble-impresión: el servidor marca impresoEn al crear/marcar el
-        // pedido; si ya estaba impreso devuelve "already_printed".
-        if (pedido.action === "already_printed") {
-          setStep("ya_impreso");
-          try { await apiRequest("POST", "/api/auth/logout"); } catch {}
-          return;
-        }
-        const opt = getOptions(minuta).find(o => o.number === pedido.opcionSeleccionada);
+        pedido = data;
+      } catch (err: any) {
+        // Falló la llamada misma (red, parse). Mostramos el mensaje real.
+        const detail = err?.message || String(err) || "error desconocido";
+        setErrMsg(`No se pudo emitir tu vale: ${detail}`);
+        setStep("error");
+        return;
+      }
+
+      // A partir de acá el pedido YA existe en el servidor. Cualquier excepción
+      // posterior se loguea pero NO bloquea al comensal: igual mostramos QR.
+      if (pedido!.action === "already_printed") {
+        setStep("ya_impreso");
+        try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+        return;
+      }
+      try {
+        const opt = getOptions(minutaUsada).find(o => o.number === pedido!.opcionSeleccionada);
         const nowDate = new Date();
-        setQrCode(pedido.codigoQr || pedido.id);
-        setQrPedidoId(pedido.id);
+        setQrCode(pedido!.codigoQr || pedido!.id);
+        setQrPedidoId(pedido!.id);
         setQrMeta({
-          familia: minuta.familia || "Almuerzo",
-          opcion: opt?.text || `Opción ${pedido.opcionSeleccionada}`,
+          familia: minutaUsada.familia || "Almuerzo",
+          opcion: opt?.text || `Opción ${pedido!.opcionSeleccionada}`,
           nombre: `${u!.nombre} ${u!.apellido}`,
           rut: formatRutDisplay(u!.rut),
           fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
           hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
         });
-        await preloadResumenForPrint();
-        setStep("qr");
-        try { await apiRequest("POST", "/api/auth/logout"); } catch {}
-        return;
-      } catch {
-        setErrMsg("No se pudo emitir tu vale. Intenta nuevamente.");
-        setStep("error");
-        return;
+      } catch (err) {
+        // Datos mínimos para que el QR igual se imprima.
+        console.error("[totem] error armando qrMeta:", err);
+        setQrCode(pedido!.codigoQr || pedido!.id);
+        setQrPedidoId(pedido!.id);
+        setQrMeta({
+          familia: minutaUsada.familia || "Almuerzo",
+          opcion: `Opción ${pedido!.opcionSeleccionada}`,
+          nombre: `${u!.nombre} ${u!.apellido}`,
+          rut: formatRutDisplay(u!.rut),
+          fecha: new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          hora: new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+        });
       }
-    } catch {
-      setErrMsg("No se pudo cargar tu menú. Intenta nuevamente.");
+      try { await preloadResumenForPrint(); } catch (e) { console.error("[totem] preloadResumen falló:", e); }
+      setStep("qr");
+      try { await apiRequest("POST", "/api/auth/logout"); } catch {}
+      return;
+    } catch (err: any) {
+      const detail = err?.message || String(err) || "error desconocido";
+      setErrMsg(`No se pudo cargar tu menú: ${detail}`);
       setStep("error");
     } finally {
       setBusy(false);
