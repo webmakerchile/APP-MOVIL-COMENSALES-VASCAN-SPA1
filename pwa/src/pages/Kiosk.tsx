@@ -1333,11 +1333,24 @@ export default function Kiosk() {
         {(() => {
           const now = new Date();
           const pad = (n: number) => String(n).padStart(2, "0");
-          const nowDate = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
-          const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+          // Formato local 24h, sin segundos: DD/MM/YYYY HH:MM
+          const fmtDateTime = (d: Date) =>
+            `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          const nowDateTime = fmtDateTime(printTime || now);
+          // Ventana de servicio del periodo activo (Desde/Hasta). Si el casino
+          // no tiene periodo activo, mostramos placeholder para que sea evidente.
+          const PLACEHOLDER = "--/--/----  --:--";
+          const desdeStr = resumen?.periodo?.fechaInicio
+            ? fmtDateTime(new Date(resumen.periodo.fechaInicio))
+            : PLACEHOLDER;
+          const hastaStr = resumen?.periodo?.fechaFin
+            ? fmtDateTime(new Date(resumen.periodo.fechaFin))
+            : PLACEHOLDER;
+          // Fecha del día de servicio para los subtítulos de OPCIONES DE MENÚ.
           const resumenDateStr = resumen?.fecha
             ? (() => { const [y, m, d] = resumen.fecha.split("-"); return `${d}/${m}/${y}`; })()
-            : nowDate;
+            : `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+          // Agrupar opciones por familia para las dos secciones del ticket.
           const titleCase = (s: string) =>
             s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
           const familiaServicio = new Map<string, number>();
@@ -1352,21 +1365,22 @@ export default function Kiosk() {
           const grandTotal = (resumen?.totalSeleccion || 0) + (resumen?.totalVisitas || 0);
           return (
             <>
-              <div className="pr-title">&gt;&gt; {(casino?.nombre || "CASINO").toUpperCase()} &lt;&lt;</div>
-              <div className="pr-subtitle">------ VALE DE CONTROL INTERNO ------</div>
-              <div className="pr-subtitle">*** Informe del {nowDate} {nowTime} ***</div>
-              <div className="pr-text">Desde el {resumenDateStr} a las 00:00:00 hrs.</div>
-              <div className="pr-text">Hasta el {nowDate} a las {(() => {
-                const t = printTime || now;
-                return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
-              })()} hrs.</div>
+              {/* Cabecera: 3 líneas centradas según mockup aprobado por cliente. */}
+              <div className="pr-title">&gt;&gt; CASINO &lt;&lt;</div>
+              <div className="pr-casino-name">{casino?.nombre || ""}</div>
+              <div className="pr-doc-title">VALE DE CONTROL INTERNO</div>
+              <hr className="pr-hr" />
+              {/* Bloque rótulo:valor alineado a la izquierda, formato 24h sin segundos */}
+              <div className="pr-info-row"><span className="pr-info-lbl">Informe:</span><span className="pr-info-val">{nowDateTime}</span></div>
+              <div className="pr-info-row"><span className="pr-info-lbl">Desde:</span><span className="pr-info-val">{desdeStr}</span></div>
+              <div className="pr-info-row"><span className="pr-info-lbl">Hasta:</span><span className="pr-info-val">{hastaStr}</span></div>
               <hr className="pr-hr" />
               {resumen?.minuta ? (
                 <>
-                  <div className="pr-section">RESUMEN DE SERVICIOS:</div>
+                  <div className="pr-section">RESUMEN DE SERVICIOS</div>
                   <div className="pr-col-hdr">
                     <span className="pr-col-svc">Servicio</span>
-                    <span className="pr-col-qty">Cantidad</span>
+                    <span className="pr-col-qty">Cant.</span>
                   </div>
                   {[...familiaServicio.entries()].map(([familia, qty]) => (
                     <div key={familia} className="pr-svc-row">
@@ -1385,7 +1399,7 @@ export default function Kiosk() {
                     <span className="pr-col-qty">{grandTotal}</span>
                   </div>
                   <hr className="pr-hr" />
-                  <div className="pr-section">OPCIONES DE MENÚ:</div>
+                  <div className="pr-section">OPCIONES DE MENÚ</div>
                   {[...familiaOpciones.entries()].map(([familia, opciones]) => {
                     const subtotal = opciones.reduce((acc, o) => acc + o.cantidad, 0);
                     return (
