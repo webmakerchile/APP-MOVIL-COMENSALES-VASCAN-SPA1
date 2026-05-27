@@ -257,17 +257,32 @@ export default function Kiosk() {
     if (step !== "qr" || !qrCode || !qrMeta) return;
     if (printedRef.current === qrCode) return;
     printedRef.current = qrCode;
-    // Imprime inmediatamente (sin delay perceptible). Chrome --kiosk-printing
-    // requiere que el DOM esté pintado, así que usamos requestAnimationFrame.
-    const raf = window.requestAnimationFrame(() => {
-      try { window.print(); } catch {}
-      const pid = qrPedidoId;
-      if (pid) {
-        apiRequest("POST", `/api/pedidos/${pid}/marcar-impreso`, {}).catch(() => {});
-      }
+    // Pedido del cliente (27/05/2026): cada vez que un comensal imprime su
+    // vale, también debe salir el resumen acumulado del día. El resumen se
+    // pre-cargó vía preloadResumenForPrint() en cada handler ANTES del logout
+    // (la sesión del comensal ya no existe acá). Si quedó cargado con datos,
+    // imprimimos vale + resumen juntos vía print-both-mode; si no, solo vale.
+    const r = resumen;
+    const resumenOk = !!(r && r.minuta && (
+      (Array.isArray(r.opciones) && r.opciones.length > 0) ||
+      (r.totalSeleccion || 0) > 0 ||
+      (r.totalVisitas || 0) > 0
+    ));
+    // 2 frames para asegurar que el DOM con el resumen ya pintó.
+    const raf1 = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const mode = resumenOk ? "print-both-mode" : "";
+        if (mode) document.body.classList.add(mode);
+        try { window.print(); } catch {}
+        setTimeout(() => { if (mode) document.body.classList.remove(mode); }, 500);
+        const pid = qrPedidoId;
+        if (pid) {
+          apiRequest("POST", `/api/pedidos/${pid}/marcar-impreso`, {}).catch(() => {});
+        }
+      });
     });
-    return () => window.cancelAnimationFrame(raf);
-  }, [step, qrCode, qrMeta, qrPedidoId]);
+    return () => window.cancelAnimationFrame(raf1);
+  }, [step, qrCode, qrMeta, qrPedidoId, resumen]);
   useEffect(() => {
     if (step !== "qr") printedRef.current = null;
   }, [step]);
@@ -448,6 +463,7 @@ export default function Kiosk() {
           fecha: nowDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
           hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
         });
+        await preloadResumenForPrint();
         setStep("qr");
         try { await apiRequest("POST", "/api/auth/logout"); } catch {}
         return;
@@ -481,13 +497,28 @@ export default function Kiosk() {
     }
   }
 
-  async function loadResumen(casinoId: string) {
+  // Pre-carga el resumen ANTES del logout. La sesión del comensal se cierra
+  // apenas entramos al paso "qr", entonces el useEffect de impresión ya no
+  // puede hacer fetch (401). Llamamos esto justo antes de cada setStep("qr").
+  async function preloadResumenForPrint() {
+    const cid = selectedCasinoId || casino?.id;
+    if (!cid) return;
+    setPrintTime(new Date());
+    try { await loadResumen(cid); } catch {}
+  }
+
+  async function loadResumen(casinoId: string): Promise<any | null> {
     try {
       // Pasar fecha del cliente (timezone local) para evitar desfase UTC.
       const fecha = todayISO();
       const r = await fetch(`/api/reportes/resumen-dia/${casinoId}?fecha=${fecha}&_t=${Date.now()}`, { credentials: "include" });
-      if (r.ok) setResumen(await r.json());
+      if (r.ok) {
+        const data = await r.json();
+        setResumen(data);
+        return data;
+      }
     } catch {}
+    return null;
   }
 
   // ── Cambio de clave forzado (primer ingreso) ──
@@ -588,6 +619,7 @@ export default function Kiosk() {
         hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
       });
       setBusy(false);
+      await preloadResumenForPrint();
       setStep("qr");
       try { await apiRequest("POST", "/api/auth/logout"); } catch {}
     } catch {
@@ -631,6 +663,7 @@ export default function Kiosk() {
       });
       // Marcar impreso ANTES del logout (mismo motivo que en selectOption).
       try { await apiRequest("POST", `/api/pedidos/${pedido.id}/marcar-impreso`, {}); } catch {}
+      await preloadResumenForPrint();
       setStep("qr");
       try { await apiRequest("POST", "/api/auth/logout"); } catch {}
     } catch {
@@ -654,7 +687,7 @@ export default function Kiosk() {
       setErrMsg("No se pudo buscar el vale");
     } finally { setBusy(false); }
   }
-  function showReimpQR(p: Pedido) {
+  async function showReimpQR(p: Pedido) {
     if (!reimpResult) return;
     const minuta = reimpResult.minutas.find(m => m.id === p.minutaId);
     if (!minuta) return;
@@ -673,6 +706,7 @@ export default function Kiosk() {
       fecha: origDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
       hora: origDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
     });
+    await preloadResumenForPrint();
     setStep("qr");
   }
 
@@ -714,6 +748,7 @@ export default function Kiosk() {
       // `impresoEn` nunca queda en BD y el comensal puede re-imprimir
       // re-logueándose. Ahora el segundo login muestra "ya_impreso".
       try { await apiRequest("POST", `/api/pedidos/${pedido.id}/marcar-impreso`, {}); } catch {}
+      await preloadResumenForPrint();
       setStep("qr");
       // Cerrar sesión silenciosamente para que el siguiente comensal parta limpio
       try { await apiRequest("POST", "/api/auth/logout"); } catch {}

@@ -1,0 +1,1 @@
+- [Tótem print-time session](totem-print-session.md) — la sesión se cierra ANTES del useEffect de impresión; cualquier dato que se quiera imprimir debe pre-cargarse en el handler antes del logout, nunca dentro del useEffect.

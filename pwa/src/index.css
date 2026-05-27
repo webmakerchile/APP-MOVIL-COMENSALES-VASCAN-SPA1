@@ -106,6 +106,39 @@ body,
     font-size: 11px;
     line-height: 1.4;
   }
+  /* Modo combinado vale + resumen — el comensal recibe los DOS tickets en
+     una sola operación de impresión. El vale va primero (corte limpio en
+     borde del papel), salto de página, y luego el resumen acumulado del día. */
+  body.print-both-mode .print-vale,
+  body.print-both-mode .print-vale * { visibility: visible !important; }
+  body.print-both-mode .print-vale {
+    display: block !important;
+    position: relative !important;
+    left: auto !important; top: auto !important;
+    width: 80mm;
+    padding: 4mm 4mm 8mm 4mm;
+    color: #000;
+    background: #fff;
+    font-family: "Courier New", "Courier", monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    page-break-after: always;
+    break-after: page;
+  }
+  body.print-both-mode .print-resumen,
+  body.print-both-mode .print-resumen * { visibility: visible !important; }
+  body.print-both-mode .print-resumen {
+    display: block !important;
+    position: relative !important;
+    left: auto !important; top: auto !important;
+    width: 80mm;
+    padding: 4mm 4mm 8mm 4mm;
+    color: #000;
+    background: #fff;
+    font-family: "Courier New", "Courier", monospace;
+    font-size: 11px;
+    line-height: 1.4;
+  }
   /* ── Ticket resumen clases ── */
   .print-resumen .pr-center   { text-align: center; }
   .print-resumen .pr-title    { font-size: 12px; font-weight: 800; letter-spacing: 2px; text-align: center; text-transform: uppercase; }
