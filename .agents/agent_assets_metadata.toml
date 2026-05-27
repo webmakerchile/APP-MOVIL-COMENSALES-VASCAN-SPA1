@@ -12,3 +12,9 @@ id = "q6CUWaNCXA51gTQ8QCOGZ"
 uri = "file://exports/ticket-rosa.svg"
 type = "image"
 title = "Vale impreso - Rosa Maria Quillas Almonacid"
+
+[[outputs]]
+id = "9NzuYURDUXQd-hmPvNoSH"
+uri = "file://exports/ticket-calderon.svg"
+type = "image"
+title = "Vale impreso - Michael Calderón (CASINO BAUMAX)"
