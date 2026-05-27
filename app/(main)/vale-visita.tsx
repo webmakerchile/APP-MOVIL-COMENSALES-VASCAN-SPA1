@@ -53,7 +53,7 @@ export default function ValeVisitaScreen() {
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      Alert.alert("Vale Emitido", `Vale de visita creado para "${nombreVisita}". Código: ${data.codigoQr}`, [
+      Alert.alert("Vale Emitido", `Vale de visita creado para "${nombreVisita}". Indícale a la persona que retire el vale impreso en el tótem.`, [
         { text: "OK", onPress: () => router.back() },
       ]);
     },

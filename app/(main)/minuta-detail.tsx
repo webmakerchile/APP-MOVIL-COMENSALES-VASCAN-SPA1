@@ -197,21 +197,9 @@ export default function MinutaDetailScreen() {
               {getOptions().find((o) => o.number === selectedOption)?.text}
             </Text>
 
-            {qrCode ? (
-              <View style={styles.qrContainer}>
-                <View style={styles.qrPlaceholder}>
-                  <MaterialCommunityIcons
-                    name="qrcode"
-                    size={120}
-                    color={Colors.primary}
-                  />
-                </View>
-                <Text style={styles.qrCodeText}>{qrCode}</Text>
-                <Text style={styles.qrHint}>
-                  Presenta este vale en el casino
-                </Text>
-              </View>
-            ) : null}
+            <Text style={styles.qrHint}>
+              Retira tu vale impreso en el tótem del casino el día del servicio.
+            </Text>
 
             <Pressable
               style={({ pressed }) => [

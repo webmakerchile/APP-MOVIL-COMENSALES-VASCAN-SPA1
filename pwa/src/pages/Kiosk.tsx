@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Delete, Check, X, ArrowLeft, AlertCircle } from "lucide-react";
-import { QRCodeSVG } from "qrcode.react";
 import { apiRequest } from "@/lib/api";
 
 // ── Types ──────────────────────────────────────────────────────────────────
