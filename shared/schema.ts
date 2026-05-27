@@ -9,6 +9,7 @@ import {
   timestamp,
   boolean,
   pgEnum,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -142,9 +143,16 @@ export const pedidos = pgTable("pedidos", {
   impresoEn: timestamp("impreso_en"),
   createdAt: timestamp("created_at").defaultNow(),
   ...syncCols,
-});
+}, (t) => ({
+  // Defensa a nivel BD: un comensal NO puede tener dos pedidos vivos para la
+  // misma minuta. Garantiza unicidad incluso si una ruta de aplicación falla
+  // o si el tótem Windows offline crea un duplicado por race condition.
+  // Partial index sobre deleted_at IS NULL para permitir tombstones múltiples.
+  uniqUserMinutaActive: uniqueIndex("uniq_pedidos_user_minuta_active")
+    .on(t.userId, t.minutaId)
+    .where(sql`deleted_at IS NULL`),
+}));
 
-// ── Fleet management (cloud-only) ──────────────────────────────────────────
 export const totems = pgTable("totems", {
   id: varchar("id")
     .primaryKey()

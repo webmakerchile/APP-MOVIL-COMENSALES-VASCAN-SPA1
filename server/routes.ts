@@ -1390,10 +1390,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         opcionFinal = 1;
       }
 
-      if (user.role === "comensal" && tipo === "seleccion") {
+      // Bloqueo de duplicados para CUALQUIER rol cuando no es vale visita.
+      // Visita legítimamente puede tener múltiples pedidos por minuta (cada
+      // visitante distinto). Selección/no_asiste solo 1 por (user, minuta).
+      // El índice único parcial en BD es la defensa final, este check da el
+      // mensaje amigable antes de que postgres lance el error de constraint.
+      if (tipo !== "visita") {
         const existing = await storage.getPedidoByUserAndMinuta(parsed.data.userId, parsed.data.minutaId);
         if (existing) {
-          return res.status(409).json({ message: "Ya tienes un pedido registrado para esta fecha. Solo puedes emitir 1 vale por comida." });
+          return res.status(409).json({ message: "Ya tienes un pedido registrado para esta minuta. Solo puedes emitir 1 vale por comida." });
         }
       }
 
