@@ -955,6 +955,33 @@
         setShowModal(true);
       }
 
+      async function crearMinutaPruebaHoy() {
+        const targetCasinoIds = selectedCasino ? [selectedCasino] : casinos.map(c => c.id);
+        if (targetCasinoIds.length === 0) {
+          setToast({ message: 'No hay casinos disponibles', type: 'error' });
+          return;
+        }
+        const familia = familiasList.length > 0 ? familiasList[0].nombre : 'Almuerzo';
+        const stamp = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        const body = {
+          fecha: new Date().toISOString().split('T')[0],
+          familia,
+          opcion1: `PRUEBA ${stamp} - Pollo al horno con arroz y ensalada`,
+          opcion2: `PRUEBA ${stamp} - Pescado grillado con puré y vegetales`,
+          opcion3: `PRUEBA ${stamp} - Pastas a la boloñesa con pan`,
+          opcion4: null,
+          opcion5: null,
+          casinoIds: targetCasinoIds,
+        };
+        try {
+          await apiFetch('/api/minutas', { method: 'POST', body: JSON.stringify(body) });
+          setToast({ message: `Minuta de prueba creada en ${targetCasinoIds.length} casino(s)`, type: 'success' });
+          loadMinutas(selectedCasino);
+        } catch (err) {
+          setToast({ message: err.message, type: 'error' });
+        }
+      }
+
       function openEdit(m) {
         setEditItem(m);
         setForm({ fecha: m.fecha, familia: m.familia || 'Almuerzo', opcion1: m.opcion1, opcion2: m.opcion2, opcion3: m.opcion3, opcion4: m.opcion4 || '', opcion5: m.opcion5 || '', casinoIds: [m.casinoId], editCasinoId: m.casinoId });
@@ -1090,10 +1117,16 @@
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold">Minutas</h1>
             {user?.role !== 'interlocutor' && (
-              <button onClick={openCreate} className="bg-vascan-gold hover:bg-vascan-goldDark text-white font-semibold px-5 py-2.5 rounded-xl transition text-sm flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                Nueva Minuta
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={crearMinutaPruebaHoy} title="Crea una minuta con datos ficticios para hoy en el casino seleccionado (o en todos si no hay filtro)" className="bg-white/5 hover:bg-white/10 border border-white/15 text-white/80 font-medium px-4 py-2.5 rounded-xl transition text-sm flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  Minuta Prueba HOY
+                </button>
+                <button onClick={openCreate} className="bg-vascan-gold hover:bg-vascan-goldDark text-white font-semibold px-5 py-2.5 rounded-xl transition text-sm flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  Nueva Minuta
+                </button>
+              </div>
             )}
           </div>
 
