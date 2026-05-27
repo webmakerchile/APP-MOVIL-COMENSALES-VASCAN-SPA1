@@ -1,0 +1,148 @@
+Windows PowerShell
+Copyright (C) Microsoft Corporation. Todos los derechos reservados.
+
+Prueba la nueva tecnología PowerShell multiplataforma https://aka.ms/pscore6
+
+PS C:\Windows\system32> # Cerrar Chrome
+>> pkill -f chrome
+>>
+>> # Reabrirlo en modo kiosko (ajustá la URL a tu deploy)
+>> google-chrome \
+>>   --kiosk \
+>>   --kiosk-printing \
+>>   --noerrdialogs \
+>>   --disable-pinch \
+>>   --overscroll-history-navigation=0 \
+>>   --disable-features=TranslateUI \
+>>   --no-first-run \
+>>   --start-fullscreen \
+>>   https://TU-DOMINIO.replit.app/kiosk
+En línea: 6 Carácter: 5
++   --kiosk \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 6 Carácter: 5
++   --kiosk \
++     ~~~~~
+Token 'kiosk' inesperado en la expresión o la instrucción.
+En línea: 7 Carácter: 5
++   --kiosk-printing \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 7 Carácter: 5
++   --kiosk-printing \
++     ~~~~~~~~~~~~~~
+Token 'kiosk-printing' inesperado en la expresión o la instrucción.
+En línea: 8 Carácter: 5
++   --noerrdialogs \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 8 Carácter: 5
++   --noerrdialogs \
++     ~~~~~~~~~~~~
+Token 'noerrdialogs' inesperado en la expresión o la instrucción.
+En línea: 9 Carácter: 5
++   --disable-pinch \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 9 Carácter: 5
++   --disable-pinch \
++     ~~~~~~~~~~~~~
+Token 'disable-pinch' inesperado en la expresión o la instrucción.
+En línea: 10 Carácter: 5
++   --overscroll-history-navigation=0 \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 10 Carácter: 5
++   --overscroll-history-navigation=0 \
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Token 'overscroll-history-navigation=0' inesperado en la expresión o la instrucción.
+No se notificaron todos los errores de análisis. Corrija los errores notificados e inténtelo de nuevo.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingExpressionAfterOperator
+
+PS C:\Windows\system32> # Cerrar Chrome
+>> pkill -f chrome
+>>
+>> # Reabrirlo en modo kiosko (ajustá la URL a tu deploy)
+>> google-chrome \
+>>   --kiosk \
+>>   --kiosk-printing \
+>>   --noerrdialogs \
+>>   --disable-pinch \
+>>   --overscroll-history-navigation=0 \
+>>   --disable-features=TranslateUI \
+>>   --no-first-run \
+>>   --start-fullscreen \
+>>   https://vascan.replit.app
+En línea: 6 Carácter: 5
++   --kiosk \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 6 Carácter: 5
++   --kiosk \
++     ~~~~~
+Token 'kiosk' inesperado en la expresión o la instrucción.
+En línea: 7 Carácter: 5
++   --kiosk-printing \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 7 Carácter: 5
++   --kiosk-printing \
++     ~~~~~~~~~~~~~~
+Token 'kiosk-printing' inesperado en la expresión o la instrucción.
+En línea: 8 Carácter: 5
++   --noerrdialogs \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 8 Carácter: 5
++   --noerrdialogs \
++     ~~~~~~~~~~~~
+Token 'noerrdialogs' inesperado en la expresión o la instrucción.
+En línea: 9 Carácter: 5
++   --disable-pinch \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 9 Carácter: 5
++   --disable-pinch \
++     ~~~~~~~~~~~~~
+Token 'disable-pinch' inesperado en la expresión o la instrucción.
+En línea: 10 Carácter: 5
++   --overscroll-history-navigation=0 \
++     ~
+Falta una expresión después del operador unario '--'.
+En línea: 10 Carácter: 5
++   --overscroll-history-navigation=0 \
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Token 'overscroll-history-navigation=0' inesperado en la expresión o la instrucción.
+No se notificaron todos los errores de análisis. Corrija los errores notificados e inténtelo de nuevo.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : MissingExpressionAfterOperator
+
+PS C:\Windows\system32> pkill -f chrome
+>>
+pkill : El término 'pkill' no se reconoce como nombre de un cmdlet, función, archivo de script o programa ejecutable.
+Compruebe si escribió correctamente el nombre o, si incluyó una ruta de acceso, compruebe que dicha ruta es correcta e
+inténtelo de nuevo.
+En línea: 1 Carácter: 1
++ pkill -f chrome
++ ~~~~~
+    + CategoryInfo          : ObjectNotFound: (pkill:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS C:\Windows\system32> pkill -f chrome
+>>
+pkill : El término 'pkill' no se reconoce como nombre de un cmdlet, función, archivo de script o programa ejecutable.
+Compruebe si escribió correctamente el nombre o, si incluyó una ruta de acceso, compruebe que dicha ruta es correcta e
+inténtelo de nuevo.
+En línea: 1 Carácter: 1
++ pkill -f chrome
++ ~~~~~
+    + CategoryInfo          : ObjectNotFound: (pkill:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS C:\Windows\system32>
+
+
+
+
