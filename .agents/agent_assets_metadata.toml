@@ -6,3 +6,9 @@ id = "V4BhHUipMjujlVtdqBD7G"
 uri = "file://public/ticket-preview.jpg"
 type = "image"
 title = "Ticket resumen tótem – con Desde/Hasta corregido"
+
+[[outputs]]
+id = "q6CUWaNCXA51gTQ8QCOGZ"
+uri = "file://exports/ticket-rosa.svg"
+type = "image"
+title = "Vale impreso - Rosa Maria Quillas Almonacid"
