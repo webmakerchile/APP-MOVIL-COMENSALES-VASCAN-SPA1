@@ -959,110 +959,6 @@ export default function Kiosk() {
               </button>
             </div>
 
-            {/* Layout imprimible del resumen (térmica 80mm). Solo visible cuando
-                body tiene .print-resumen-mode + @media print. */}
-            <div className="print-resumen" aria-hidden="true">
-              {(() => {
-                // Helpers de formato fecha/hora para el ticket
-                const now = new Date();
-                const pad = (n: number) => String(n).padStart(2, "0");
-                const fmtDate = (iso: string) => {
-                  const d = new Date(iso);
-                  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
-                };
-                const fmtTime = (iso: string) => {
-                  const d = new Date(iso);
-                  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-                };
-                const nowDate = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
-                const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-                // Fecha del resumen (YYYY-MM-DD → DD/MM/YYYY)
-                const resumenDateStr = resumen?.fecha
-                  ? (() => { const [y, m, d] = resumen.fecha.split("-"); return `${d}/${m}/${y}`; })()
-                  : nowDate;
-                // Agrupar opciones por familia (manteniendo case original) para
-                // las dos secciones: Resumen de Servicios + Opciones de Menú.
-                const titleCase = (s: string) =>
-                  s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
-                const familiaServicio = new Map<string, number>(); // familia → cantidad total
-                const familiaOpciones = new Map<string, Array<{ numero: number; descripcion: string; cantidad: number }>>(); // familia → opciones
-                for (const o of (resumen?.opciones || [])) {
-                  const famRaw = (o.familia || "Servicio").trim();
-                  const fam = titleCase(famRaw);
-                  familiaServicio.set(fam, (familiaServicio.get(fam) || 0) + o.cantidad);
-                  if (!familiaOpciones.has(fam)) familiaOpciones.set(fam, []);
-                  familiaOpciones.get(fam)!.push({ numero: o.numero, descripcion: o.descripcion, cantidad: o.cantidad });
-                }
-                const grandTotal = (resumen?.totalSeleccion || 0) + (resumen?.totalVisitas || 0);
-                return (
-                  <>
-                    {/* Cabecera */}
-                    <div className="pr-title">&gt;&gt; {(casino?.nombre || "CASINO").toUpperCase()} &lt;&lt;</div>
-                    <div className="pr-subtitle">------ VALE DE CONTROL INTERNO ------</div>
-                    <div className="pr-subtitle">*** Informe del {nowDate} {nowTime} ***</div>
-                    {/* Desde = inicio del día (00:00). Hasta = momento exacto en que
-                        se apretó Imprimir. Así cada impresión refleja "todo lo consumido
-                        hoy hasta este minuto" — pedido del cliente 26/05/2026. */}
-                    <div className="pr-text">Desde el {resumenDateStr} a las 00:00:00 hrs.</div>
-                    <div className="pr-text">Hasta el {nowDate} a las {(() => {
-                      const t = printTime || now;
-                      return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
-                    })()} hrs.</div>
-                    <hr className="pr-hr" />
-                    {resumen?.minuta ? (
-                      <>
-                        {/* Resumen de Servicios */}
-                        <div className="pr-section">RESUMEN DE SERVICIOS:</div>
-                        <div className="pr-col-hdr">
-                          <span className="pr-col-svc">Servicio</span>
-                          <span className="pr-col-qty">Cantidad</span>
-                        </div>
-                        {[...familiaServicio.entries()].map(([familia, qty]) => (
-                          <div key={familia} className="pr-svc-row">
-                            <span className="pr-col-svc">{familia}</span>
-                            <span className="pr-col-qty">{qty}</span>
-                          </div>
-                        ))}
-                        {(resumen.totalVisitas || 0) > 0 && (
-                          <div className="pr-svc-row">
-                            <span className="pr-col-svc">VISITAS</span>
-                            <span className="pr-col-qty">{resumen.totalVisitas}</span>
-                          </div>
-                        )}
-                        <div className="pr-total-row">
-                          <span className="pr-col-svc">TOTAL</span>
-                          <span className="pr-col-qty">{grandTotal}</span>
-                        </div>
-                        <hr className="pr-hr" />
-                        {/* Opciones de Menu — agrupado por familia, con subtotal por bloque */}
-                        <div className="pr-section">OPCIONES DE MENÚ:</div>
-                        {[...familiaOpciones.entries()].map(([familia, opciones]) => {
-                          const subtotal = opciones.reduce((acc, o) => acc + o.cantidad, 0);
-                          return (
-                            <div key={familia}>
-                              <div className="pr-date-hdr">{resumenDateStr} — {familia}</div>
-                              {opciones.map((o, i) => (
-                                <div key={`${familia}:${o.numero}:${i}`} className="pr-opt-row">
-                                  <span className="pr-opt-num">{o.numero}.</span>
-                                  <span className="pr-opt-desc">{o.descripcion}</span>
-                                  <span className="pr-opt-qty">{o.cantidad}</span>
-                                </div>
-                              ))}
-                              <div className="pr-opt-total">
-                                <span className="pr-col-svc">TOTAL</span>
-                                <span className="pr-col-qty">{subtotal}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </>
-                    ) : (
-                      <div className="pr-center">Sin menú para hoy.</div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
           </div>
         )}
 
@@ -1428,6 +1324,95 @@ export default function Kiosk() {
           <div className="pv-foot">BuenaMezcla · Vale no reimprimible</div>
         </div>
       )}
+
+      {/* Layout imprimible del resumen (térmica 80mm). DEBE estar SIEMPRE en
+          el DOM (no dentro de step==="resumen") porque también se imprime
+          desde el flujo del comensal en step==="qr". Solo visible cuando
+          body tiene .print-resumen-mode + @media print. */}
+      <div className="print-resumen" aria-hidden="true">
+        {(() => {
+          const now = new Date();
+          const pad = (n: number) => String(n).padStart(2, "0");
+          const nowDate = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+          const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+          const resumenDateStr = resumen?.fecha
+            ? (() => { const [y, m, d] = resumen.fecha.split("-"); return `${d}/${m}/${y}`; })()
+            : nowDate;
+          const titleCase = (s: string) =>
+            s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+          const familiaServicio = new Map<string, number>();
+          const familiaOpciones = new Map<string, Array<{ numero: number; descripcion: string; cantidad: number }>>();
+          for (const o of (resumen?.opciones || [])) {
+            const famRaw = (o.familia || "Servicio").trim();
+            const fam = titleCase(famRaw);
+            familiaServicio.set(fam, (familiaServicio.get(fam) || 0) + o.cantidad);
+            if (!familiaOpciones.has(fam)) familiaOpciones.set(fam, []);
+            familiaOpciones.get(fam)!.push({ numero: o.numero, descripcion: o.descripcion, cantidad: o.cantidad });
+          }
+          const grandTotal = (resumen?.totalSeleccion || 0) + (resumen?.totalVisitas || 0);
+          return (
+            <>
+              <div className="pr-title">&gt;&gt; {(casino?.nombre || "CASINO").toUpperCase()} &lt;&lt;</div>
+              <div className="pr-subtitle">------ VALE DE CONTROL INTERNO ------</div>
+              <div className="pr-subtitle">*** Informe del {nowDate} {nowTime} ***</div>
+              <div className="pr-text">Desde el {resumenDateStr} a las 00:00:00 hrs.</div>
+              <div className="pr-text">Hasta el {nowDate} a las {(() => {
+                const t = printTime || now;
+                return `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+              })()} hrs.</div>
+              <hr className="pr-hr" />
+              {resumen?.minuta ? (
+                <>
+                  <div className="pr-section">RESUMEN DE SERVICIOS:</div>
+                  <div className="pr-col-hdr">
+                    <span className="pr-col-svc">Servicio</span>
+                    <span className="pr-col-qty">Cantidad</span>
+                  </div>
+                  {[...familiaServicio.entries()].map(([familia, qty]) => (
+                    <div key={familia} className="pr-svc-row">
+                      <span className="pr-col-svc">{familia}</span>
+                      <span className="pr-col-qty">{qty}</span>
+                    </div>
+                  ))}
+                  {(resumen.totalVisitas || 0) > 0 && (
+                    <div className="pr-svc-row">
+                      <span className="pr-col-svc">VISITAS</span>
+                      <span className="pr-col-qty">{resumen.totalVisitas}</span>
+                    </div>
+                  )}
+                  <div className="pr-total-row">
+                    <span className="pr-col-svc">TOTAL</span>
+                    <span className="pr-col-qty">{grandTotal}</span>
+                  </div>
+                  <hr className="pr-hr" />
+                  <div className="pr-section">OPCIONES DE MENÚ:</div>
+                  {[...familiaOpciones.entries()].map(([familia, opciones]) => {
+                    const subtotal = opciones.reduce((acc, o) => acc + o.cantidad, 0);
+                    return (
+                      <div key={familia}>
+                        <div className="pr-date-hdr">{resumenDateStr} — {familia}</div>
+                        {opciones.map((o, i) => (
+                          <div key={`${familia}:${o.numero}:${i}`} className="pr-opt-row">
+                            <span className="pr-opt-num">{o.numero}.</span>
+                            <span className="pr-opt-desc">{o.descripcion}</span>
+                            <span className="pr-opt-qty">{o.cantidad}</span>
+                          </div>
+                        ))}
+                        <div className="pr-opt-total">
+                          <span className="pr-col-svc">TOTAL</span>
+                          <span className="pr-col-qty">{subtotal}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <div className="pr-center">Sin menú para hoy.</div>
+              )}
+            </>
+          );
+        })()}
+      </div>
     </div>
   );
 }
