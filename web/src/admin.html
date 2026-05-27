@@ -712,10 +712,14 @@
               </div>
               <SelectField label="Casino principal" value={form.casinoId} onChange={v => setForm({...form, casinoId: v})}
                 options={[{ value: '', label: 'Sin casino asignado' }, ...casinos.map(c => ({ value: c.id, label: c.nombre }))]} />
-              {(form.role === 'interlocutor' || form.role === 'encargado_casino') && (
+              {form.role !== 'admin' && (
                 <div>
                   <label className="block text-sm font-medium text-white/70 mb-1.5">Casinos adicionales accesibles</label>
-                  <p className="text-xs text-white/40 mb-2">El usuario podrá ver datos de estos casinos además del principal.</p>
+                  <p className="text-xs text-white/40 mb-2">
+                    {form.role === 'comensal'
+                      ? 'El comensal podrá retirar su vale desde el tótem de cualquiera de estos casinos (además del principal).'
+                      : 'El usuario podrá ver datos de estos casinos además del principal.'}
+                  </p>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto bg-white/5 rounded-xl p-3 border border-white/10">
                     {casinos.map(c => (
                       <label key={c.id} className="flex items-center gap-3 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1 transition">

@@ -385,13 +385,37 @@ export default function Kiosk() {
       }
 
       // Comensal: si ya tiene pedido para hoy, saltar directo al QR.
+      // Soporte multi-casino: el comensal puede tener acceso a varios casinos
+      // (campo casinoIds). Pedimos minutas de TODOS sus casinos accesibles y
+      // las unimos. El backend (auto-totem) valida que la minuta pertenezca a
+      // uno de sus casinos accesibles, así que esto es seguro.
       const today = todayISO();
-      const [minutasRes, pedidosRes] = await Promise.all([
-        fetch(`/api/minutas/${u!.casinoId}?_t=${Date.now()}`, { credentials: "include" }),
+      const casinoIdsAccesibles: string[] = (u!.casinoIds && u!.casinoIds.length > 0)
+        ? u!.casinoIds
+        : (u!.casinoId ? [u!.casinoId] : []);
+      if (casinoIdsAccesibles.length === 0) {
+        setErrMsg("Tu usuario no tiene un casino asignado.");
+        setStep("error");
+        return;
+      }
+      const [minutasArrays, pedidosRes] = await Promise.all([
+        Promise.all(
+          casinoIdsAccesibles.map(cid =>
+            fetch(`/api/minutas/${cid}?_t=${Date.now()}`, { credentials: "include" })
+              .then(r => r.ok ? r.json() as Promise<Minuta[]> : [] as Minuta[])
+              .catch(() => [] as Minuta[])
+          )
+        ),
         fetch(`/api/pedidos/${u!.id}?_t=${Date.now()}`, { credentials: "include" }),
       ]);
-      if (!minutasRes.ok) throw new Error("No se pudo cargar el menú");
-      const minutasData: Minuta[] = await minutasRes.json();
+      // Unir minutas de todos los casinos accesibles, deduplicando por id.
+      const seenIds = new Set<string>();
+      const minutasData: Minuta[] = [];
+      for (const arr of minutasArrays) {
+        for (const m of arr) {
+          if (!seenIds.has(m.id)) { seenIds.add(m.id); minutasData.push(m); }
+        }
+      }
       const pedidosData: Pedido[] = pedidosRes.ok ? await pedidosRes.json() : [];
 
       const todayMins = minutasData.filter((m) => m.fecha === today && m.activo);
