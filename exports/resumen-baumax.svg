@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="540" viewBox="0 0 380 540" font-family="'Courier New', monospace">
+  <rect width="380" height="540" fill="#d4d4d4"/>
+  <g transform="translate(40,20)">
+    <rect width="300" height="500" fill="#ffffff" stroke="#bbb" stroke-width="1"/>
+    <g fill="#000">
+      <text x="150" y="34" font-size="13" font-weight="800" letter-spacing="2" text-anchor="middle">&gt;&gt; CASINO BAUMAX &lt;&lt;</text>
+      <text x="150" y="52" font-size="10" text-anchor="middle">------ VALE DE CONTROL INTERNO ------</text>
+      <text x="150" y="68" font-size="10" text-anchor="middle">*** Informe del 27/05/2026 00:50:00 ***</text>
+      <text x="20" y="92" font-size="10">Desde el 27/05/2026 a las 00:00:00 hrs.</text>
+      <text x="20" y="108" font-size="10">Hasta el 27/05/2026 a las 00:50:00 hrs.</text>
+    </g>
+    <line x1="14" y1="120" x2="286" y2="120" stroke="#000" stroke-dasharray="3,3"/>
+
+    <text x="20" y="140" font-size="11" font-weight="700">RESUMEN DE SERVICIOS:</text>
+    <g font-size="10" fill="#000">
+      <text x="20" y="160" font-weight="700">Servicio</text>
+      <text x="280" y="160" font-weight="700" text-anchor="end">Cantidad</text>
+      <text x="20" y="178">Menu Ejecutivo</text>
+      <text x="280" y="178" font-weight="700" text-anchor="end">1</text>
+    </g>
+    <line x1="14" y1="188" x2="286" y2="188" stroke="#000"/>
+    <g font-size="11" font-weight="800" fill="#000">
+      <text x="20" y="204">TOTAL</text>
+      <text x="280" y="204" text-anchor="end">1</text>
+    </g>
+    <line x1="14" y1="216" x2="286" y2="216" stroke="#000" stroke-dasharray="3,3"/>
+
+    <text x="20" y="236" font-size="11" font-weight="700">OPCIONES DE MENÚ:</text>
+    <text x="20" y="258" font-size="11" font-weight="700">27/05/2026 — Menu Ejecutivo</text>
+    <g font-size="9" fill="#000">
+      <text x="20" y="278">1.</text>
+      <text x="36" y="278">PRUEBA 11:21 p. m. - Pollo al</text>
+      <text x="36" y="290">horno con arroz y ensalada</text>
+      <text x="280" y="278" font-weight="700" text-anchor="end">1</text>
+    </g>
+    <line x1="14" y1="300" x2="286" y2="300" stroke="#000"/>
+    <g font-size="11" font-weight="800" fill="#000">
+      <text x="20" y="316">TOTAL</text>
+      <text x="280" y="316" text-anchor="end">1</text>
+    </g>
+
+    <text x="150" y="380" font-size="9" fill="#888" text-anchor="middle">[ Previsualización — datos reales BD 27/05/2026 ]</text>
+    <text x="150" y="396" font-size="9" fill="#888" text-anchor="middle">Hoy en BAUMAX hay 1 pedido impreso (Calderón)</text>
+    <text x="150" y="412" font-size="9" fill="#888" text-anchor="middle">El formato real con varias familias y VISITAS</text>
+    <text x="150" y="428" font-size="9" fill="#888" text-anchor="middle">se ve igual al ejemplo que enviaste.</text>
+  </g>
+</svg>

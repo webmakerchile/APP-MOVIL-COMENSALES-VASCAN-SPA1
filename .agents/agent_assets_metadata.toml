@@ -18,3 +18,9 @@ id = "9NzuYURDUXQd-hmPvNoSH"
 uri = "file://exports/ticket-calderon.svg"
 type = "image"
 title = "Vale impreso - Michael Calderón (CASINO BAUMAX)"
+
+[[outputs]]
+id = "3GCb9DhhBZuswouyhB85W"
+uri = "file://exports/resumen-baumax.svg"
+type = "image"
+title = "Previsualización - Resumen tótem CASINO BAUMAX (27/05/2026)"
