@@ -116,14 +116,14 @@ body,
     position: relative !important;
     left: auto !important; top: auto !important;
     width: 80mm;
-    padding: 4mm 4mm 8mm 4mm;
+    padding: 4mm 4mm 2mm 4mm;
     color: #000;
     background: #fff;
     font-family: "Courier New", "Courier", monospace;
     font-size: 12px;
     line-height: 1.5;
-    page-break-after: always;
-    break-after: page;
+    page-break-after: avoid;
+    break-after: avoid;
   }
   body.print-both-mode .print-resumen,
   body.print-both-mode .print-resumen * { visibility: visible !important; }
@@ -132,12 +132,14 @@ body,
     position: relative !important;
     left: auto !important; top: auto !important;
     width: 80mm;
-    padding: 4mm 4mm 8mm 4mm;
+    padding: 0 4mm 8mm 4mm;
     color: #000;
     background: #fff;
     font-family: "Courier New", "Courier", monospace;
     font-size: 11px;
     line-height: 1.4;
+    page-break-before: avoid;
+    break-before: avoid;
   }
   /* ── Ticket resumen clases ── */
   .print-resumen .pr-center   { text-align: center; }
