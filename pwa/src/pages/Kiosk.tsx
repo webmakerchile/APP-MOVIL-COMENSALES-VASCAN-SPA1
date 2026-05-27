@@ -1295,7 +1295,7 @@ export default function Kiosk() {
         <div className="print-vale" aria-hidden="true">
           <div className="pv-title">&gt;&gt; CASINO &lt;&lt;</div>
           {casino?.nombre && <div className="pv-sub">{casino.nombre}</div>}
-          <div className="pv-sub">VALE DE COMEDOR</div>
+          <div className="pv-sub">VALE DE CONTROL INTERNO</div>
           <hr className="pv-hr" />
           <div className="pv-familia">{qrMeta.familia}</div>
           <div className="pv-opcion">{qrMeta.opcion}</div>
