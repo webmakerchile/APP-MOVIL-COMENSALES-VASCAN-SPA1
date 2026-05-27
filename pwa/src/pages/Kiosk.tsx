@@ -271,7 +271,11 @@ export default function Kiosk() {
     // 2 frames para asegurar que el DOM con el resumen ya pintó.
     const raf1 = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        const mode = resumenOk ? "print-both-mode" : "";
+        // Cliente pidió (27/05/2026) que se imprima SOLO el resumen del día,
+        // no el vale individual del comensal. Si el resumen no pudo cargarse,
+        // imprimimos el vale como fallback para que el comensal no se quede
+        // sin nada.
+        const mode = resumenOk ? "print-resumen-mode" : "";
         if (mode) document.body.classList.add(mode);
         try { window.print(); } catch {}
         setTimeout(() => { if (mode) document.body.classList.remove(mode); }, 500);
