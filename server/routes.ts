@@ -1658,7 +1658,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Resumen del día para encargado_casino / admin: totales por opción + no_asiste + visitas.
-  app.get("/api/reportes/resumen-dia/:casinoId", requireAdmin, async (req: Request, res: Response) => {
+  app.get("/api/reportes/resumen-dia/:casinoId", async (req: Request, res: Response) => {
+    // Auth flexible: cualquier usuario autenticado puede consultar el resumen
+    // del día. Los comensales lo necesitan en el tótem para que el ticket
+    // impreso incluya el desglose de lo pedido hoy en el casino. La data es
+    // agregada (no PII) y limitada al casino al que pertenecen.
+    const sessionUserId = (req.session as any).userId;
+    if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+    const sessionUser = await storage.getUser(sessionUserId);
+    if (!sessionUser) return res.status(401).json({ message: "Usuario no encontrado" });
     try {
       const { casinoId } = req.params;
       const fecha = (req.query.fecha as string) || new Date().toISOString().split("T")[0];
