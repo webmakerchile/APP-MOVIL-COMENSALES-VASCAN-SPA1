@@ -202,6 +202,12 @@ export default function Kiosk() {
   const [resetTargetRut, setResetTargetRut] = useState("");
   const [resumen, setResumen] = useState<any>(null);
   const [printTime, setPrintTime] = useState<Date | null>(null);
+  // Modo de impresión al llegar al paso "qr":
+  //  - "resumen": imprime el resumen del día acumulado (flujo comensal normal,
+  //    pedido del cliente del 27/05/2026).
+  //  - "vale": imprime SOLO el vale individual del comensal (flujo Vale visita
+  //    y Reimpresión — pedido del cliente del 27/05/2026 tarde).
+  const [printMode, setPrintMode] = useState<"resumen" | "vale">("resumen");
   const [reimpRut, setReimpRut] = useState("");
   const [reimpResult, setReimpResult] = useState<{ user: any; pedidos: Pedido[]; minutas: Minuta[] } | null>(null);
   const [visitaRut, setVisitaRut] = useState("");
@@ -271,11 +277,12 @@ export default function Kiosk() {
     // 2 frames para asegurar que el DOM con el resumen ya pintó.
     const raf1 = window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        // Cliente pidió (27/05/2026) que se imprima SOLO el resumen del día,
-        // no el vale individual del comensal. Si el resumen no pudo cargarse,
-        // imprimimos el vale como fallback para que el comensal no se quede
-        // sin nada.
-        const mode = resumenOk ? "print-resumen-mode" : "";
+        // - printMode "vale": imprime el vale individual (Vale visita, Reimpresión).
+        // - printMode "resumen": imprime el resumen del día (comensal normal).
+        //   Si no se pudo cargar el resumen, cae al vale como fallback para
+        //   que el comensal/visitante no se quede sin ticket.
+        const useResumen = printMode === "resumen" && resumenOk;
+        const mode = useResumen ? "print-resumen-mode" : "";
         if (mode) document.body.classList.add(mode);
         try { window.print(); } catch {}
         setTimeout(() => { if (mode) document.body.classList.remove(mode); }, 500);
@@ -286,9 +293,14 @@ export default function Kiosk() {
       });
     });
     return () => window.cancelAnimationFrame(raf1);
-  }, [step, qrCode, qrMeta, qrPedidoId, resumen]);
+  }, [step, qrCode, qrMeta, qrPedidoId, resumen, printMode]);
   useEffect(() => {
-    if (step !== "qr") printedRef.current = null;
+    if (step !== "qr") {
+      printedRef.current = null;
+      // Resetear printMode al modo por defecto (comensal = resumen) cuando
+      // salimos del paso QR, para que el próximo flujo arranque correctamente.
+      setPrintMode("resumen");
+    }
   }, [step]);
 
   // ── Login submit ──
@@ -719,7 +731,9 @@ export default function Kiosk() {
       });
       // Marcar impreso ANTES del logout (mismo motivo que en selectOption).
       try { await apiRequest("POST", `/api/pedidos/${pedido.id}/marcar-impreso`, {}); } catch {}
-      await preloadResumenForPrint();
+      // Vale visita: el ticket impreso debe ser el VALE individual del
+      // visitante, NO el resumen del día. (Pedido cliente 27/05/2026.)
+      setPrintMode("vale");
       setStep("qr");
       try { await apiRequest("POST", "/api/auth/logout"); } catch {}
     } catch {
@@ -762,7 +776,9 @@ export default function Kiosk() {
       fecha: origDate.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }),
       hora: origDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
     });
-    await preloadResumenForPrint();
+    // Reimpresión: imprimir la COPIA DEL VALE individual, no el resumen del día.
+    // (Pedido cliente 27/05/2026 tarde.)
+    setPrintMode("vale");
     setStep("qr");
   }
 

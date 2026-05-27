@@ -76,17 +76,23 @@ body,
   }
   body * { visibility: hidden !important; }
   .print-vale, .print-vale * { visibility: visible !important; }
+  /* Tipografía sans-serif bold para legibilidad en térmica
+     (cliente 27/05/2026 — la letra mono Courier salía borrosa).
+     Ancho REDUCIDO a 72mm con padding lateral generoso para
+     evitar que el lado derecho se corte (área imprimible real
+     de la térmica suele ser ~70-72mm en papel 80mm). */
   .print-vale {
     display: block !important;
     position: absolute;
     left: 0; top: 0;
-    width: 80mm;
+    width: 72mm;
     padding: 4mm 4mm 8mm 4mm;
     color: #000;
     background: #fff;
-    font-family: "Courier New", "Courier", monospace;
-    font-size: 12px;
-    line-height: 1.5;
+    font-family: "Arial Black", "Helvetica", Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.45;
   }
   /* Resumen del día imprimible — solo cuando body tiene .print-resumen-mode */
   body.print-resumen-mode .print-vale,
@@ -98,13 +104,14 @@ body,
     display: block !important;
     position: absolute;
     left: 0; top: 0;
-    width: 80mm;
+    width: 72mm;
     padding: 4mm 4mm 8mm 4mm;
     color: #000;
     background: #fff;
-    font-family: "Courier New", "Courier", monospace;
-    font-size: 11px;
-    line-height: 1.4;
+    font-family: "Arial Black", "Helvetica", Arial, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.35;
   }
   /* Modo combinado vale + resumen — el comensal recibe los DOS tickets en
      una sola operación de impresión. El vale va primero (corte limpio en
@@ -115,13 +122,14 @@ body,
     display: block !important;
     position: relative !important;
     left: auto !important; top: auto !important;
-    width: 80mm;
+    width: 72mm;
     padding: 4mm 4mm 2mm 4mm;
     color: #000;
     background: #fff;
-    font-family: "Courier New", "Courier", monospace;
-    font-size: 12px;
-    line-height: 1.5;
+    font-family: "Arial Black", "Helvetica", Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.45;
     page-break-after: avoid;
     break-after: avoid;
   }
@@ -131,13 +139,14 @@ body,
     display: block !important;
     position: relative !important;
     left: auto !important; top: auto !important;
-    width: 80mm;
+    width: 72mm;
     padding: 0 4mm 8mm 4mm;
     color: #000;
     background: #fff;
-    font-family: "Courier New", "Courier", monospace;
-    font-size: 11px;
-    line-height: 1.4;
+    font-family: "Arial Black", "Helvetica", Arial, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.35;
     page-break-before: avoid;
     break-before: avoid;
   }
