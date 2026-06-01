@@ -94,7 +94,23 @@ function getOptions(m: Minuta) {
   return opts;
 }
 
-const todayISO = () => new Date().toISOString().split("T")[0];
+// Fecha "hoy" en horario de Chile (America/Santiago), formato YYYY-MM-DD.
+// IMPORTANTE: NO usar toISOString() — devuelve la fecha en UTC y, después de
+// las ~20:00 de Chile (UTC-4/-3), salta al día siguiente. Eso hacía que el
+// tótem creyera que "no hay menú para hoy" en la tarde/noche: el resumen del
+// día salía en cero y el botón "Vale visita" quedaba deshabilitado.
+// Usamos formatToParts para armar YYYY-MM-DD de forma determinista (sin
+// depender del formato del locale).
+const todayISO = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+};
 
 // ── Inactivity hook ────────────────────────────────────────────────────────
 function useIdleReset(onIdle: () => void, ms: number, enabled: boolean) {

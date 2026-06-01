@@ -1,1 +1,2 @@
 - [Tótem print-time session](totem-print-session.md) — la sesión se cierra ANTES del useEffect de impresión; cualquier dato que se quiera imprimir debe pre-cargarse en el handler antes del logout, nunca dentro del useEffect.
+- [Chile timezone for "today"](timezone-chile.md) — "hoy" se calcula en America/Santiago, no UTC; toISOString() rompe el tótem de noche.

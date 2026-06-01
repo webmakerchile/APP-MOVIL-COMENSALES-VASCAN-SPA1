@@ -20,6 +20,22 @@ const upload = multer({ dest: "/tmp/uploads/" });
 
 const SUPER_ADMIN_RUT = "21212011-1";
 
+// Fecha "hoy" en horario de Chile (America/Santiago), formato YYYY-MM-DD.
+// Usar esto en vez de new Date().toISOString().split("T")[0] para cualquier
+// noción de "hoy": toISOString() devuelve UTC y desfasa el día después de las
+// ~20:00 de Chile, rompiendo el resumen del día y el menú del tótem en la noche.
+// formatToParts arma YYYY-MM-DD de forma determinista (sin depender del locale).
+function todayChile(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 function validarRutChileno(rutCompleto: string): boolean {
   const cleaned = rutCompleto.replace(/\./g, "").replace(/-/g, "").trim().toUpperCase();
   if (cleaned.length < 2) return false;
@@ -799,7 +815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allUsers = await storage.getAllUsers();
       const allPedidos = await storage.getAllPedidos();
       const allMinutas = await storage.getAllMinutas();
-      const today = new Date().toISOString().split('T')[0];
+      const today = todayChile();
       const now = new Date();
 
       const casinoStats = await Promise.all(activeCasinos.map(async casino => {
@@ -1529,7 +1545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Solo permite auto-asignación para el menú del DÍA (consumo en vivo).
       // Usar fecha enviada por el cliente (timezone local Chile) — si no viene,
       // fallback a UTC. Esto evita el desfase UTC-3/4 después de las ~9pm Chile.
-      const checkFecha = (clientFecha as string) || new Date().toISOString().split("T")[0];
+      const checkFecha = (clientFecha as string) || todayChile();
       if (minuta.fecha !== checkFecha) {
         return res.status(403).json({ message: "Solo se puede emitir vale para el menú de hoy" });
       }
@@ -1630,7 +1646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/pedidos/buscar/por-rut", requireAdmin, async (req: Request, res: Response) => {
     try {
       const rut = (req.query.rut as string || "").replace(/[^0-9kK]/g, "").toUpperCase();
-      const fecha = (req.query.fecha as string) || new Date().toISOString().split("T")[0];
+      const fecha = (req.query.fecha as string) || todayChile();
       if (!rut) return res.status(400).json({ message: "RUT requerido" });
       const allUsers = await storage.getAllUsers();
       const norm = (s: string) => s.replace(/[^0-9kK]/g, "").toUpperCase();
@@ -1669,7 +1685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!sessionUser) return res.status(401).json({ message: "Usuario no encontrado" });
     try {
       const { casinoId } = req.params;
-      const fecha = (req.query.fecha as string) || new Date().toISOString().split("T")[0];
+      const fecha = (req.query.fecha as string) || todayChile();
       const minutas = await storage.getAllMinutasByCasino(casinoId);
       // Agregar TODAS las minutas activas del día (almuerzo + colación + VIP +
       // desayuno, etc). Antes solo tomaba una y dejaba el resumen vacío cuando
@@ -1890,7 +1906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── Reporte Diario Manual ──
   app.post("/api/reportes/diario", requireAdminOnly, async (req: Request, res: Response) => {
     try {
-      const fecha = (req.body?.fecha as string) || new Date().toISOString().split("T")[0];
+      const fecha = (req.body?.fecha as string) || todayChile();
       const entries = await generateDailyReport(fecha);
       console.log(`[reporte manual] Generado para ${fecha}:`, JSON.stringify(entries, null, 2));
       return res.json({ fecha, casinos: entries });
