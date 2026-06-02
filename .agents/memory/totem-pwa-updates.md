@@ -33,3 +33,17 @@ datos del sitio en el navegador, luego recargar.
 **Servido:** `server/index.ts` ya manda `no-store` para index.html / sw.js /
 manifest, e `immutable` (max-age 1 año) para assets con hash. Eso está bien;
 el problema era exclusivamente la falta de recarga en el kiosco.
+
+# Impresión térmica — ancho real del papel
+**Síntoma:** el vale impreso se "come" el borde derecho (nombres, RUT, fecha,
+hora cortados a la misma posición x).
+**Causa:** se asumía papel/área imprimible de 80mm (`@page size: 80mm`,
+contenedores 72mm), pero la térmica del tótem del cliente recorta a ~58mm. El
+borde derecho cae fuera del área imprimible real.
+**Regla:** el ancho de impresión depende del HARDWARE/driver, no se puede
+detectar por CSS. Ante cortes, asumir el ancho conservador (58mm es lo común en
+vales de casino) y, además, hacer que TODO valor envuelva (`min-width:0` +
+`overflow-wrap:anywhere`) para que nada se desborde aunque el ancho real sea
+otro. Confirmar el modelo/ancho con el cliente para calibrar fino.
+**Dónde:** bloques `@media print` en `pwa/src/index.css` (`@page` + `.print-vale`
+/ `.print-resumen`). Si el cliente confirma 80mm, subir `@page size` y `width`.

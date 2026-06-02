@@ -1466,7 +1466,9 @@ export default function Kiosk() {
                     <span className="pr-col-svc">Servicio</span>
                     <span className="pr-col-qty">Cant.</span>
                   </div>
-                  {[...familiaServicio.entries()].map(([familia, qty]) => (
+                  {[...familiaServicio.entries()]
+                    .sort((a, b) => a[0].localeCompare(b[0], "es"))
+                    .map(([familia, qty]) => (
                     <div key={familia} className="pr-svc-row">
                       <span className="pr-col-svc">{familia}</span>
                       <span className="pr-col-qty">{qty}</span>
@@ -1484,12 +1486,17 @@ export default function Kiosk() {
                   </div>
                   <hr className="pr-hr" />
                   <div className="pr-section">OPCIONES DE MENÚ</div>
-                  {[...familiaOpciones.entries()].map(([familia, opciones]) => {
+                  {[...familiaOpciones.entries()]
+                    .sort((a, b) => a[0].localeCompare(b[0], "es"))
+                    .map(([familia, opciones]) => {
                     const subtotal = opciones.reduce((acc, o) => acc + o.cantidad, 0);
                     return (
                       <div key={familia}>
                         <div className="pr-date-hdr">{resumenDateStr} — {familia}</div>
-                        {opciones.map((o, i) => (
+                        {opciones
+                          .slice()
+                          .sort((a, b) => a.numero - b.numero)
+                          .map((o, i) => (
                           <div key={`${familia}:${o.numero}:${i}`} className="pr-opt-row">
                             <span className="pr-opt-num">{o.numero}.</span>
                             <span className="pr-opt-desc">{o.descripcion}</span>

@@ -65,7 +65,11 @@ body,
 
 @media print {
   @page {
-    size: 80mm auto;
+    /* Térmica de 58mm (la del tótem del cliente recorta el borde derecho
+       cuando se asume 80mm — ver fotos 27/05 y 02/06). Página de 58mm para
+       que el contenido no se salga del área imprimible real. Si el cliente
+       confirma una impresora de 80mm, subir este valor y el width de abajo. */
+    size: 58mm auto;
     margin: 0;
   }
   html, body, #root {
@@ -85,8 +89,9 @@ body,
     display: block !important;
     position: absolute;
     left: 0; top: 0;
-    width: 72mm;
-    padding: 4mm 4mm 8mm 4mm;
+    width: 58mm;
+    box-sizing: border-box;
+    padding: 4mm 5mm 8mm 5mm;
     color: #000;
     background: #fff;
     font-family: "Arial Black", "Helvetica", Arial, sans-serif;
@@ -104,8 +109,9 @@ body,
     display: block !important;
     position: absolute;
     left: 0; top: 0;
-    width: 72mm;
-    padding: 4mm 4mm 8mm 4mm;
+    width: 58mm;
+    box-sizing: border-box;
+    padding: 4mm 5mm 8mm 5mm;
     color: #000;
     background: #fff;
     font-family: "Arial Black", "Helvetica", Arial, sans-serif;
@@ -122,8 +128,9 @@ body,
     display: block !important;
     position: relative !important;
     left: auto !important; top: auto !important;
-    width: 72mm;
-    padding: 4mm 4mm 2mm 4mm;
+    width: 58mm;
+    box-sizing: border-box;
+    padding: 4mm 5mm 2mm 5mm;
     color: #000;
     background: #fff;
     font-family: "Arial Black", "Helvetica", Arial, sans-serif;
@@ -139,8 +146,9 @@ body,
     display: block !important;
     position: relative !important;
     left: auto !important; top: auto !important;
-    width: 72mm;
-    padding: 0 4mm 8mm 4mm;
+    width: 58mm;
+    box-sizing: border-box;
+    padding: 0 5mm 8mm 5mm;
     color: #000;
     background: #fff;
     font-family: "Arial Black", "Helvetica", Arial, sans-serif;
@@ -156,19 +164,19 @@ body,
   .print-resumen .pr-casino-name { font-size: 12px; text-align: center; margin: 0.5mm 0; }
   .print-resumen .pr-doc-title   { font-size: 12px; font-weight: 700; text-align: center; letter-spacing: 1px; margin: 0.5mm 0; text-transform: uppercase; }
   .print-resumen .pr-info-row    { display: flex; font-size: 11px; margin: 0.4mm 0; }
-  .print-resumen .pr-info-lbl    { width: 16mm; font-weight: 700; }
-  .print-resumen .pr-info-val    { flex: 1; }
+  .print-resumen .pr-info-lbl    { width: 16mm; font-weight: 700; flex-shrink: 0; }
+  .print-resumen .pr-info-val    { flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
   .print-resumen .pr-hr       { border: 0; border-top: 1px dashed #000; margin: 2mm 0; }
   .print-resumen .pr-section  { font-weight: 800; font-size: 11px; margin: 2mm 0 1mm; text-transform: uppercase; letter-spacing: 0.5px; }
   .print-resumen .pr-col-hdr  { display: flex; font-size: 10px; font-weight: 700; margin-bottom: 0.5mm; padding-bottom: 0.5mm; border-bottom: 1px solid #000; }
   .print-resumen .pr-svc-row  { display: flex; font-size: 10px; margin: 0.4mm 0; }
-  .print-resumen .pr-col-svc  { flex: 1; }
+  .print-resumen .pr-col-svc  { flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
   .print-resumen .pr-col-qty  { width: 10mm; text-align: right; font-weight: 700; white-space: nowrap; }
   .print-resumen .pr-total-row { display: flex; font-size: 11px; font-weight: 800; border-top: 1px solid #000; margin-top: 0.5mm; padding-top: 0.5mm; }
   .print-resumen .pr-date-hdr { font-weight: 700; font-size: 11px; margin: 1.5mm 0 0.5mm; }
   .print-resumen .pr-opt-row  { display: flex; font-size: 10px; margin: 0.4mm 0; align-items: flex-start; }
   .print-resumen .pr-opt-num  { width: 5mm; font-weight: 700; flex-shrink: 0; }
-  .print-resumen .pr-opt-desc { flex: 1; font-size: 9px; padding-right: 1mm; word-break: break-word; }
+  .print-resumen .pr-opt-desc { flex: 1; min-width: 0; font-size: 9px; padding-right: 1mm; word-break: break-word; overflow-wrap: anywhere; }
   .print-resumen .pr-opt-qty  { width: 10mm; text-align: right; font-weight: 700; flex-shrink: 0; }
   .print-resumen .pr-opt-total { display: flex; font-size: 11px; font-weight: 800; border-top: 1px solid #000; margin-top: 0.5mm; padding-top: 0.5mm; }
   .print-vale .pv-title   { font-size: 13px; font-weight: 800; letter-spacing: 3px; text-align: center; }
@@ -184,9 +192,9 @@ body,
     border: 2px solid #000;
     line-height: 1.35;
   }
-  .print-vale .pv-row   { display: flex; justify-content: space-between; gap: 2mm; margin: 0.8mm 0; font-size: 11px; }
-  .print-vale .pv-label { font-weight: 400; }
-  .print-vale .pv-value { text-align: right; font-weight: 700; }
+  .print-vale .pv-row   { display: flex; justify-content: space-between; gap: 2mm; margin: 0.8mm 0; font-size: 11px; align-items: baseline; }
+  .print-vale .pv-label { font-weight: 400; flex-shrink: 0; }
+  .print-vale .pv-value { text-align: right; font-weight: 700; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
   .print-vale .pv-foot  { text-align: center; font-size: 10px; margin-top: 2mm; color: #444; }
 }
 
