@@ -24,3 +24,9 @@ id = "3GCb9DhhBZuswouyhB85W"
 uri = "file://exports/resumen-baumax.svg"
 type = "image"
 title = "Previsualización - Resumen tótem CASINO BAUMAX (27/05/2026)"
+
+[[outputs]]
+id = "21iS-5bzaDIj5UJkkqN7T"
+uri = "file://documentos/WebMakerChile - Hosting y Mantencion - BuenaMezcla.pdf"
+type = "pdf"
+title = "Hosting y Mantención — Justificación del valor mensual"

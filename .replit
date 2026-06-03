@@ -3,7 +3,7 @@ modules = ["nodejs-22", "python-3.11", "postgresql-16"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tk", "zlib"]
+packages = ["freetype", "gumbo", "harfbuzz", "jbig2dec", "lcms2", "libimagequant", "libjpeg", "libjpeg_turbo", "libtiff", "libwebp", "libxcrypt", "mupdf", "openjpeg", "swig", "tcl", "tk", "xcbuild", "zlib"]
 
 [deployment]
 deploymentTarget = "autoscale"
