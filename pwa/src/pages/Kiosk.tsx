@@ -371,11 +371,21 @@ export default function Kiosk() {
         : null;
       setCasino(casinoData);
 
-      // Cambio de clave forzado DESHABILITADO en el tótem por decisión del cliente:
-      // la clave del comensal es siempre los primeros 4 dígitos de su RUT y no
-      // necesita cambiarse. Se ignora `passwordChangeRequired` aquí. (El botón
-      // opcional "Cambio de clave" del menú staff sigue disponible si el casino
-      // tiene `permitirCambioClaveTotem` activo.)
+      // Cambio de clave forzado en el PRIMER ingreso (Marcha Blanca): si el
+      // usuario aún tiene la clave por defecto pendiente de cambio
+      // (`passwordChangeRequired`), lo enviamos a la pantalla de cambio de clave
+      // ANTES de continuar a su flujo normal (comensal o staff). Aplica a todos
+      // los roles. Se excluye al super admin (cuenta especial, no opera el tótem).
+      if (u!.passwordChangeRequired && u!.rut !== "21212011-1") {
+        setResetTargetRut("");
+        setNewPwd("");
+        setNewPwd2("");
+        setPwdStage(1);
+        setErrMsg("");
+        setStep("change_pwd");
+        setBusy(false);
+        return;
+      }
 
       // Roles staff → menú con 5 botones (Vale propio, Vale visita, Cambio
       // de clave, Resumen del día, Reimpresión).
@@ -703,7 +713,10 @@ export default function Kiosk() {
         hora: nowDate.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
       });
       setBusy(false);
-      await preloadResumenForPrint();
+      // El vale propio del staff debe imprimir el VALE individual del propio
+      // usuario, NO el resumen del día (igual que Vale visita / Reimpresión).
+      // Antes quedaba en printMode "resumen" por defecto y salía el resumen.
+      setPrintMode("vale");
       setStep("qr");
       try { await apiRequest("POST", "/api/auth/logout"); } catch {}
     } catch {
@@ -963,8 +976,10 @@ export default function Kiosk() {
               <h2 className="text-3xl font-bold mb-2">{pwdStage === 1 ? "Crea la nueva clave" : "Confirma la nueva clave"}</h2>
               {resetTargetRut ? (
                 <p className="text-white/50">Para RUT: <span className="text-vascan-gold font-mono">{formatRutDisplay(resetTargetRut)}</span></p>
+              ) : pwdStage === 1 ? (
+                <p className="text-white/50">Por seguridad, define tu clave personal · mínimo 4 dígitos</p>
               ) : (
-                <p className="text-white/50">Mínimo 4 dígitos · solo numérica</p>
+                <p className="text-white/50">Vuelve a ingresar la misma clave para confirmar</p>
               )}
             </div>
             <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-center">

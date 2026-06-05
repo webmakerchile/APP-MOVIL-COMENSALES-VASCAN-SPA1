@@ -148,9 +148,12 @@ export const pedidos = pgTable("pedidos", {
   // misma minuta. Garantiza unicidad incluso si una ruta de aplicación falla
   // o si el tótem Windows offline crea un duplicado por race condition.
   // Partial index sobre deleted_at IS NULL para permitir tombstones múltiples.
+  // Se excluyen los vales de visita (tipo='visita'): un mismo interlocutor/staff
+  // emite MÚLTIPLES visitas el mismo día sobre la misma minuta (todas quedan
+  // bajo su userId), por lo que NO deben colisionar contra esta restricción.
   uniqUserMinutaActive: uniqueIndex("uniq_pedidos_user_minuta_active")
     .on(t.userId, t.minutaId)
-    .where(sql`deleted_at IS NULL`),
+    .where(sql`deleted_at IS NULL AND tipo <> 'visita'`),
 }));
 
 export const totems = pgTable("totems", {

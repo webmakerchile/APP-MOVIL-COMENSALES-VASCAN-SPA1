@@ -11,6 +11,10 @@ build = ["bash", "-c", "npx vite build --config pwa/vite.config.ts && npx esbuil
 run = ["npm", "run", "server:prod"]
 
 [[ports]]
+localPort = 3001
+externalPort = 3002
+
+[[ports]]
 localPort = 5000
 externalPort = 5000
 

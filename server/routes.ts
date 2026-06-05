@@ -337,7 +337,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   if (process.env.DB_MODE !== "totem") {
     await autoSeed();
     await ensureSuperAdmin();
-    await backfillRutPasswords();
+    // backfillRutPasswords() queda DESACTIVADO a partir de Marcha Blanca: el
+    // cliente reactivó el cambio de clave forzado en el primer ingreso, por lo
+    // que ya NO debemos limpiar `passwordChangeRequired` ni resetear claves al
+    // arrancar (eso anularía el flujo de cambio obligatorio de los usuarios
+    // nuevos). La función se conserva por si se requiere una corrida puntual.
   }
 
   // ── Admin Panel ──
@@ -518,7 +522,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hashed = await bcrypt.hash(String(newPassword), 10);
-      await storage.updateUser(target.id, { password: hashed, passwordChangeRequired: false } as any);
+      // Tras un reset por staff la clave queda como TEMPORAL: el usuario debe
+      // cambiarla obligatoriamente en su próximo ingreso, de modo que ni el
+      // staff que la reseteó conozca la clave definitiva del comensal.
+      await storage.updateUser(target.id, { password: hashed, passwordChangeRequired: true } as any);
       console.log(`[audit] reset-password-by-rut: actor=${actor.rut} (${actor.role}) → target=${target.rut}`);
       return res.json({ message: "Clave actualizada", user: { rut: target.rut, nombre: target.nombre, apellido: target.apellido } });
     } catch (error) {
@@ -624,7 +631,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: role || "comensal",
         casinoId: casinoId || null,
         fechaNacimiento: fechaNacimiento || null,
-        passwordChangeRequired: false,
+        // Si el admin NO definió una clave explícita, el usuario arranca con la
+        // clave por defecto (4 dígitos del RUT) y debe cambiarla en su primer
+        // ingreso. Si el admin sí definió una clave, se respeta tal cual.
+        passwordChangeRequired: !pwd,
       } as any);
 
       if (Array.isArray(casinoIds) && casinoIds.length > 0) {
@@ -2382,7 +2392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const defaultPassword = digits.slice(0, 4) || "1234";
           const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-          await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null, passwordChangeRequired: false } as any);
+          await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null, passwordChangeRequired: true } as any);
           created++;
         } catch (err: any) {
           errorDetails.push({ row: rowNum, error: err.message || "Error desconocido" });
