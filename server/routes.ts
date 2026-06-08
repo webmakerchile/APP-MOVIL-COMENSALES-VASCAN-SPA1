@@ -1465,6 +1465,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessionUserId = (req.session as any).userId;
       const actor = sessionUserId ? await storage.getUser(sessionUserId) : null;
       const isStaff = !!actor && (actor.role === "admin" || actor.role === "interlocutor" || actor.role === "encargado_casino");
+      // El actor con clave por defecto pendiente de cambio NO puede inscribirse
+      // hasta cambiarla (el super admin queda exento). Defensa server-side del
+      // requisito "cambiar clave antes de inscribirse" — el guard del frontend
+      // (móvil/tótem) es solo UX.
+      if (actor && actor.passwordChangeRequired && actor.rut !== SUPER_ADMIN_RUT) {
+        return res.status(403).json({ message: "Debes cambiar tu clave antes de inscribirte." });
+      }
       // Comensal solo puede crear pedidos para sí mismo.
       if (!isStaff && (!actor || actor.id !== parsed.data.userId)) {
         return res.status(403).json({ message: "Solo puedes registrar tu propio pedido" });
@@ -1764,6 +1771,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const sessionUser = await storage.getUser(sessionUserId);
       if (!sessionUser) return res.status(401).json({ message: "Usuario no encontrado" });
+
+      // No permitir inscribirse con la clave por defecto pendiente de cambio
+      // (super admin exento). Defensa server-side del requisito de negocio.
+      if (sessionUser.passwordChangeRequired && sessionUser.rut !== SUPER_ADMIN_RUT) {
+        return res.status(403).json({ message: "Debes cambiar tu clave antes de inscribirte." });
+      }
 
       const { selecciones } = req.body;
       let { userId } = req.body;
