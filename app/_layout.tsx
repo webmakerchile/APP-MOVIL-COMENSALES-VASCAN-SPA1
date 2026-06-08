@@ -28,6 +28,7 @@ function RootLayoutNav() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="cambiar-clave" />
       <Stack.Screen name="(main)" options={{ headerShown: false }} />
     </Stack>
   );

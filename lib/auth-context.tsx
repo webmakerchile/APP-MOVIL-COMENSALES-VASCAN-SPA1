@@ -3,6 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { fetch } from "expo/fetch";
 
+export const SUPER_ADMIN_RUT = "21212011-1";
+
 interface AuthUser {
   id: string;
   rut: string;
@@ -11,13 +13,15 @@ interface AuthUser {
   role: string;
   casinoId: string | null;
   activo: boolean;
+  passwordChangeRequired?: boolean;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
-  login: (rut: string, password: string) => Promise<void>;
+  login: (rut: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  changePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -56,11 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(rut: string, password: string) {
+  async function login(rut: string, password: string): Promise<AuthUser> {
     const res = await apiRequest("POST", "/api/auth/login", { rut, password });
     const data = await res.json();
     setUser(data.user);
     await AsyncStorage.setItem("vascan_user", JSON.stringify(data.user));
+    return data.user;
   }
 
   async function logout() {
@@ -73,8 +78,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem("vascan_user");
   }
 
+  async function changePassword(newPassword: string) {
+    await apiRequest("POST", "/api/auth/change-password", { newPassword });
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, passwordChangeRequired: false };
+      AsyncStorage.setItem("vascan_user", JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }
+
   const value = useMemo(
-    () => ({ user, isLoading, login, logout }),
+    () => ({ user, isLoading, login, logout, changePassword }),
     [user, isLoading],
   );
 
@@ -87,4 +102,10 @@ export function useAuth() {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
+}
+
+export function requiresPasswordChange(user: { passwordChangeRequired?: boolean; rut: string } | null): boolean {
+  if (!user) return false;
+  if (user.rut === SUPER_ADMIN_RUT) return false;
+  return !!user.passwordChangeRequired;
 }

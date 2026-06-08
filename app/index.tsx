@@ -10,7 +10,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth, requiresPasswordChange } from "@/lib/auth-context";
 
 export default function SplashRedirect() {
   const { user, isLoading } = useAuth();
@@ -19,7 +19,11 @@ export default function SplashRedirect() {
   useEffect(() => {
     if (!isLoading) {
       if (user) {
-        router.replace("/(main)/home");
+        if (requiresPasswordChange(user)) {
+          router.replace("/cambiar-clave");
+        } else {
+          router.replace("/(main)/home");
+        }
       } else {
         router.replace("/login");
       }
