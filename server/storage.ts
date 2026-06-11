@@ -109,21 +109,49 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
+  // Convierte cualquier RUT a su forma canónica "12345678-5" / "12345678-K":
+  // sin puntos, con guion y dígito verificador en MAYÚSCULA. Si la entrada no
+  // parece un RUT, la devuelve tal cual (trim). Única fuente de verdad para
+  // guardar y comparar RUTs en el backend.
+  private canonRut(raw: string): string {
+    const cleaned = (raw || "").replace(/[^0-9kK]/g, "").toUpperCase();
+    const looks = cleaned.length > 1 && /^[0-9]+[0-9K]$/.test(cleaned);
+    return looks ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : (raw || "").trim();
+  }
   async getUserByRut(rut: string): Promise<User | undefined> {
-    // Normaliza RUT al formato canónico "12345678-5" antes de consultar.
-    // Acepta entradas con/sin puntos y con/sin guion (ej. desde el kiosko que
-    // solo permite teclado numérico, o desde Excel que viene con dots).
+    // Búsqueda tolerante a formato: acepta con/sin puntos, con/sin guion y
+    // dígito verificador en cualquier caja (k/K). Evita que un comensal cargado
+    // con un RUT mal formateado (ej. desde Excel con "k" minúscula o con puntos)
+    // no pueda iniciar sesión ni inscribirse.
     const raw = (rut || "").trim();
     const cleaned = raw.replace(/[^0-9kK]/g, "").toUpperCase();
-    const looksLikeRut = cleaned.length > 1 && /^[0-9]+[0-9kK]$/.test(cleaned);
-    const normalized = looksLikeRut
-      ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1)
-      : raw;
-    const [user] = await db.select().from(users).where(eq(users.rut, normalized));
+    const looks = cleaned.length > 1 && /^[0-9]+[0-9K]$/.test(cleaned);
+    const normalized = looks ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : raw;
+    // 1) match canónico exacto (caso normal, datos ya normalizados)
+    let [user] = await db.select().from(users).where(eq(users.rut, normalized));
     if (user) return user;
-    if (looksLikeRut) return undefined;
-    const [byRaw] = await db.select().from(users).where(eq(users.rut, raw));
-    return byRaw;
+    // 2) match crudo exacto (por si quedó almacenado idéntico a la entrada)
+    [user] = await db.select().from(users).where(eq(users.rut, raw));
+    if (user) return user;
+    // 3) fallback auto-sanador: compara dígitos+DV ignorando formato/caja
+    //    contra todos los usuarios (tabla chica). Resuelve filas legadas en
+    //    formato no canónico sin migrar la BD.
+    if (looks) {
+      const all = await db.select().from(users);
+      const matches = all.filter(
+        (u) => (u.rut || "").replace(/[^0-9kK]/g, "").toUpperCase() === cleaned,
+      );
+      // Ante datos legados duplicados (mismo RUT en distinto formato) NO elegimos
+      // "el primero": sería autenticación ambigua. Mejor fallar explícito para
+      // que un admin sanee los duplicados antes de permitir el acceso.
+      if (matches.length > 1) {
+        throw new Error(
+          `RUT ambiguo: existen ${matches.length} usuarios con el RUT ${normalized}. Contacta al administrador para corregir el duplicado.`,
+        );
+      }
+      return matches[0];
+    }
+    return undefined;
   }
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users);
@@ -131,11 +159,15 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const v: any = touch(insertUser);
     if (!v.id) v.id = require("crypto").randomUUID();
+    // Guardamos SIEMPRE el RUT canónico para que login/inscripción lo encuentren.
+    if (v.rut) v.rut = this.canonRut(v.rut);
     const [user] = await db.insert(users).values(v).returning();
     return user;
   }
   async updateUser(id: string, data: Partial<InsertUser & { activo?: boolean }>): Promise<User | undefined> {
-    const [user] = await db.update(users).set(touch(data)).where(eq(users.id, id)).returning();
+    const d: any = touch(data);
+    if (d.rut) d.rut = this.canonRut(d.rut);
+    const [user] = await db.update(users).set(d).where(eq(users.id, id)).returning();
     return user;
   }
   async deleteUser(id: string): Promise<boolean> {

@@ -1,16 +1,27 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./lib/auth-context";
+import { useAuth, requiresPasswordChange } from "./lib/auth-context";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Historial from "./pages/Historial";
 import Kiosk from "./pages/Kiosk";
+import CambiarClave from "./pages/CambiarClave";
 import InstallPrompt from "./components/InstallPrompt";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
+  // Con clave por defecto pendiente, todo el flujo se desvía a cambio de clave.
+  if (requiresPasswordChange(user)) return <Navigate to="/cambiar-clave" replace />;
+  return <>{children}</>;
+}
+
+function PasswordChangeRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!requiresPasswordChange(user)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -47,6 +58,14 @@ export default function App() {
             <PublicRoute>
               <Login />
             </PublicRoute>
+          }
+        />
+        <Route
+          path="/cambiar-clave"
+          element={
+            <PasswordChangeRoute>
+              <CambiarClave />
+            </PasswordChangeRoute>
           }
         />
         <Route

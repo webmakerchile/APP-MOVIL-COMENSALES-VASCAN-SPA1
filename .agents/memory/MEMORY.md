@@ -1,4 +1,5 @@
 - [Tótem print-time session](totem-print-session.md) — la sesión se cierra ANTES del useEffect de impresión; cualquier dato que se quiera imprimir debe pre-cargarse en el handler antes del logout, nunca dentro del useEffect.
 - [Chile timezone for "today"](timezone-chile.md) — "hoy" se calcula en America/Santiago, no UTC; toISOString() rompe el tótem de noche.
 - [Tótem PWA auto-updates](totem-pwa-updates.md) — el kiosco no recarga solo; bumpear caché no basta, hace falta controllerchange→reload + update() periódico.
+- [RUT canónico + lookup tolerante](rut-normalization.md) — guardar RUT canónico siempre; getUserByRut tolera formato; ante duplicado canónico fallar explícito, nunca elegir el primero.
 - [Forced password change](forced-password-change.md) — cambio de clave por defecto se fuerza en celular y tótem (UX) pero la defensa real es server-side en endpoints de inscripción (super admin exento).
