@@ -94,7 +94,9 @@ export default function Login() {
                 value={rut}
                 onChange={handleRutChange}
                 placeholder="Ej: 12.345.678-9"
-                inputMode="numeric"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
                 autoComplete="username"
                 className="flex-1 bg-transparent text-white placeholder-white/25 text-base py-4 px-3 outline-none"
               />
