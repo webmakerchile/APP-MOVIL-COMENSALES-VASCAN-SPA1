@@ -10,7 +10,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Pinneado a 7.x: Babel 8 (que el CDN servía como "latest") cambió el runtime
+       de JSX a automático y emitía import "react/jsx-runtime", que el navegador no
+       puede resolver → pantalla en negro. 7.x usa el runtime clásico (React.createElement). -->
+  <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
