@@ -592,8 +592,15 @@
         const txt = (u.nombre + ' ' + u.apellido + ' ' + u.rut).toLowerCase();
         if (search && !txt.includes(search.toLowerCase())) return false;
         if (filterCasino && filterCasino !== 'all') {
-          const ids = [u.casinoId, ...(u.casinoIds || [])].filter(Boolean);
-          if (!ids.includes(filterCasino)) return false;
+          // El filtro por casino aplica SOLO a comensales (que pertenecen a un
+          // casino concreto). Los roles de gestión (admin, interlocutor,
+          // encargado) se muestran siempre, aunque no tengan un casino base
+          // asignado: de lo contrario un interlocutor sin casino desaparecía
+          // del listado al filtrar y parecía que solo se mostraban comensales.
+          if (u.role === 'comensal') {
+            const ids = [u.casinoId, ...(u.casinoIds || [])].filter(Boolean);
+            if (!ids.includes(filterCasino)) return false;
+          }
         }
         return true;
       });
