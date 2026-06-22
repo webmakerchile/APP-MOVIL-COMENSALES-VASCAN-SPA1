@@ -67,6 +67,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByRut(rut: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  getComensalesByCasino(casinoId: string): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<InsertUser & { activo?: boolean }>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
@@ -402,6 +403,22 @@ export class DatabaseStorage implements IStorage {
   async deletePeriodo(id: string): Promise<boolean> {
     const [periodo] = await db.update(periodos).set(tombstone()).where(eq(periodos.id, id)).returning();
     return !!periodo;
+  }
+
+  // Comensales (activos) de un casino: por casino base O por relación
+  // usuario_casinos (multi-casino). Usado por "Preparar marcha blanca" para
+  // normalizar las claves de todos los comensales de un casino.
+  async getComensalesByCasino(casinoId: string): Promise<User[]> {
+    const linkRows = await db
+      .select()
+      .from(usuarioCasinos)
+      .where(eq(usuarioCasinos.casinoId, casinoId));
+    const linkedIds = new Set(linkRows.map(r => r.userId));
+    const all = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.role, "comensal"), eq(users.activo, true), isNull(users.deletedAt)));
+    return all.filter(u => u.casinoId === casinoId || linkedIds.has(u.id));
   }
 
   // ── Usuario ↔ Casinos (multi-casino interlocutor / encargado) ──

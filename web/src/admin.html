@@ -110,8 +110,10 @@
       );
     }
 
-    function ConfirmDialog({ open, onClose, onConfirm, message }) {
+    function ConfirmDialog({ open, onClose, onConfirm, message, confirmText, confirmClass, busy }) {
       if (!open) return null;
+      const label = confirmText || 'Eliminar';
+      const btnClass = confirmClass || 'bg-red-500 hover:bg-red-600';
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
           <div className="bg-vascan-surface border border-white/10 rounded-2xl w-full max-w-sm fade-in" onClick={e => e.stopPropagation()}>
@@ -121,8 +123,8 @@
               </div>
               <p className="text-white/80 mb-6">{message}</p>
               <div className="flex gap-3 justify-center">
-                <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-medium transition">Cancelar</button>
-                <button onClick={onConfirm} className="px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-sm font-medium transition">Eliminar</button>
+                <button onClick={onClose} disabled={busy} className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed">Cancelar</button>
+                <button onClick={onConfirm} disabled={busy} className={`px-5 py-2.5 rounded-xl text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${btnClass}`}>{label}</button>
               </div>
             </div>
           </div>
@@ -765,6 +767,8 @@
       const [showModal, setShowModal] = useState(false);
       const [editItem, setEditItem] = useState(null);
       const [deleteTarget, setDeleteTarget] = useState(null);
+      const [prepTarget, setPrepTarget] = useState(null);
+      const [prepBusy, setPrepBusy] = useState(false);
       const [toast, setToast] = useState(null);
       const [form, setForm] = useState({ nombre: '', direccion: '', comensalesDiarios: 0, permitirCambioClaveTotem: false });
 
@@ -834,6 +838,20 @@
         }
       }
 
+      async function handlePrepararMarchaBlanca() {
+        if (!prepTarget || prepBusy) return;
+        setPrepBusy(true);
+        try {
+          const r = await apiFetch(`/api/casinos/${prepTarget.id}/reset-claves-comensales`, { method: 'POST' });
+          setToast({ message: `Claves preparadas en "${r.casino}": ${r.reset} comensales restablecidos${r.omitidos ? `, ${r.omitidos} omitidos` : ''}${r.fallidos ? `, ${r.fallidos} fallidos (reintenta)` : ''}. Deberán cambiar su clave en el primer ingreso.`, type: r.fallidos ? 'error' : 'success' });
+          setPrepTarget(null);
+        } catch (err) {
+          setToast({ message: err.message, type: 'error' });
+        } finally {
+          setPrepBusy(false);
+        }
+      }
+
       if (loading) return <LoadingSpinner />;
 
       return (
@@ -886,6 +904,10 @@
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     Eliminar
                   </button>
+                  <button onClick={() => setPrepTarget(c)} className="text-xs text-white/50 hover:text-amber-400 transition flex items-center gap-1 ml-auto">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                    Preparar marcha blanca
+                  </button>
                 </div>
               </div>
             ))}
@@ -914,6 +936,10 @@
 
           <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
             message={`¿Eliminar el casino "${deleteTarget?.nombre}"? Si tiene minutas o usuarios asociados será desactivado en vez de eliminado.`} />
+
+          <ConfirmDialog open={!!prepTarget} onClose={() => !prepBusy && setPrepTarget(null)} onConfirm={handlePrepararMarchaBlanca} busy={prepBusy}
+            confirmText={prepBusy ? 'Procesando…' : 'Sí, preparar'} confirmClass="bg-amber-500 hover:bg-amber-600 text-vascan-bg"
+            message={`Vas a RESTABLECER la clave de TODOS los comensales de "${prepTarget?.nombre}" a los 4 primeros dígitos de su RUT, y los obligarás a cambiarla en su primer ingreso. Esto reemplaza cualquier clave personalizada que hayan creado. ¿Continuar?`} />
         </div>
       );
     }

@@ -534,6 +534,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Preparar Marcha Blanca: normaliza las claves de TODOS los comensales de un
+  // casino a los 4 primeros dígitos de su RUT y los marca con cambio de clave
+  // obligatorio en su próximo ingreso (passwordChangeRequired=true). Deja a
+  // todo el casino en un estado consistente: entran con los 4 dígitos la primera
+  // vez y deben cambiar la clave. Acción explícita del admin (REEMPLAZA claves
+  // personalizadas existentes de los comensales del casino). Idempotente.
+  app.post("/api/casinos/:id/reset-claves-comensales", requireAdminOnly, async (req: Request, res: Response) => {
+    try {
+      const casinoId = req.params.id;
+      const casino = await storage.getCasino(casinoId);
+      if (!casino) return res.status(404).json({ message: "Casino no encontrado" });
+
+      const comensales = await storage.getComensalesByCasino(casinoId);
+      let reset = 0;
+      let omitidos = 0;
+      let fallidos = 0;
+      for (const u of comensales) {
+        if (u.rut === SUPER_ADMIN_RUT) { omitidos++; continue; }
+        const digits = (u.rut || "").replace(/[^0-9]/g, "");
+        if (digits.length < 4) { omitidos++; continue; }
+        try {
+          const hashed = await bcrypt.hash(digits.slice(0, 4), 10);
+          await storage.updateUser(u.id, { password: hashed, passwordChangeRequired: true } as any);
+          reset++;
+        } catch (e) {
+          // Idempotente: la acción se puede re-ejecutar. No abortamos el lote por
+          // un comensal; reportamos los fallidos para que el admin reintente.
+          fallidos++;
+          console.error(`[audit] reset-claves-comensales: fallo en comensal rut=${u.rut}`, e);
+        }
+      }
+      const actor = (req as any).currentUser;
+      console.log(`[audit] reset-claves-comensales: actor=${actor?.rut} casino=${casino.nombre} reset=${reset} omitidos=${omitidos} fallidos=${fallidos}`);
+      return res.json({ casino: casino.nombre, total: comensales.length, reset, omitidos, fallidos });
+    } catch (error) {
+      console.error("Reset claves comensales error:", error);
+      return res.status(500).json({ message: "Error al preparar la marcha blanca" });
+    }
+  });
+
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
       const parsed = insertUserSchema.safeParse(req.body);

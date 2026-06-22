@@ -1,6 +1,7 @@
 - [Tótem print-time session](totem-print-session.md) — la sesión se cierra ANTES del useEffect de impresión; cualquier dato que se quiera imprimir debe pre-cargarse en el handler antes del logout, nunca dentro del useEffect.
 - [Chile timezone for "today"](timezone-chile.md) — "hoy" se calcula en America/Santiago, no UTC; toISOString() rompe el tótem de noche.
 - [Tótem PWA auto-updates](totem-pwa-updates.md) — el kiosco no recarga solo; bumpear caché no basta, hace falta controllerchange→reload + update() periódico.
+- [Tótem no-inscrito y claves](totem-no-inscrito-y-claves.md) — auto-totem NO tiene bug; el "algo salió mal" del no-inscrito es DATOS de claves; normalizar por casino con reset-claves-comensales.
 - [Prod vs Dev DB](prod-vs-dev-db.md) — workspace y producción son BD distintas; cómo consultar prod (environment:"production") y por qué "no inscritos/algunos emiten" suele ser datos (periodo cerrado) no bug.
 - [Filtro casino en Usuarios](admin-usuarios-casino-filter.md) — el filtro por casino del listado admin solo aplica a comensales; el staff (interlocutor/encargado/admin) se muestra siempre, aunque no tenga casino.
 - [RUT canónico + lookup tolerante](rut-normalization.md) — guardar RUT canónico siempre; getUserByRut tolera formato; ante duplicado canónico fallar explícito, nunca elegir el primero.
