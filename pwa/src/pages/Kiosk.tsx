@@ -456,19 +456,20 @@ export default function Kiosk() {
       }
       const pedidosData: Pedido[] = pedidosRes.ok ? await pedidosRes.json() : [];
 
-      const todayMins = minutasData.filter((m) => m.fecha === today && m.activo);
-      if (todayMins.length === 0) {
-        setErrMsg("No hay menú disponible para hoy en tu casino.");
-        setStep("error");
-        return;
-      }
+      // Minutas de hoy: TODAS (para resolver/imprimir pedidos ya existentes,
+      // aunque el menú se haya apagado después de inscribirse) y SOLO ACTIVAS
+      // (necesarias únicamente para INSCRIBIR un pedido nuevo).
+      const todayMinsAll = minutasData.filter((m) => m.fecha === today);
+      const todayMinsActive = todayMinsAll.filter((m) => m.activo);
 
       // ── Flujo de CONSUMO (módulo Tótem) ──
       // El tótem es para retirar el vale, no para inscribirse. Tres casos:
       //  1) Tiene pedido válido del día → mostrar QR (o "ya impreso" si corresponde).
+      //     SIEMPRE puede imprimir, aunque la minuta esté desactivada.
       //  2) Tiene pedido "no_asiste" → mensaje + sugerir vale visita al interlocutor.
-      //  3) No tiene pedido → auto-crear pedido con Opción 1 (asignación default).
-      const todayIds = new Set(todayMins.map(m => m.id));
+      //  3) No tiene pedido → auto-crear pedido con Opción 1 (requiere menú ACTIVO).
+      // Buscar pedido existente contra TODAS las minutas de hoy (incl. inactivas).
+      const todayIds = new Set(todayMinsAll.map(m => m.id));
       const todayPedidos = pedidosData.filter(p => todayIds.has(p.minutaId));
       // Priorizar pedido VÁLIDO (opcion>0) sobre "no_asiste". Si en el mismo día
       // hay varias minutas/familias y al menos una tiene un pedido válido,
