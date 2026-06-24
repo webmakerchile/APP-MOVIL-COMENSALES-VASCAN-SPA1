@@ -87,6 +87,7 @@ export interface IStorage {
   getPedidoByUserAndMinuta(userId: string, minutaId: string): Promise<Pedido | undefined>;
   createPedido(pedido: InsertPedido & { codigoQr?: string }): Promise<Pedido>;
   updatePedido(id: string, data: Partial<InsertPedido & { codigoQr?: string | null }>): Promise<Pedido | undefined>;
+  setGestionEstado(id: string, estado: string | null): Promise<Pedido | undefined>;
   getPedidoById(id: string): Promise<Pedido | undefined>;
   deletePedido(id: string): Promise<boolean>;
   getPedidosByMinuta(minutaId: string): Promise<Pedido[]>;
@@ -334,6 +335,12 @@ export class DatabaseStorage implements IStorage {
       return tx() as Pedido | undefined;
     }
     const [pedido] = await db.update(pedidos).set(touch({ impresoEn: new Date() } as any)).where(eq(pedidos.id, id)).returning();
+    return pedido;
+  }
+  async setGestionEstado(id: string, estado: string | null): Promise<Pedido | undefined> {
+    // Gestión diaria (admin cloud): marca delivery/baja o limpia (null) sobre un
+    // pedido inscrito que no pasó por el tótem. No es una operación del tótem.
+    const [pedido] = await db.update(pedidos).set(touch({ gestionEstado: estado } as any)).where(eq(pedidos.id, id)).returning();
     return pedido;
   }
   async getAnuladosByMinuta(minutaId: string): Promise<Pedido[]> {

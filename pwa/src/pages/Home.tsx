@@ -163,7 +163,8 @@ export default function Home() {
   const periodoActivo = periodoData?.activo ?? false;
 
   // ── Derived: filter + sort + group by week ──
-  const todayStr = new Date().toISOString().split("T")[0];
+  // "Hoy" en horario de Chile (no UTC) para no adelantar el día de noche.
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Santiago" });
   const today = parseDate(todayStr);
 
   // Chips reflejan los rangos reales del periodo activo (semanas dentro de la
@@ -270,8 +271,9 @@ export default function Home() {
       return;
     }
     // Validate ALL days within the ACTIVE PERIOD have a selection (new or already registered)
-    const pStart = new Date(periodoData.periodo.fechaInicio);
-    const pEnd = new Date(periodoData.periodo.fechaFin);
+    // Normalizar límites a fecha-solo (horario Chile) para no excluir el primer/último día.
+    const pStart = parseDate(new Date(periodoData.periodo.fechaInicio).toLocaleDateString("en-CA", { timeZone: "America/Santiago" }));
+    const pEnd = parseDate(new Date(periodoData.periodo.fechaFin).toLocaleDateString("en-CA", { timeZone: "America/Santiago" }));
     const startCheck = pStart < today ? today : pStart;
     const minutasEnPeriodo = (minutas ?? []).filter(m => {
       const d = parseDate(m.fecha);

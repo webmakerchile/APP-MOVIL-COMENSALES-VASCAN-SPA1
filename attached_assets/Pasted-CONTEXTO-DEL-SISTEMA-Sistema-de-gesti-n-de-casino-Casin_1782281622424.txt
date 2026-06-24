@@ -1,0 +1,47 @@
+CONTEXTO DEL SISTEMA
+Sistema de gestión de casino (Casino Unión Química) con 3 módulos: (1) Módulo de Inscripción — app móvil donde el comensal inscribe sus pedidos de la próxima semana; (2) Módulo de Administrador — consola donde se habilita el período de inscripción/modificación; (3) Módulo de Impresión/Tótem — donde el comensal valida e imprime su vale de control interno.
+Necesito implementar/corregir 4 puntos reportados por el cliente. Detallo cada uno:
+
+1. HISTORIAL DE INSCRIPCIÓN DE LA SEMANA ANTERIOR (Módulo de Inscripción)
+Agregar en el módulo de inscripción del comensal una vista de solo lectura ("foto" o resumen) de lo que inscribió la semana anterior.
+
+Caso de uso: un comensal reclama "yo no pedí tomaticán" pero el sistema lo registró con tomaticán. Necesita poder entrar a su módulo y ver exactamente qué inscribió la semana pasada.
+Requisitos: persistir la inscripción de una semana a la otra (no borrar el historial al abrir nuevo período). Vista simple, sin edición, solo consulta — un resumen visual de los días/menús inscritos en el período anterior.
+
+
+2. OBLIGAR A SELECCIONAR TODOS LOS DÍAS DEL PERÍODO (Bug de validación)
+Hay un bug: el sistema permite cerrar la inscripción seleccionando menos días de los autorizados en el período.
+
+Comportamiento esperado: si el administrador habilita 5 días, el comensal debe inscribir los 5 días obligatoriamente antes de poder finalizar el trámite. No puede cerrar con 4.
+Reporte concreto: una persona se inscribió pero en su ficha el día jueves aparece como "no inscrito". Revisar si el flujo de validación permite saltarse días o si hay un fallo al guardar.
+Pendiente de confirmar por el cliente antes de mergear a producción (este punto está marcado en amarillo / por validar).
+
+
+3. LENTITUD EN IMPRESIÓN Y CAMBIOS (Diagnóstico de rendimiento)
+El sistema se queda "pegado" en ciertos procesos. Dos síntomas concretos:
+
+La impresión del vale se cuelga.
+Al hacer un cambio, demora ~3 "pestañas/pantallas" en procesar.
+
+Necesito un diagnóstico que distinga la causa raíz entre: (a) hardware insuficiente del tótem (ej. RAM), (b) conexión a Internet, o (c) el propio sistema/software.
+
+Si es dependencia de Internet: evaluar arquitectura offline-first — que el tótem trabaje localmente y sincronice ("alimente hacia arriba") la información de forma asíncrona, en vez de requerir conexión obligatoria en cada operación.
+Agregar logging/timing en las operaciones de impresión y guardado para medir dónde está el cuello de botella.
+
+
+4. GESTIÓN DIARIA (Nueva funcionalidad — Módulo de Administrador)
+Reemplazar un control manual que antes se hacía en Excel. Permite al casino llevar control en tiempo real de qué comensales han pasado a retirar/consumir su comida durante el día.
+Estructura de la vista (tabla):
+
+Columna 1 — Comensales inscritos: lista desde la base de datos (estado "inscrito", en verde), independiente de si imprimió o no el vale.
+Columna 2 — No pasó por el sistema/tótem: marca a quienes a una hora de corte (ej. 14:00) aún no han pasado por el tótem, independiente de si estaban inscritos. El operador va "tarjando" (marcando) a cada persona que pasa.
+Columna 3 — Acción: dos acciones posibles sobre los comensales que no pasaron:
+
+Eliminar/Dar de baja: la persona no se presentó, se fue temprano o no comerá. No se espera al comensal.
+Delivery: la persona se lleva la comida para consumir fuera del local (ej. personal de logística que anda en camioneta). Se prepara pero se marca como retiro/delivery.
+
+
+
+Objetivo: a una hora determinada el administrador debe poder ver claramente quiénes inscritos NO han pasado por el tótem y aplicarles una acción.
+
+Nota sobre las imágenes adjuntas: una muestra un vale impreso con "Sin menú para hoy" (revisar lógica de generación de menú diario), y la otra un error en el tótem: 404 {"message":"No se encontró un usuario con ese RUT"} al confirmar nueva clave (RUT 29.283.227-5) — revisar el endpoint de cambio de clave y por qué no encuentra el RUT existente.

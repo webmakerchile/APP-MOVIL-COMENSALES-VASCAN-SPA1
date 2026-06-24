@@ -1375,6 +1375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // sobreescribe (no daña nada). No requiere auth admin: el dueño del pedido
   // o cualquier sesión activa del tótem puede marcarlo.
   app.post("/api/pedidos/:id/marcar-impreso", async (req: Request, res: Response) => {
+    const __t0 = Date.now(); // [TIMING] diagnóstico lentitud impresión
     try {
       const userId = (req.session as any).userId;
       if (!userId) return res.status(401).json({ message: "No autenticado" });
@@ -1402,8 +1403,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const updated = await storage.markPedidoImpreso(id);
       if (!updated) return res.status(404).json({ message: "Pedido no encontrado" });
+      console.log(`[TIMING] /api/pedidos/${id}/marcar-impreso ms=${Date.now() - __t0}`);
       return res.json({ ok: true, impresoEn: updated.impresoEn });
     } catch (error) {
+      console.error(`[TIMING] marcar-impreso ERROR ms=${Date.now() - __t0}`);
       console.error("Mark impreso error:", error);
       return res.status(500).json({ message: "Error al marcar impreso" });
     }
@@ -1444,6 +1447,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sessionUserId = (req.session as any).userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
 
+      // Autorización: un comensal sólo ve su propio historial. El staff
+      // (admin/interlocutor/encargado) puede ver el de otros, pero limitado a
+      // usuarios dentro de su scope de casinos. Evita IDOR entre comensales.
+      if (sessionUserId !== userId) {
+        const requester = await storage.getUser(sessionUserId);
+        if (!requester) return res.status(401).json({ message: "Usuario no encontrado" });
+        const isStaff = ["admin", "interlocutor", "encargado_casino"].includes(requester.role);
+        if (!isStaff) return res.status(403).json({ message: "Sin permisos para ver este historial" });
+        const accessible = await getAccessibleCasinoIds(requester);
+        if (accessible !== null) {
+          const target = await storage.getUser(userId);
+          if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
+          const targetCasinos = [target.casinoId, ...((target as any).casinoIds || [])].filter(Boolean);
+          const inScope = targetCasinos.some((c: string) => accessible.includes(c));
+          if (!inScope) return res.status(403).json({ message: "Sin acceso a este usuario" });
+        }
+      }
+
       const pedidosList = await storage.getPedidosByUser(userId);
       const allMinutas = await storage.getAllMinutas();
       const minutaMap: Record<string, any> = {};
@@ -1476,6 +1497,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Historial error:", error);
       return res.status(500).json({ message: "Error interno del servidor" });
+    }
+  });
+
+  // ── Gestión diaria (módulo admin) ──────────────────────────────────────────
+  // Reemplaza la planilla Excel manual: lista los comensales INSCRITOS para un
+  // casino+fecha y muestra cuáles YA pasaron por el tótem (impresoEn) y cuáles
+  // siguen pendientes. Sobre los pendientes el admin aplica una acción
+  // ("delivery" o "baja"). El "corte de hora" es una decisión visual del panel;
+  // el backend sólo expone el estado real (pasó tótem / pendiente / gestión).
+  app.get("/api/gestion-diaria", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const fecha = (req.query.fecha as string) || todayChile();
+      const { allowedIds } = await getScopedCasinoFilter(req, req.query.casinoId as string | undefined);
+      // allowedIds === null → admin global sin filtro → todos los casinos.
+      if (allowedIds !== null && allowedIds.size === 0) {
+        return res.json({ fecha, items: [] });
+      }
+
+      const casinos = await storage.getCasinos();
+      const casinoNombre: Record<string, string> = {};
+      for (const c of casinos) casinoNombre[c.id] = c.nombre;
+
+      const allMinutas = await storage.getAllMinutas();
+      const minutasDia = allMinutas.filter(
+        (m) => m.fecha === fecha && m.activo && (allowedIds === null || allowedIds.has(m.casinoId)),
+      );
+
+      const userCache = new Map<string, any>();
+      const items: any[] = [];
+      for (const minuta of minutasDia) {
+        const opts = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
+        const pedidosMinuta = await storage.getPedidosByMinuta(minuta.id);
+        for (const p of pedidosMinuta) {
+          // Sólo inscripciones reales de comensales (no_asiste y visita se excluyen).
+          if (p.tipo !== "seleccion" || (p.opcionSeleccionada ?? 0) <= 0) continue;
+          let u = userCache.get(p.userId);
+          if (u === undefined) {
+            u = await storage.getUser(p.userId);
+            userCache.set(p.userId, u || null);
+          }
+          if (!u) continue;
+          items.push({
+            pedidoId: p.id,
+            userId: p.userId,
+            rut: u.rut,
+            nombre: u.nombre,
+            apellido: u.apellido,
+            casinoId: minuta.casinoId,
+            casinoNombre: casinoNombre[minuta.casinoId] ?? "—",
+            fecha: minuta.fecha,
+            familia: minuta.familia ?? null,
+            opcionSeleccionada: p.opcionSeleccionada,
+            opcionTexto: opts[(p.opcionSeleccionada || 1) - 1] || null,
+            impresoEn: (p as any).impresoEn ?? null,
+            pasoTotem: !!(p as any).impresoEn,
+            gestionEstado: (p as any).gestionEstado ?? null,
+          });
+        }
+      }
+
+      // Pendientes (no pasaron por tótem y sin gestión) primero; luego por nombre.
+      items.sort((a, b) => {
+        const ap = a.pasoTotem || a.gestionEstado ? 1 : 0;
+        const bp = b.pasoTotem || b.gestionEstado ? 1 : 0;
+        if (ap !== bp) return ap - bp;
+        return `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`);
+      });
+
+      const resumen = {
+        total: items.length,
+        pasaron: items.filter((i) => i.pasoTotem).length,
+        pendientes: items.filter((i) => !i.pasoTotem && !i.gestionEstado).length,
+        delivery: items.filter((i) => i.gestionEstado === "delivery").length,
+        baja: items.filter((i) => i.gestionEstado === "baja").length,
+      };
+
+      return res.json({ fecha, resumen, items });
+    } catch (error) {
+      console.error("Gestion diaria error:", error);
+      return res.status(500).json({ message: "Error al cargar la gestión diaria" });
+    }
+  });
+
+  // Aplica/limpia una acción de gestión sobre un pedido inscrito.
+  // body: { estado: "delivery" | "baja" | null }
+  app.post("/api/gestion-diaria/:pedidoId/accion", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { pedidoId } = req.params;
+      const estadoRaw = req.body?.estado;
+      const estado = estadoRaw === null || estadoRaw === "" ? null : String(estadoRaw);
+      if (estado !== null && estado !== "delivery" && estado !== "baja") {
+        return res.status(400).json({ message: "Acción inválida. Use 'delivery', 'baja' o vacío para limpiar." });
+      }
+
+      const pedido = await storage.getPedidoById(pedidoId);
+      if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
+
+      // Scope: el actor debe tener acceso al casino de la minuta del pedido.
+      const minuta = await storage.getMinuta(pedido.minutaId);
+      if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
+      const accessible = await getAccessibleCasinoIds((req as any).currentUser);
+      if (accessible !== null && !accessible.includes(minuta.casinoId)) {
+        return res.status(403).json({ message: "Sin acceso a este casino" });
+      }
+
+      const updated = await storage.setGestionEstado(pedidoId, estado);
+      if (!updated) return res.status(404).json({ message: "Pedido no encontrado" });
+      return res.json({ ok: true, gestionEstado: (updated as any).gestionEstado ?? null });
+    } catch (error) {
+      console.error("Gestion diaria accion error:", error);
+      return res.status(500).json({ message: "Error al aplicar la acción" });
     }
   });
 
@@ -1805,6 +1937,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/pedidos/semanal", async (req: Request, res: Response) => {
+    const __t0 = Date.now(); // [TIMING] diagnóstico lentitud guardado
     try {
       const sessionUserId = (req.session as any).userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
@@ -1913,8 +2046,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         results.push(pedido);
       }
 
+      console.log(`[TIMING] /api/pedidos/semanal user=${userId} items=${selecciones.length} guardados=${results.length} omitidos=${skipped.length} ms=${Date.now() - __t0}`);
       return res.status(201).json({ results, skipped });
     } catch (error) {
+      console.error(`[TIMING] /api/pedidos/semanal ERROR ms=${Date.now() - __t0}`);
       console.error("Create pedidos semanales error:", error);
       return res.status(500).json({ message: "Error al registrar selecciones semanales" });
     }

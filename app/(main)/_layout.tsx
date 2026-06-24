@@ -19,6 +19,7 @@ export default function MainLayout() {
     >
       <Stack.Screen name="home" />
       <Stack.Screen name="minuta-detail" />
+      <Stack.Screen name="historial" />
     </Stack>
   );
 }

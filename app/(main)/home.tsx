@@ -57,6 +57,13 @@ function getOptions(m: Minuta) {
   return opts;
 }
 
+// Parse "YYYY-MM-DD" como fecha local a medianoche (evita el corrimiento de
+// zona horaria que produce new Date("YYYY-MM-DD") al interpretarlo como UTC).
+function parseDate(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
 type DaySelection = {
   minutaId: string;
   opcionSeleccionada: number;
@@ -165,13 +172,36 @@ export default function HomeScreen() {
   }
 
   function handleSubmitWeek() {
-    if (!periodoActivo) {
+    if (!periodoActivo || !periodoData?.periodo) {
       Alert.alert("Inscripción cerrada", "No hay un periodo de inscripción activo en este momento. Contacta a tu administrador.");
+      return;
+    }
+    // Obligatorio: inscribir TODOS los días del período activo (con opción o
+    // "no asiste") antes de poder finalizar. Evita cerrar con días sin marcar
+    // (ej. "el jueves aparece como no inscrito").
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Santiago" });
+    const today = parseDate(todayStr);
+    // Normalizar los límites del período a fecha-solo (medianoche local, en
+    // horario de Chile) para comparar contra m.fecha sin que el componente
+    // horario del timestamp excluya el primer/último día.
+    const pStart = parseDate(new Date(periodoData.periodo.fechaInicio).toLocaleDateString("en-CA", { timeZone: "America/Santiago" }));
+    const pEnd = parseDate(new Date(periodoData.periodo.fechaFin).toLocaleDateString("en-CA", { timeZone: "America/Santiago" }));
+    const startCheck = pStart < today ? today : pStart;
+    const minutasEnPeriodo = (minutas ?? []).filter((m) => {
+      const d = parseDate(m.fecha);
+      return d >= startCheck && d <= pEnd;
+    });
+    const faltantes = minutasEnPeriodo.filter((m) => !pedidoByMinuta[m.id] && !selections[m.id]);
+    if (faltantes.length > 0) {
+      Alert.alert(
+        "Faltan días por inscribir",
+        `Debes inscribir TODOS los días del período (elige una opción o marca "No asiste"). Faltan ${faltantes.length} día${faltantes.length > 1 ? "s" : ""}.`
+      );
       return;
     }
     const selArray = Object.values(selections);
     if (selArray.length === 0) {
-      Alert.alert("Atención", "Selecciona al menos una opción antes de enviar.");
+      Alert.alert("Atención", "No hay cambios para guardar.");
       return;
     }
     if (Platform.OS !== "web") {
@@ -241,9 +271,18 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
-        <Pressable onPress={handleLogout} style={styles.logoutButton}>
-          <Feather name="log-out" size={22} color={Colors.textSecondary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push("/(main)/historial" as any)}
+            style={styles.logoutButton}
+            accessibilityLabel="Ver historial de inscripciones"
+          >
+            <Feather name="clock" size={22} color={Colors.textSecondary} />
+          </Pressable>
+          <Pressable onPress={handleLogout} style={styles.logoutButton}>
+            <Feather name="log-out" size={22} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.sectionHeader}>
@@ -472,6 +511,10 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 12,
     color: Colors.primaryLight,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   logoutButton: {
     width: 44,

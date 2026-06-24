@@ -7,3 +7,4 @@
 - [RUT canónico + lookup tolerante](rut-normalization.md) — guardar RUT canónico siempre; getUserByRut tolera formato; ante duplicado canónico fallar explícito, nunca elegir el primero.
 - [Forced password change](forced-password-change.md) — cambio de clave por defecto se fuerza en celular y tótem (UX) pero la defensa real es server-side en endpoints de inscripción (super admin exento).
 - [Admin panel CDN/Babel](admin-panel-cdn.md) — /admin transpila JSX en el navegador con @babel/standalone del CDN; mantenerlo pinneado a 7.x o se rompe (pantalla negra) cuando el CDN sube de versión.
+- [db:push borra session](db-push-session-drop.md) — drizzle-kit quiere DROP de la tabla session (no está en schema.ts); nunca confirmar; agregar columnas con ALTER TABLE directo.

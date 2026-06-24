@@ -269,6 +269,7 @@
       const allItems = [
         { id: 'dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', roles: ['admin', 'interlocutor'] },
         { id: 'consolidacion', label: 'Consolidación', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', roles: ['admin', 'interlocutor'] },
+        { id: 'gestionDiaria', label: 'Gestión Diaria', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', roles: ['admin', 'interlocutor'] },
         { id: 'usuarios', label: 'Usuarios', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', roles: ['admin', 'interlocutor'] },
         { id: 'casinos', label: 'Casinos', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', roles: ['admin'] },
         { id: 'minutas', label: 'Minutas', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', roles: ['admin', 'interlocutor'] },
@@ -2717,6 +2718,7 @@
         casinos: CasinosView,
         minutas: MinutasView,
         consolidacion: ConsolidacionView,
+        gestionDiaria: GestionDiariaView,
         vales: ValesView,
         familias: FamiliasView,
         periodos: PeriodosView,
@@ -2732,6 +2734,218 @@
           <main className="flex-1 p-8 overflow-y-auto">
             <CurrentView key={view} user={user} />
           </main>
+        </div>
+      );
+    }
+
+    // ── Gestión Diaria ──
+    // Reemplaza la planilla manual: el admin elige casino + fecha (hoy por
+    // defecto), ve quién está inscrito, quién YA pasó por el tótem y quién sigue
+    // pendiente. Sobre los pendientes aplica "Delivery" o "Baja".
+    function GestionDiariaView({ user }) {
+      const todayChile = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+      const [casinos, setCasinos] = useState([]);
+      const [selectedCasino, setSelectedCasino] = useState('all');
+      const [fecha, setFecha] = useState(todayChile);
+      const [data, setData] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+      const [actingId, setActingId] = useState(null);
+      const [filtro, setFiltro] = useState('');
+
+      useEffect(() => {
+        apiFetch('/api/casinos').then(list => {
+          if (user?.role === 'interlocutor') {
+            const myIds = new Set([user.casinoId, ...(user.casinoIds || [])].filter(Boolean));
+            setCasinos(list.filter(c => myIds.has(c.id)));
+          } else {
+            setCasinos(list);
+          }
+        }).catch(() => {});
+      }, []);
+
+      const load = React.useCallback(async () => {
+        if (!fecha) return;
+        setLoading(true);
+        setError('');
+        try {
+          const casinoParam = selectedCasino && selectedCasino !== 'all' ? `&casinoId=${selectedCasino}` : '';
+          const res = await apiFetch(`/api/gestion-diaria?fecha=${fecha}${casinoParam}`);
+          setData(res);
+        } catch (err) {
+          setError(err?.message || 'Error al cargar la gestión diaria');
+          setData(null);
+        } finally {
+          setLoading(false);
+        }
+      }, [fecha, selectedCasino]);
+
+      useEffect(() => { load(); }, [load]);
+
+      async function aplicar(row, estado) {
+        // estado: 'delivery' | 'baja' | null (limpiar)
+        setActingId(row.pedidoId);
+        try {
+          await apiFetch(`/api/gestion-diaria/${row.pedidoId}/accion`, {
+            method: 'POST',
+            body: JSON.stringify({ estado }),
+          });
+          setToast?.({
+            message: estado === 'delivery' ? 'Marcado como delivery' : estado === 'baja' ? 'Marcado como baja' : 'Acción limpiada',
+            type: 'success',
+          });
+          load();
+        } catch (err) {
+          setToast?.({ message: err?.message || 'Error al aplicar la acción', type: 'error' });
+        } finally {
+          setActingId(null);
+        }
+      }
+
+      const resumen = data?.resumen;
+      const items = (data?.items || []).filter(it => {
+        if (!filtro.trim()) return true;
+        const q = filtro.trim().toLowerCase();
+        return (`${it.nombre} ${it.apellido}`.toLowerCase().includes(q)) || (it.rut || '').toLowerCase().includes(q);
+      });
+
+      function EstadoBadge({ row }) {
+        if (row.gestionEstado === 'delivery') return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300">Delivery</span>;
+        if (row.gestionEstado === 'baja') return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-300">Baja</span>;
+        if (row.pasoTotem) return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-300">Pasó por tótem</span>;
+        return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-500/20 text-yellow-300">Pendiente</span>;
+      }
+
+      function fmtHora(iso) {
+        if (!iso) return '—';
+        try {
+          return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' });
+        } catch { return '—'; }
+      }
+
+      return (
+        <div className="fade-in">
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-white">Gestión Diaria</h1>
+              <p className="text-white/50 text-sm mt-1">Inscritos del día y quién pasó por el tótem. Aplica delivery o baja a los pendientes.</p>
+            </div>
+            <button onClick={load} disabled={loading}
+              className="px-4 py-2 rounded-lg bg-vascan-gold/20 text-vascan-gold font-semibold text-sm hover:bg-vascan-gold/30 disabled:opacity-50">
+              {loading ? 'Cargando…' : '↻ Refrescar'}
+            </button>
+          </div>
+
+          <div className="bg-vascan-surface border border-white/10 rounded-2xl p-4 mb-5 flex flex-wrap items-end gap-4">
+            <div>
+              <label className="block text-xs text-white/50 mb-1">Casino</label>
+              <select value={selectedCasino} onChange={e => setSelectedCasino(e.target.value)}
+                className="bg-vascan-bg border border-white/10 rounded-lg px-3 py-2 text-white text-sm min-w-[200px]">
+                <option value="all">Todos los casinos</option>
+                {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-white/50 mb-1">Fecha</label>
+              <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+                className="bg-vascan-bg border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs text-white/50 mb-1">Buscar comensal</label>
+              <input type="text" value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Nombre o RUT…"
+                className="w-full bg-vascan-bg border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+            </div>
+          </div>
+
+          {resumen && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+              <div className="bg-vascan-surface border border-white/10 rounded-xl p-3 text-center">
+                <div className="text-2xl font-bold text-white">{resumen.total}</div>
+                <div className="text-xs text-white/50">Inscritos</div>
+              </div>
+              <div className="bg-vascan-surface border border-green-500/20 rounded-xl p-3 text-center">
+                <div className="text-2xl font-bold text-green-300">{resumen.pasaron}</div>
+                <div className="text-xs text-white/50">Pasaron tótem</div>
+              </div>
+              <div className="bg-vascan-surface border border-yellow-500/20 rounded-xl p-3 text-center">
+                <div className="text-2xl font-bold text-yellow-300">{resumen.pendientes}</div>
+                <div className="text-xs text-white/50">Pendientes</div>
+              </div>
+              <div className="bg-vascan-surface border border-blue-500/20 rounded-xl p-3 text-center">
+                <div className="text-2xl font-bold text-blue-300">{resumen.delivery}</div>
+                <div className="text-xs text-white/50">Delivery</div>
+              </div>
+              <div className="bg-vascan-surface border border-red-500/20 rounded-xl p-3 text-center">
+                <div className="text-2xl font-bold text-red-300">{resumen.baja}</div>
+                <div className="text-xs text-white/50">Baja</div>
+              </div>
+            </div>
+          )}
+
+          {error && <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl p-4 mb-4 text-sm">{error}</div>}
+
+          <div className="bg-vascan-surface border border-white/10 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-white/50 text-left">
+                    <th className="px-4 py-3 font-medium">Comensal</th>
+                    <th className="px-4 py-3 font-medium">Casino</th>
+                    <th className="px-4 py-3 font-medium">Opción</th>
+                    <th className="px-4 py-3 font-medium">Hora tótem</th>
+                    <th className="px-4 py-3 font-medium">Estado</th>
+                    <th className="px-4 py-3 font-medium text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-white/40">Cargando…</td></tr>
+                  )}
+                  {!loading && items.length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-white/40">No hay inscritos para este día.</td></tr>
+                  )}
+                  {!loading && items.map(row => (
+                    <tr key={row.pedidoId} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="px-4 py-3 text-white">
+                        <div className="font-medium">{row.nombre} {row.apellido}</div>
+                        <div className="text-white/40 text-xs">{row.rut}</div>
+                      </td>
+                      <td className="px-4 py-3 text-white/70">{row.casinoNombre}</td>
+                      <td className="px-4 py-3 text-white/70">
+                        <span className="text-vascan-gold font-semibold">Opc {row.opcionSeleccionada}</span>
+                        {row.opcionTexto ? <span className="text-white/50"> · {row.opcionTexto}</span> : null}
+                      </td>
+                      <td className="px-4 py-3 text-white/60">{fmtHora(row.impresoEn)}</td>
+                      <td className="px-4 py-3"><EstadoBadge row={row} /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          {row.pasoTotem ? (
+                            <span className="text-white/30 text-xs">—</span>
+                          ) : row.gestionEstado ? (
+                            <button onClick={() => aplicar(row, null)} disabled={actingId === row.pedidoId}
+                              className="px-3 py-1.5 rounded-lg bg-white/10 text-white/70 text-xs font-semibold hover:bg-white/20 disabled:opacity-50">
+                              Deshacer
+                            </button>
+                          ) : (
+                            <>
+                              <button onClick={() => aplicar(row, 'delivery')} disabled={actingId === row.pedidoId}
+                                className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 text-xs font-semibold hover:bg-blue-500/30 disabled:opacity-50">
+                                Delivery
+                              </button>
+                              <button onClick={() => aplicar(row, 'baja')} disabled={actingId === row.pedidoId}
+                                className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 text-xs font-semibold hover:bg-red-500/30 disabled:opacity-50">
+                                Baja
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       );
     }

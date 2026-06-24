@@ -141,6 +141,10 @@ export const pedidos = pgTable("pedidos", {
   codigoQr: text("codigo_qr"),
   origenTotemId: varchar("origen_totem_id"),
   impresoEn: timestamp("impreso_en"),
+  // Gestión diaria (módulo admin): acción tomada sobre un inscrito que NO pasó
+  // por el tótem a la hora de corte. null = sin gestión; 'delivery' = se envía
+  // a domicilio/puesto; 'baja' = se da de baja (no consume, descontar del conteo).
+  gestionEstado: text("gestion_estado"),
   createdAt: timestamp("created_at").defaultNow(),
   ...syncCols,
 }, (t) => ({
