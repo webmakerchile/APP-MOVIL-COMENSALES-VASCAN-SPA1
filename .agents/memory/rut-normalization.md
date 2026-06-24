@@ -28,3 +28,13 @@ fallback los auto-sana sin migrar la BD.
   queda en logs para que un admin sanee el duplicado.
 - No hay índice único sobre RUT normalizado en la BD; si en el futuro aparecen
   duplicados canónicos, sanearlos antes de añadir esa restricción.
+
+**404 en "Cambio de clave" del tótem (reset-password-by-rut) para un comensal
+que SÍ existe = RUT mal cargado, no falta de usuario ni bug de código.** El
+buscador tolera formato pero no puede emparejar dígitos distintos: si el RUT
+guardado tiene un dígito cambiado respecto al de la cédula, la persona escribe
+su RUT real y recibe 404. No es "usuario no existe" (error que cometí antes):
+el usuario existe bajo un RUT con typo de la carga masiva. Fix = corregir el
+dato (RUT real de la cédula), no tocar el lookup. Confirmar el RUT con el
+cliente antes de escribir; no adivinar (dos RUT que difieren un dígito pueden
+tener ambos DV válidos, p.ej. 29283727-5 vs 29283227-3).
