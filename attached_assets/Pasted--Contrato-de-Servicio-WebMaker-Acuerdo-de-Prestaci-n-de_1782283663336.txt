@@ -1,0 +1,221 @@
+
+Contrato de Servicio
+WebMaker
+Acuerdo de Prestación de Servicios
+
+Vascan spa
+24 de febrero de 2026
+FIRMADO
+Términos y Condiciones
+Alcance del Proyecto
+WebMakerChile se compromete a desarrollar e implementar una Aplicación Móvil para Comensales para Vascan spa, con el fin de digitalizar y optimizar la gestión de alimentación en sus sedes, eliminando el uso de formularios manuales y centralizando los pedidos de comidas de manera eficiente. La solución permitirá a los comensales inscribirse, seleccionar y gestionar sus preferencias de comida intuitivamente desde su celular.
+
+Capacidades técnicas desarrolladas:
+
+Diseño UI/UX: Interfaz intuitiva y funcional optimizada para una selección de menús fácil, rápida y precisa.
+Autenticación Segura: Módulo de registro y acceso de usuarios mediante RUT y contraseña.
+Selección de Menú: Permite elegir entre un mínimo de 3 opciones diarias, adaptándose a las ofertas de su servicio.
+Calendario de Pedidos: Funcionalidad para selección anticipada de menús (desde una semana hasta un mes), incluyendo gestión de plazos de inscripción.
+Adaptación por Sede: Visualización de minutas diferenciadas por 'código de casino' o sede asignada.
+Historial de Pedidos: Visualización clara de la selección confirmada y un historial de próximos pedidos.
+Centralización y Reportes: Sistema robusto que consolida todos los pedidos para facilitar la planificación de compras con al menos 24 horas de antelación y la generación de reportes precisos.
+Integración con Tótem: Compatibilidad para cargar automáticamente las selecciones de comensales al Tótem físico post-plazo de inscripción, permitiendo retiro mediante validación de RUT/contraseña y emisión de vale digital/físico. Esta integración depende de la disponibilidad de una API o acceso técnico por parte del proveedor del hardware del cliente (Vascan spa).
+Gestión de Publicación en App Stores: WebMakerChile gestionará la publicación en Apple App Store y Google Play Store, incluyendo metadatos, capturas, certificados y seguimiento hasta su aprobación.
+Tecnologías a emplear:
+
+Frontend Móvil: Desarrollo con React Native para compatibilidad cruzada iOS/Android.
+Backend API: Implementación de API RESTful personalizada utilizando Node.js y Express.js.
+Base de Datos: Gestión de datos de usuarios, menús y pedidos con PostgreSQL.
+Entregables finales para Vascan spa:
+
+El software funcional desplegado y operativo en entornos de producción (App Stores).
+Las credenciales de acceso administrativo para la gestión del contenido y usuarios de la aplicación.
+La entrega total del código fuente de la aplicación móvil y el backend, incluyendo las llaves de firmado (.keystore y certificados .p12) y las credenciales de los servicios de backend, transfiriendo la propiedad tecnológica completa a Vascan spa una vez cubierto el 100% del monto total del proyecto y asegurando su autonomía total en la gestión de la aplicación.
+Cualquier funcionalidad, modificación o integración no explícitamente descrita en este alcance se considerará como un trabajo adicional y será objeto de una nueva cotización por parte de WebMakerChile.
+
+Proceso de Trabajo
+El proceso de trabajo que WebMakerChile seguirá para la ejecución del proyecto de Vascan spa se estructura en las siguientes etapas clave:
+
+Análisis y Planificación: Levantamiento detallado de requerimientos y definición de la arquitectura técnica.
+Diseño UI/UX: Creación de prototipos y mockups de interfaz y experiencia de usuario, los cuales serán presentados a Vascan spa para su aprobación.
+Desarrollo e Implementación: Codificación del frontend móvil en React Native y desarrollo del backend API con Node.js y PostgreSQL.
+Pruebas Internas (QA): Ejecución de pruebas exhaustivas de funcionalidad, usabilidad y rendimiento por parte del equipo de WebMakerChile.
+Periodo de Prueba con Cliente: Vascan spa tendrá la oportunidad de probar la aplicación en un entorno de staging para validar funcionalidades y reportar observaciones.
+Entrega Final y Puesta en Producción: Despliegue de la aplicación en Apple App Store y Google Play Store.
+Vascan spa dispondrá de 5 días hábiles para revisar y proporcionar feedback o aprobación a cada entregable parcial presentado por WebMakerChile, garantizando un flujo de trabajo ágil y colaborativo.
+
+Plazos de Entrega
+WebMakerChile estima un plazo de 30 a 60 días hábiles para la entrega del proyecto, contados a partir de la recepción efectiva del 50% de anticipo y la provisión completa de la información base y requerimientos iniciales por parte de Vascan spa. Este plazo puede extenderse si Vascan spa solicita modificaciones al alcance inicial no contempladas, o si existe una demora superior a 5 días hábiles en la entrega de feedback, aprobaciones o información crítica para el avance del desarrollo del proyecto.
+
+Condiciones de Pago
+El costo total del proyecto asciende a $1.428.000 CLP (Un millón cuatrocientos veintiocho mil pesos chilenos). La forma de pago acordada con Vascan spa es la siguiente:
+
+Un 50% de anticipo al inicio del proyecto y firma del presente contrato.
+El 50% restante se cancelará una vez que la aplicación sea aprobada por las tiendas (Apple App Store y Google Play Store) o, en su defecto, 10 días hábiles después de haber sido enviada a revisión, siempre y cuando no existan observaciones técnicas pendientes de WebMakerChile.
+El incumplimiento en las fechas de pago facultará a WebMakerChile para suspender inmediatamente el desarrollo, la publicación de la aplicación o la entrega del código fuente hasta que los saldos pendientes sean regularizados por Vascan spa. Los métodos de pago aceptados son transferencia bancaria directa a WebMakerChile o a través de la plataforma Flow.cl.
+
+Confidencialidad
+WebMakerChile reconoce que toda la información, datos y material proporcionado por Vascan spa para el desarrollo de este proyecto es propiedad exclusiva del cliente y se obliga a mantenerla bajo estricta confidencialidad durante y después de la ejecución del servicio. Una vez que Vascan spa haya cubierto el pago total del proyecto, WebMakerChile cede a Vascan spa todos los derechos de uso, comercialización y explotación del software desarrollado. Vascan spa será, a partir de ese momento, el único titular y propietario del producto final entregado y su código fuente asociado.
+
+Servicios Incluidos
+Desarrollo Aplicación Móvil Comensales
+
+$1.000.000
+
+Aplicación móvil nativa o híbrida (iOS/Android) diseñada para optimizar la gestión de alimentación en empresas que producen y distribuyen comidas a múltiples sedes o casinos. Esta solución elimina completamente el uso de formularios manuales (tipo Google Forms o Excel) y las problemáticas asociadas a selecciones erróneas o información incompleta, centralizando los pedidos de forma eficiente. Permite a los comensales inscribirse, seleccionar y gestionar sus preferencias de comida de manera intuitiva desde su celular, en cualquier momento, reemplazando el proceso actual de tótem y vales físicos con una gestión digital avanzada.
+
+QUE INCLUYE:
+
+Diseño UI/UX intuitivo y funcional, optimizado para una selección de menús fácil, rápida y precisa, minimizando errores de elección.
+Módulo de registro y autenticación segura de usuarios (RUT y contraseña) para la gestión de acceso de los comensales.
+Funcionalidad de selección de comidas que permite elegir entre un mínimo de 3 opciones diarias, adaptándose a las ofertas de su servicio.
+Calendario para selección anticipada de menús con alta flexibilidad, permitiendo a los usuarios programar sus pedidos desde una semana hasta un mes completo (incluyendo rangos de 2, 3 o 4 semanas) y la opción de marcar un mes entero. Se incorpora un sistema de gestión de plazos de inscripción para cada periodo.
+Adaptación y visualización de minutas diferenciadas por 'código de casino' o sede asignada, garantizando que cada comensal vea las opciones pertinentes a su ubicación.
+Visualización clara y detallada de la selección confirmada y un historial de próximos pedidos.
+Centralización de pedidos y generación de reportes automáticos: Un sistema robusto que consolida todos los pedidos para facilitar la planificación de compras con al menos 24 horas de antelación y la generación de reportes precisos, eliminando problemas de información incorrecta para la producción y distribución.
+Integración para la alimentación de sistemas de retiro (Tótem): Compatibilidad para cargar automáticamente las selecciones de los comensales al Tótem físico una vez agotado el plazo de inscripción, permitiendo el retiro de comidas mediante validación de RUT/contraseña y la emisión de un vale digital o físico basado en la inscripción.
+PROCESO DE TRABAJO:
+
+1
+Levantamiento detallado de requerimientos y diseño de la experiencia de usuario (UI/UX).
+2
+Desarrollo Frontend para plataformas iOS y Android (compatibilidad cruzada).
+3
+Integración completa con la API Backend personalizada para gestión de datos, pedidos y la alimentación del Tótem.
+4
+Pruebas de usabilidad, funcionalidad y rendimiento en dispositivos reales.
+5
+Asistencia en el proceso de publicación en Apple App Store y Google Play Store.
+TIEMPO DE ENTREGA: 30-60 días hábiles
+
+GARANTIA: 1 meses de soporte técnico y corrección de errores críticos post-lanzamiento.
+
+Ideal para: Empresas de catering corporativo, instituciones educativas, grandes corporaciones con casino o comedor propio que buscan modernizar y digitalizar completamente la gestión de alimentación, eliminando procesos manuales y errores.
+
+Gestión y Publicación en App Stores
+
+$200.000
+
+Este servicio cubre la gestión integral del proceso de publicación de la aplicación móvil en las tiendas de aplicaciones oficiales, Apple App Store y Google Play Store. Incluye la configuración de metadatos, la preparación de capturas de pantalla y videos promocionales (suministrados por el cliente o generados con el diseño de la app), la gestión de certificados y perfiles de aprovisionamiento, el envío de la aplicación para revisión, y el seguimiento hasta su aprobación y disponibilidad pública. Se asegura el cumplimiento de las directrices de cada plataforma para garantizar una publicación exitosa.
+
+Subtotal
+$1.200.000
+IVA (19%)
+$228.000
+Total del Proyecto
+$1.428.000
+Mantenimiento Mensual
+$150.000/mes
+Incluye hosting y soporte técnico
+
+Vista Previa del Documento
+Descargar PDF
+
+Revise el documento completo antes de proceder con la firma
+
+Contrato Firmado
+Este contrato fue firmado electrónicamente
+
+Firmante
+Oliver Vásquez
+
+Email
+ovasquez@vascan.cl
+
+Fecha de Firma
+02 de marzo de 2026
+
+Descargar Contrato PDF
+Carpeta de tu Proyecto
+Sube fotos, videos y la información que necesitamos
+
+Hemos creado una carpeta exclusiva en Google Drive para tu proyecto. Dentro encontraras un documento con la información que necesitamos y carpetas para subir tus imagenes y videos:
+
+https://drive.google.com/drive/folders/1AFzy50reORpUak3cx1qmqPvxm3Antx-L
+
+
+Abrir Carpeta en Google Drive
+Portal de tu Proyecto
+Accede cuando quieras para ver el avance
+
+Guarda este enlace privado. Con él podrás ver el estado de tu proyecto, dejar comentarios y seguir el progreso en cualquier momento:
+
+https://webmakerlatam.com/portal/login?token=f5a61dc2-0dd0-457c-9e12-e9b4cdbf0fcd
+
+
+Abrir Portal del Proyecto
+Instrucciones de Pago
+Datos para realizar la transferencia
+
+Titular
+
+Webmakerchile
+
+RUT
+
+78.042.968-2
+
+Método de Pago
+
+Mercado Pago
+
+Cuenta
+
+1041474795
+
+
+Email
+
+webmakerlatam@gmail.com
+
+
+Monto Total del Proyecto
+$1.428.000
+Modalidad: 50% al inicio del proyecto, 50% a la entrega final
+
+Pago Inicial (50%)
+
+$714.000
+
+Pago Final (50%)
+
+$714.000
+
+Envíe el comprobante de pago a webmakerlatam@gmail.com o por WhatsApp al +56 9 3583 5854
+
+Acceso al Portal de Clientes
+Credenciales para la app móvil (en desarrollo)
+
+Email
+
+
+Contrasena
+
+
+Estamos desarrollando una app móvil exclusiva para nuestros clientes donde podras seguir el avance de tu proyecto en tiempo real. Estas son tus credenciales de acceso para cuando la app este disponible. Mientras tanto, también puedes acceder al portal web con estas mismas credenciales.
+
+Estas credenciales también fueron enviadas a tu correo. Podras cambiar tu contrasena desde la app cuando este disponible.
+
+App Móvil - En Desarrollo
+Contrato Digital Verificado por WebMaker
+WEBMAKERCHILE © 2026
+
+Sistema de Contratos Digitales
+
+
+Lucas
+Lucas · WebMaker
+En línea ahora
+WhatsApp
+
+
+Lucas
+¡Hola! 👋 Soy Lucas, fundador de WebMaker.
+
+Cuéntame en una línea: ¿qué estás buscando? Te respondo personalmente en minutos.
+2:46 a.m.
+Agendar 15 min con Lucas
+
+Escribe un mensaje...
+
+Powered by webmakerlatam.com
