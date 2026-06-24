@@ -478,6 +478,15 @@ export default function Kiosk() {
       const existingNoAsiste = todayPedidos.find(p => p.opcionSeleccionada === 0);
       const existingToday = existingValid || existingNoAsiste;
 
+      // Solo bloqueamos con "sin menú" si NO hay pedido del día Y tampoco hay
+      // minuta activa para inscribir uno nuevo. Si ya existe un pedido, debe
+      // poder imprimir aunque la minuta se haya apagado (caso 1).
+      if (!existingToday && todayMinsActive.length === 0) {
+        setErrMsg("No hay menú disponible para hoy en tu casino.");
+        setStep("error");
+        return;
+      }
+
       // Caso 2: solo no_asiste (sin ningún pedido válido).
       if (!existingValid && existingNoAsiste) {
         setStep("no_asiste_msg");
@@ -499,11 +508,13 @@ export default function Kiosk() {
       // en setState) no muestre "Algo salió mal" cuando el pedido YA existe en
       // el servidor — el comensal igual debe poder ver/imprimir su vale.
       let pedido: (Pedido & { action?: string }) | null = null;
-      let minutaUsada: Minuta = todayMins[0];
+      let minutaUsada: Minuta = todayMinsActive[0] ?? todayMinsAll[0];
       try {
+        // Pedido existente: usar SU minuta (puede estar inactiva → igual imprime).
+        // Sin pedido (auto-crear): usar la primera minuta ACTIVA del día.
         minutaUsada = existingValid
-          ? (todayMins.find(m => m.id === existingValid.minutaId) ?? todayMins[0])
-          : todayMins[0];
+          ? (todayMinsAll.find(m => m.id === existingValid.minutaId) ?? todayMinsActive[0] ?? todayMinsAll[0])
+          : (todayMinsActive[0] ?? todayMinsAll[0]);
         const res = await apiRequest("POST", "/api/pedidos/auto-totem", {
           userId: u!.id,
           minutaId: minutaUsada.id,

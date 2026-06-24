@@ -37,4 +37,5 @@ su RUT real y recibe 404. No es "usuario no existe" (error que cometí antes):
 el usuario existe bajo un RUT con typo de la carga masiva. Fix = corregir el
 dato (RUT real de la cédula), no tocar el lookup. Confirmar el RUT con el
 cliente antes de escribir; no adivinar (dos RUT que difieren un dígito pueden
-tener ambos DV válidos, p.ej. 29283727-5 vs 29283227-3).
+tener ambos DV válidos, p.ej. dos números casi idénticos cada uno con su
+propio DV correcto).

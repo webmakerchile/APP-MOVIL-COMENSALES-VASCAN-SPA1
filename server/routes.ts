@@ -1738,11 +1738,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (minuta.fecha !== checkFecha) {
         return res.status(403).json({ message: "Solo se puede emitir vale para el menú de hoy" });
       }
-      if (!minuta.activo) {
-        return res.status(403).json({ message: "Minuta inactiva" });
-      }
-
       const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
+      // Pedido VÁLIDO ya existente: imprimir SIEMPRE, aunque la minuta se haya
+      // apagado después de que el comensal se inscribió. La inscripción ya
+      // ocurrió; imprimir el ticket no debe depender del estado del menú.
       if (existing && existing.opcionSeleccionada > 0) {
         // Si ya estaba impreso ANTES de esta llamada → cliente debe mostrar
         // "ya_impreso" (no re-imprimir). Si no estaba impreso, lo marcamos
@@ -1753,6 +1752,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.json({ ...(marked || existing), action: "marked_existing" });
         }
         return res.json({ ...existing, action: "already_printed" });
+      }
+      // De aquí en adelante se CREA o convierte un pedido (no_asiste → opción 1,
+      // o auto-asignación nueva). Eso SÍ es inscribir, así que exige menú activo.
+      if (!minuta.activo) {
+        return res.status(403).json({ message: "Minuta inactiva" });
       }
       if (existing && existing.opcionSeleccionada === 0) {
         // Tenía "no_asiste" — cliente pidió que el tótem SIEMPRE pueda emitir
