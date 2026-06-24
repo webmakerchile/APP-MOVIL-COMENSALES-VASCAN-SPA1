@@ -230,7 +230,7 @@
       <tbody>
         <tr>
           <td><span class="t">Incidencia «cambio de clave»</span></td>
-          <td class="d">El sistema respondía correctamente: el RUT consultado no existía en producción. Es un dato faltante, no una falla de software → <strong>ajuste operativo / soporte</strong> (cargar el usuario).</td>
+          <td class="d">La comensal <strong>sí existe</strong> en el sistema; su RUT quedó cargado con un dígito distinto al de su cédula durante la carga masiva de usuarios. El buscador del sistema funciona correctamente y es tolerante al formato, pero no puede emparejar dígitos distintos. No es una falla de software → <strong>corrección de dato</strong> (ajuste operativo / soporte): corregir el RUT al valor real de la cédula.</td>
         </tr>
         <tr>
           <td><span class="t">Incidencia «sin menú para hoy»</span></td>
@@ -273,7 +273,7 @@
         <ul class="chk watch">
           <li>La velocidad del tótem depende de la <strong>conexión a internet del recinto</strong>; se recomienda evaluar a futuro un modo «sin conexión» (mejora cotizable aparte) si la red del casino resulta inestable.</li>
           <li>La validación de «inscribir todos los días» quedó <strong>por validar</strong> con la operación antes de fijarla como definitiva.</li>
-          <li>Asegurar la carga correcta y a tiempo de menús y usuarios: los dos incidentes recientes se originaron por datos no cargados.</li>
+          <li>Asegurar la carga correcta de menús y usuarios: los dos incidentes recientes se originaron por datos no cargados o mal cargados (un menú inactivo y un RUT con un dígito equivocado).</li>
         </ul>
         <p style="margin:14px 0 0"><strong>Recomendación:</strong> iniciar la marcha blanca en un casino, monitorear el comportamiento real (especialmente la red en el tótem y la carga de menús) y luego escalar al resto de las sedes.</p>
       </div>
