@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Informe de Alcance y Estado del Sistema — BuenaMezcla</title>
+<style>
+  :root{
+    --tinta:#1c1c1e;
+    --gris:#5b5b60;
+    --linea:#e4e4e7;
+    --naranja:#ED6A2C;
+    --naranja-suave:#fdf1ea;
+    --verde:#1f7a4d;
+    --verde-suave:#e9f6ef;
+    --ambar:#b5781a;
+    --ambar-suave:#fbf3e2;
+    --negro:#111114;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--tinta);
+    background:#f3f3f5;
+    line-height:1.55;
+    font-size:14px;
+  }
+  .hoja{
+    max-width:820px;
+    margin:24px auto;
+    background:#fff;
+    box-shadow:0 2px 18px rgba(0,0,0,.08);
+  }
+  /* Encabezado */
+  header{
+    background:var(--negro);
+    color:#fff;
+    padding:30px 44px 26px;
+  }
+  header .marca{display:flex;align-items:center;gap:18px;}
+  header img{height:46px;width:auto;display:block;}
+  header .etq{
+    margin-left:auto;text-align:right;font-size:11.5px;color:#b9b9c0;line-height:1.5;
+  }
+  header h1{
+    font-size:23px;margin:22px 0 4px;font-weight:700;letter-spacing:-.2px;
+  }
+  header .sub{color:#c9c9d0;font-size:13.5px;margin:0;}
+  header .barra{height:4px;background:var(--naranja);margin-top:22px;border-radius:2px;width:90px;}
+  .meta{
+    display:flex;flex-wrap:wrap;gap:26px;padding:16px 44px;
+    background:#fafafa;border-bottom:1px solid var(--linea);font-size:12.5px;color:var(--gris);
+  }
+  .meta b{color:var(--tinta);font-weight:600;}
+  main{padding:30px 44px 40px;}
+  h2{
+    font-size:16.5px;margin:34px 0 12px;color:var(--negro);
+    display:flex;align-items:center;gap:10px;font-weight:700;
+  }
+  h2 .n{
+    background:var(--naranja);color:#fff;width:26px;height:26px;border-radius:7px;
+    display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:0 0 auto;
+  }
+  h2:first-of-type{margin-top:8px;}
+  p{margin:0 0 12px;}
+  .lead{color:var(--gris);}
+  table{width:100%;border-collapse:collapse;margin:6px 0 8px;font-size:12.8px;}
+  th,td{text-align:left;padding:9px 11px;vertical-align:top;border-bottom:1px solid var(--linea);}
+  th{background:#f6f6f7;font-weight:600;color:var(--gris);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;}
+  td .t{font-weight:600;color:var(--tinta);display:block;margin-bottom:2px;}
+  td .d{color:var(--gris);}
+  .pill{
+    display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;
+  }
+  .pill.ok{background:var(--verde-suave);color:var(--verde);}
+  .pill.amb{background:var(--ambar-suave);color:var(--ambar);}
+  .nota{
+    background:var(--naranja-suave);border-left:3px solid var(--naranja);
+    padding:12px 16px;border-radius:0 8px 8px 0;color:#7a3f1d;font-size:13px;margin:10px 0 16px;
+  }
+  /* Veredicto marcha blanca */
+  .veredicto{
+    border:1px solid var(--linea);border-radius:12px;overflow:hidden;margin:8px 0 18px;
+  }
+  .veredicto .cab{
+    background:var(--verde-suave);padding:16px 20px;display:flex;align-items:center;gap:14px;
+    border-bottom:1px solid var(--linea);
+  }
+  .veredicto .cab .ico{
+    width:38px;height:38px;border-radius:50%;background:var(--verde);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto;font-weight:700;
+  }
+  .veredicto .cab h3{margin:0;font-size:15.5px;color:var(--verde);}
+  .veredicto .cab span{display:block;font-size:12px;color:var(--gris);font-weight:400;margin-top:1px;}
+  .veredicto .cuerpo{padding:16px 20px;}
+  .chk{list-style:none;margin:0;padding:0;}
+  .chk li{padding:5px 0 5px 26px;position:relative;font-size:13px;}
+  .chk li::before{content:"✓";position:absolute;left:0;color:var(--verde);font-weight:700;}
+  .watch li::before{content:"!";color:var(--ambar);}
+  .frontera{
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:8px 0;
+  }
+  .frontera .caja{border:1px solid var(--linea);border-radius:10px;padding:14px 16px;}
+  .frontera .caja h4{margin:0 0 6px;font-size:13px;}
+  .frontera .caja.m h4{color:var(--verde);}
+  .frontera .caja.c h4{color:var(--naranja);}
+  .frontera .caja ul{margin:0;padding-left:18px;color:var(--gris);font-size:12.5px;}
+  footer{
+    padding:18px 44px 30px;border-top:1px solid var(--linea);
+    color:var(--gris);font-size:11px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+  }
+  .disc{font-size:11px;color:#8a8a90;font-style:italic;margin-top:18px;border-top:1px dashed var(--linea);padding-top:12px;}
+  @media print{
+    body{background:#fff;font-size:11.5px;}
+    .hoja{box-shadow:none;margin:0;max-width:none;}
+    header,.meta,main,footer{padding-left:30px;padding-right:30px;}
+    h2{page-break-after:avoid;}
+    table,.veredicto,.nota{page-break-inside:avoid;}
+    @page{margin:14mm;}
+  }
+</style>
+</head>
+<body>
+<div class="hoja">
+  <header>
+    <div class="marca">
+      <img src="./webmaker-logo.png" alt="WebMaker" />
+      <div class="etq">
+        Desarrollo de software a medida<br />
+        Documento de gestión de proyecto
+      </div>
+    </div>
+    <h1>Informe de Alcance, Mantención y Estado del Sistema</h1>
+    <p class="sub">Sistema de Inscripción de Comensales — <strong>BuenaMezcla</strong></p>
+    <div class="barra"></div>
+  </header>
+
+  <div class="meta">
+    <div><b>Preparado para:</b> Vascan SPA — Oliver Vásquez</div>
+    <div><b>Preparado por:</b> WebMakerChile</div>
+    <div><b>Fecha:</b> 24 de junio de 2026</div>
+  </div>
+
+  <main>
+    <p class="lead">
+      Este documento entrega, de forma transparente, el detalle de: <strong>(1)</strong> el trabajo
+      realizado <strong>fuera del alcance</strong> del contrato —ya resuelto, implementado y operativo—,
+      <strong>(2)</strong> lo que corresponde al <strong>alcance contratado</strong> y ya fue entregado,
+      <strong>(3)</strong> lo que cubre el <strong>servicio mensual de hosting y mantención</strong>, y
+      <strong>(4)</strong> una evaluación del estado del sistema para iniciar la <strong>marcha blanca</strong>.
+    </p>
+
+    <!-- 1. FUERA DE ALCANCE -->
+    <h2><span class="n">1</span> Trabajo fuera de alcance — ya entregado</h2>
+    <div class="nota">
+      El contrato firmado contemplaba una <strong>aplicación móvil</strong> (iOS/Android) más la
+      alimentación del tótem. En conversación con Oliver Vásquez se acordó <strong>llevar a la aplicación
+      web la misma experiencia disponible en la app móvil</strong>. Lo siguiente excede el alcance firmado
+      y, según la cláusula del contrato («cualquier funcionalidad, modificación o integración no descrita en
+      el alcance se considerará trabajo adicional»), correspondería a una nueva cotización. Fue desarrollado
+      e incorporado <strong>sin costo adicional</strong> en esta etapa.
+    </div>
+    <table>
+      <thead><tr><th style="width:34%">Funcionalidad</th><th>Detalle</th><th style="width:14%">Estado</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="t">Aplicación Web de comensal (PWA)</span></td>
+          <td class="d">Réplica en la web de la experiencia de la app móvil: el comensal se inscribe, selecciona menú y gestiona sus pedidos desde el navegador. No estaba en el alcance (que solo contemplaba app móvil). Acordado en llamada con Oliver.</td>
+          <td><span class="pill ok">Entregado</span></td>
+        </tr>
+        <tr>
+          <td><span class="t">Tótem como aplicación propia</span></td>
+          <td class="d">El contrato condicionaba la integración del tótem a «la disponibilidad de una API o acceso técnico del proveedor del hardware». Ante su ausencia, se desarrolló el tótem completo (pantalla de retiro, validación por RUT/clave y emisión del vale).</td>
+          <td><span class="pill ok">Entregado</span></td>
+        </tr>
+        <tr>
+          <td><span class="t">Panel de Administración web</span></td>
+          <td class="d">Más allá de las «credenciales de acceso administrativo» del contrato: tablero con estadísticas, gestión de usuarios, casinos, minutas, familias y períodos, además de carga masiva desde Excel.</td>
+          <td><span class="pill ok">Entregado</span></td>
+        </tr>
+        <tr>
+          <td><span class="t">Módulo de Gestión Diaria</span></td>
+          <td class="d">Control operativo del día: ver quién está inscrito y quién no pasó por el tótem a la hora de corte, con acciones de «delivery» y «baja». Funcionalidad nueva no descrita en el contrato.</td>
+          <td><span class="pill ok">Entregado</span></td>
+        </tr>
+        <tr>
+          <td><span class="t">Validación de inscripción completa</span></td>
+          <td class="d">Obliga al comensal a inscribir todos los días del período antes de finalizar, evitando días sin marcar. Regla de negocio nueva (en validación previa a producción).</td>
+          <td><span class="pill ok">Entregado</span></td>
+        </tr>
+        <tr>
+          <td><span class="t">Reportes adicionales en Excel</span></td>
+          <td class="d">Reportes de detalle de inscripción, de consumo (hora de emisión del vale) y de minutas del mes, adicionales al reporte de consolidación contemplado.</td>
+          <td><span class="pill ok">Entregado</span></td>
+        </tr>
+        <tr>
+          <td><span class="t">Vales para visitas</span></td>
+          <td class="d">Emisión de vales para visitas por parte del interlocutor (nombre del visitante), fuera del flujo estándar de comensal.</td>
+          <td><span class="pill ok">Entregado</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 2. DENTRO DE ALCANCE -->
+    <h2><span class="n">2</span> Trabajo dentro del alcance contratado — entregado</h2>
+    <p class="lead">Corresponde a lo firmado en el contrato de desarrollo. Está construido, desplegado y operativo.</p>
+    <table>
+      <thead><tr><th style="width:38%">Capacidad contratada</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td><span class="t">Autenticación segura (RUT + clave)</span></td><td class="d">Registro y acceso de comensales. <span class="pill ok">Entregado</span></td></tr>
+        <tr><td><span class="t">Selección de menú (mín. 3 opciones)</span></td><td class="d">Elección diaria adaptada a la oferta del servicio. <span class="pill ok">Entregado</span></td></tr>
+        <tr><td><span class="t">Calendario y plazos de inscripción</span></td><td class="d">Selección anticipada (semana a mes) con gestión de períodos. <span class="pill ok">Entregado</span></td></tr>
+        <tr><td><span class="t">Adaptación por casino / sede</span></td><td class="d">Minutas diferenciadas por código de casino. <span class="pill ok">Entregado</span></td></tr>
+        <tr><td><span class="t">Historial de pedidos</span></td><td class="d">Visualización de la selección confirmada y próximos pedidos. <span class="pill ok">Entregado</span></td></tr>
+        <tr><td><span class="t">Centralización y reportes</span></td><td class="d">Consolidación de pedidos para planificación de compras y reportes. <span class="pill ok">Entregado</span></td></tr>
+        <tr><td><span class="t">Alimentación del tótem</span></td><td class="d">Carga de selecciones al tótem tras el cierre de inscripción y emisión del vale. <span class="pill ok">Entregado</span></td></tr>
+      </tbody>
+    </table>
+
+    <!-- 3. HOSTING Y MANTENCION -->
+    <h2><span class="n">3</span> Cubierto por el hosting y la mantención mensual</h2>
+    <p class="lead">
+      Según el documento de servicio mensual ($150.000 + IVA), la mantención incluye soporte, resolución de
+      incidencias, mejoras/ajustes continuos y <strong>configuración operativa</strong> (menús, casinos,
+      períodos y usuarios). Lo siguiente cae dentro de ese servicio recurrente:
+    </p>
+    <table>
+      <thead><tr><th style="width:38%">Atención</th><th>Detalle</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="t">Incidencia «cambio de clave»</span></td>
+          <td class="d">El sistema respondía correctamente: el RUT consultado no existía en producción. Es un dato faltante, no una falla de software → <strong>ajuste operativo / soporte</strong> (cargar el usuario).</td>
+        </tr>
+        <tr>
+          <td><span class="t">Incidencia «sin menú para hoy»</span></td>
+          <td class="d">El menú de esa fecha estaba inactivo y sin opción de almuerzo cargada. El sistema operaba correctamente → <strong>ajuste operativo / soporte</strong> (activar/cargar el menú).</td>
+        </tr>
+        <tr>
+          <td><span class="t">Diagnóstico de lentitud</span></td>
+          <td class="d">Revisión y medición de tiempos de guardado e impresión para identificar el origen (conexión a internet del recinto vs. hardware vs. software) → <strong>soporte y monitoreo</strong>.</td>
+        </tr>
+        <tr>
+          <td><span class="t">Mejoras al vale y al tótem</span></td>
+          <td class="d">Ajustes al vale impreso y actualización automática del tótem → «mejoras continuas» indicadas en el propio servicio de mantención.</td>
+        </tr>
+        <tr>
+          <td><span class="t">Configuración operativa</span></td>
+          <td class="d">Apoyo en la carga y configuración de menús, casinos, períodos y usuarios según la operación del casino.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 4. MARCHA BLANCA -->
+    <h2><span class="n">4</span> Estado del sistema para marcha blanca</h2>
+    <div class="veredicto">
+      <div class="cab">
+        <div class="ico">✓</div>
+        <div>
+          <h3>Apto para iniciar marcha blanca</h3>
+          <span>Evaluación técnica al 24 de junio de 2026 — con puntos de monitoreo</span>
+        </div>
+      </div>
+      <div class="cuerpo">
+        <p class="lead" style="margin-bottom:10px">Verificaciones realizadas sobre el sistema en producción:</p>
+        <ul class="chk">
+          <li>Sistema desplegado y disponible en línea (24/7), respondiendo correctamente.</li>
+          <li>Tótem comunicándose con el servidor de forma activa (descarga de inscripciones y señal de actividad operativas).</li>
+          <li>Base de datos administrada con respaldos; app móvil, app web, tótem y panel operativos.</li>
+          <li>Las dos incidencias reportadas se confirmaron como datos/configuración, no fallas del sistema.</li>
+        </ul>
+        <p class="lead" style="margin:14px 0 8px">Puntos a vigilar durante la marcha blanca:</p>
+        <ul class="chk watch">
+          <li>La velocidad del tótem depende de la <strong>conexión a internet del recinto</strong>; se recomienda evaluar a futuro un modo «sin conexión» (mejora cotizable aparte) si la red del casino resulta inestable.</li>
+          <li>La validación de «inscribir todos los días» quedó <strong>por validar</strong> con la operación antes de fijarla como definitiva.</li>
+          <li>Asegurar la carga correcta y a tiempo de menús y usuarios: los dos incidentes recientes se originaron por datos no cargados.</li>
+        </ul>
+        <p style="margin:14px 0 0"><strong>Recomendación:</strong> iniciar la marcha blanca en un casino, monitorear el comportamiento real (especialmente la red en el tótem y la carga de menús) y luego escalar al resto de las sedes.</p>
+      </div>
+    </div>
+
+    <!-- 5. CRITERIO -->
+    <h2><span class="n">5</span> Criterio sugerido a futuro</h2>
+    <div class="frontera">
+      <div class="caja m">
+        <h4>Cubierto por la mantención mensual</h4>
+        <ul>
+          <li>Fallas y errores del sistema</li>
+          <li>Carga y configuración de datos (menús, casinos, períodos, usuarios)</li>
+          <li>Soporte, monitoreo, respaldos y seguridad</li>
+          <li>Ajustes y mejoras menores</li>
+        </ul>
+      </div>
+      <div class="caja c">
+        <h4>Trabajo adicional (nueva cotización)</h4>
+        <ul>
+          <li>Funcionalidades nuevas no descritas en el contrato</li>
+          <li>Integraciones con sistemas de terceros</li>
+          <li>Cambios mayores de alcance o rediseños</li>
+          <li>Ej.: tótem con modo «sin conexión»</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="disc">
+      Este documento tiene fines de transparencia y gestión del proyecto; resume el trabajo realizado y el
+      criterio de cobertura del servicio. No constituye asesoría legal. Cualquier ajuste a los términos
+      comerciales debe acordarse por escrito entre las partes.
+    </p>
+  </main>
+
+  <footer>
+    <span>WebMakerChile © 2026 — Sistema BuenaMezcla</span>
+    <span>Documento generado el 24 de junio de 2026</span>
+  </footer>
+</div>
+</body>
+</html>
