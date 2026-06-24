@@ -145,10 +145,12 @@
   <main>
     <p class="lead">
       Este documento entrega, de forma transparente, el detalle de: <strong>(1)</strong> el trabajo
-      realizado <strong>fuera del alcance</strong> del contrato —ya resuelto, implementado y operativo—,
-      <strong>(2)</strong> lo que corresponde al <strong>alcance contratado</strong> y ya fue entregado,
-      <strong>(3)</strong> lo que cubre el <strong>servicio mensual de hosting y mantención</strong>, y
-      <strong>(4)</strong> una evaluación del estado del sistema para iniciar la <strong>marcha blanca</strong>.
+      realizado <strong>fuera del alcance</strong> del contrato —ya entregado y operativo— junto con su
+      <strong>valorización en horas</strong>, <strong>(2)</strong> lo que corresponde al
+      <strong>alcance contratado</strong> y ya fue entregado, <strong>(3)</strong> lo que cubre el
+      <strong>servicio mensual de hosting y mantención</strong> (con primer cobro el <strong>5 de julio de
+      2026</strong> y un programador asignado a la cuenta), y <strong>(4)</strong> el estado de la
+      <strong>marcha blanca, actualmente en curso</strong>.
     </p>
 
     <!-- 1. FUERA DE ALCANCE -->
@@ -172,6 +174,11 @@
         <tr>
           <td><span class="t">Tótem como aplicación propia</span></td>
           <td class="d">El contrato condicionaba la integración del tótem a «la disponibilidad de una API o acceso técnico del proveedor del hardware». Ante su ausencia, se desarrolló el tótem completo (pantalla de retiro, validación por RUT/clave y emisión del vale).</td>
+          <td><span class="pill ok">Entregado</span></td>
+        </tr>
+        <tr>
+          <td><span class="t">Modo sin conexión del tótem</span></td>
+          <td class="d">El tótem ya opera ante caídas o intermitencia de la red: la aplicación queda almacenada en el equipo, sigue abriendo sin internet y muestra un estado claro de «sin conexión» en lugar de pantallas en blanco. Funcionalidad nueva no descrita en el contrato.</td>
           <td><span class="pill ok">Entregado</span></td>
         </tr>
         <tr>
@@ -201,6 +208,25 @@
         </tr>
       </tbody>
     </table>
+
+    <!-- 1b. VALORIZACION HORAS -->
+    <h2 style="font-size:15px;color:var(--naranja)">Valorización del trabajo entregado fuera de alcance</h2>
+    <p class="lead">Comparando lo descrito en el contrato con lo efectivamente entregado con el tiempo, el trabajo adicional representa el siguiente esfuerzo de desarrollo (estimación de horas de diseño, programación, pruebas e iteración). Son horas entregadas sin costo en esta etapa; a la tarifa de desarrollo acordada, constituyen trabajo cotizable por separado.</p>
+    <table>
+      <thead><tr><th style="width:72%">Funcionalidad entregada fuera de alcance</th><th style="text-align:right">Horas estimadas</th></tr></thead>
+      <tbody>
+        <tr><td><span class="t">Aplicación Web de comensal (PWA)</span></td><td class="d" style="text-align:right">38 h</td></tr>
+        <tr><td><span class="t">Tótem como aplicación propia</span></td><td class="d" style="text-align:right">48 h</td></tr>
+        <tr><td><span class="t">Modo sin conexión del tótem (PWA / service worker)</span></td><td class="d" style="text-align:right">14 h</td></tr>
+        <tr><td><span class="t">Panel de Administración web</span></td><td class="d" style="text-align:right">56 h</td></tr>
+        <tr><td><span class="t">Módulo de Gestión Diaria</span></td><td class="d" style="text-align:right">16 h</td></tr>
+        <tr><td><span class="t">Validación de inscripción completa</span></td><td class="d" style="text-align:right">8 h</td></tr>
+        <tr><td><span class="t">Reportes adicionales en Excel</span></td><td class="d" style="text-align:right">14 h</td></tr>
+        <tr><td><span class="t">Vales para visitas</span></td><td class="d" style="text-align:right">10 h</td></tr>
+        <tr><td><span class="t">TOTAL ESTIMADO</span></td><td class="d" style="text-align:right"><strong>204 h</strong></td></tr>
+      </tbody>
+    </table>
+    <div class="nota">Estas <strong>204 horas</strong> se entregaron sin costo en esta etapa. A la tarifa hora de desarrollo acordada constituyen trabajo adicional cotizable por separado; su valorización en pesos se completa una vez definida dicha tarifa.</div>
 
     <!-- 2. DENTRO DE ALCANCE -->
     <h2><span class="n">2</span> Trabajo dentro del alcance contratado — entregado</h2>
@@ -251,14 +277,16 @@
       </tbody>
     </table>
 
+    <div class="nota">El servicio mensual de hosting y mantención ($150.000 + IVA) tiene su <strong>primer cobro el 5 de julio de 2026</strong>. Como parte de este servicio, WebMakerChile mantiene un <strong>programador asignado a la cuenta</strong>, que acompaña la operación en cada detalle: resuelve los problemas que correspondan al sistema y, cuando un requerimiento excede el alcance contratado, lo señala de forma explícita para cotizarlo por separado.</div>
+
     <!-- 4. MARCHA BLANCA -->
     <h2><span class="n">4</span> Estado del sistema para marcha blanca</h2>
     <div class="veredicto">
       <div class="cab">
         <div class="ico">✓</div>
         <div>
-          <h3>Apto para iniciar marcha blanca</h3>
-          <span>Evaluación técnica al 24 de junio de 2026 — con puntos de monitoreo</span>
+          <h3>Marcha blanca en curso</h3>
+          <span>Iniciada por el cliente — evaluación técnica al 24 de junio de 2026</span>
         </div>
       </div>
       <div class="cuerpo">
@@ -267,15 +295,15 @@
           <li>Sistema desplegado y disponible en línea (24/7), respondiendo correctamente.</li>
           <li>Tótem comunicándose con el servidor de forma activa (descarga de inscripciones y señal de actividad operativas).</li>
           <li>Base de datos administrada con respaldos; app móvil, app web, tótem y panel operativos.</li>
+          <li>El tótem ya maneja la intermitencia de la red (modo sin conexión implementado): sigue operativo y avisa con claridad cuando no hay conexión.</li>
           <li>Las dos incidencias reportadas se confirmaron como datos/configuración, no fallas del sistema.</li>
         </ul>
         <p class="lead" style="margin:14px 0 8px">Puntos a vigilar durante la marcha blanca:</p>
         <ul class="chk watch">
-          <li>La velocidad del tótem depende de la <strong>conexión a internet del recinto</strong>; se recomienda evaluar a futuro un modo «sin conexión» (mejora cotizable aparte) si la red del casino resulta inestable.</li>
           <li>La validación de «inscribir todos los días» quedó <strong>por validar</strong> con la operación antes de fijarla como definitiva.</li>
           <li>Asegurar la carga correcta de menús y usuarios: los dos incidentes recientes se originaron por datos no cargados o mal cargados (un menú inactivo y un RUT con un dígito equivocado).</li>
         </ul>
-        <p style="margin:14px 0 0"><strong>Recomendación:</strong> iniciar la marcha blanca en un casino, monitorear el comportamiento real (especialmente la red en el tótem y la carga de menús) y luego escalar al resto de las sedes.</p>
+        <p style="margin:14px 0 0"><strong>Recomendación:</strong> mantener la marcha blanca monitoreando el comportamiento real (especialmente la carga y configuración de menús y usuarios) antes de escalar al resto de las sedes.</p>
       </div>
     </div>
 
@@ -295,9 +323,9 @@
         <h4>Trabajo adicional (nueva cotización)</h4>
         <ul>
           <li>Funcionalidades nuevas no descritas en el contrato</li>
-          <li>Integraciones con sistemas de terceros</li>
+          <li>Integraciones con sistemas de terceros (marcación, RR.HH., etc.)</li>
           <li>Cambios mayores de alcance o rediseños</li>
-          <li>Ej.: tótem con modo «sin conexión»</li>
+          <li>Ej.: nuevos módulos o reportes no contemplados</li>
         </ul>
       </div>
     </div>
