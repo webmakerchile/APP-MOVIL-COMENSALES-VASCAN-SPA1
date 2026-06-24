@@ -30,3 +30,9 @@ id = "21iS-5bzaDIj5UJkkqN7T"
 uri = "file://documentos/WebMakerChile - Hosting y Mantencion - BuenaMezcla.pdf"
 type = "pdf"
 title = "Hosting y Mantención - BuenaMezcla (capacidad máx. 1.500)"
+
+[[outputs]]
+id = "Lj258B8lpi_EgyMS-Ocac"
+uri = "file://public/informe/Informe-Alcance-BuenaMezcla.pdf"
+type = "pdf"
+title = "Informe de Alcance y Estado del Sistema — BuenaMezcla"
