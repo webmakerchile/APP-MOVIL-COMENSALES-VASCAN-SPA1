@@ -342,8 +342,8 @@ export default function Kiosk() {
       const res = await apiRequest("POST", "/api/auth/login", { rut: normalizeRutForApi(rutRaw), password: submittedPwd });
       const data = await res.json();
       if (!res.ok) {
-        const srv = data?.message || `HTTP ${res.status}`;
-        setErrMsg(res.status === 401 ? "RUT o contraseña incorrectos" : `Error ${res.status}: ${srv}`);
+        const srv = data?.message || res.statusText || `HTTP ${res.status}`;
+        setErrMsg(`Error ${res.status}: ${srv}`);
         setPwdRaw("");
         setBusy(false);
         return;
@@ -352,8 +352,8 @@ export default function Kiosk() {
       u = data.user;
       setLastLoginPwd(submittedPwd);
     } catch (err: any) {
-      const detail = err?.message || String(err) || "";
-      setErrMsg(detail && detail !== "Sin sesión" ? `Error al iniciar sesión: ${detail}` : "RUT o contraseña incorrectos");
+      const detail = err?.message || String(err) || "Error de red";
+      setErrMsg(`Error al iniciar sesión: ${detail}`);
       setPwdRaw("");
       setBusy(false);
       return;
@@ -550,8 +550,8 @@ export default function Kiosk() {
         if (!res.ok) {
           // Mensaje detallado del servidor + código HTTP para que el cliente
           // pueda enviarnos screenshot si vuelve a fallar.
-          const serverMsg = data?.message || data?.error || `HTTP ${res.status}`;
-          setErrMsg(`No se pudo emitir tu vale: ${serverMsg}`);
+          const serverMsg = data?.message || data?.error || res.statusText;
+          setErrMsg(`Error ${res.status}: ${serverMsg}`);
           setStep("error");
           try { await apiRequest("POST", "/api/auth/logout"); } catch {}
           return;
@@ -559,8 +559,8 @@ export default function Kiosk() {
         pedido = data;
       } catch (err: any) {
         // Falló la llamada misma (red, parse). Mostramos el mensaje real.
-        const detail = err?.message || String(err) || "error desconocido";
-        setErrMsg(`No se pudo emitir tu vale: ${detail}`);
+        const detail = err?.message || String(err) || "Error de red";
+        setErrMsg(`Error al emitir vale: ${detail}`);
         setStep("error");
         return;
       }
