@@ -960,9 +960,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/minutas/:casinoId", async (req: Request, res: Response) => {
     try {
       const { casinoId } = req.params;
-      const isAdmin = !!(req.session as any).userId;
       const all = req.query.all === "true";
-      const minutasList = (isAdmin && all)
+      const minutasList = all
         ? await storage.getAllMinutasByCasino(casinoId)
         : await storage.getMinutasByCasino(casinoId);
       return res.json(minutasList);

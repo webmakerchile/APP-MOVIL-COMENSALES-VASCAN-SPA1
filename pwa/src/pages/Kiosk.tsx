@@ -439,7 +439,7 @@ export default function Kiosk() {
       const [minutasArrays, pedidosRes] = await Promise.all([
         Promise.all(
           casinoIdsAccesibles.map(cid =>
-            fetch(`/api/minutas/${cid}?_t=${Date.now()}`, { credentials: "include" })
+            fetch(`/api/minutas/${cid}?all=true&_t=${Date.now()}`, { credentials: "include" })
               .then(r => r.ok ? r.json() as Promise<Minuta[]> : [] as Minuta[])
               .catch(() => [] as Minuta[])
           )
