@@ -467,7 +467,8 @@ export default function Kiosk() {
       //  1) Tiene pedido válido del día → mostrar QR (o "ya impreso" si corresponde).
       //     SIEMPRE puede imprimir, aunque la minuta esté desactivada.
       //  2) Tiene pedido "no_asiste" → mensaje + sugerir vale visita al interlocutor.
-      //  3) No tiene pedido → auto-crear pedido con Opción 1 (requiere menú ACTIVO).
+      //  3) No tiene pedido → auto-crear pedido con Opción 1.
+      //     El menú puede estar activo O inactivo: si existe para hoy, se emite vale.
       // Buscar pedido existente contra TODAS las minutas de hoy (incl. inactivas).
       const todayIds = new Set(todayMinsAll.map(m => m.id));
       const todayPedidos = pedidosData.filter(p => todayIds.has(p.minutaId));
@@ -478,10 +479,9 @@ export default function Kiosk() {
       const existingNoAsiste = todayPedidos.find(p => p.opcionSeleccionada === 0);
       const existingToday = existingValid || existingNoAsiste;
 
-      // Solo bloqueamos con "sin menú" si NO hay pedido del día Y tampoco hay
-      // minuta activa para inscribir uno nuevo. Si ya existe un pedido, debe
-      // poder imprimir aunque la minuta se haya apagado (caso 1).
-      if (!existingToday && todayMinsActive.length === 0) {
+      // Bloquear SOLO si no existe ninguna minuta para hoy (ni activa ni inactiva).
+      // Si hay minuta, el tótem puede emitir vale aunque el menú esté "cerrado".
+      if (!existingToday && todayMinsAll.length === 0) {
         setErrMsg("No hay menú disponible para hoy en tu casino.");
         setStep("error");
         return;

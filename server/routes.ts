@@ -1753,10 +1753,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ ...existing, action: "already_printed" });
       }
       // De aquí en adelante se CREA o convierte un pedido (no_asiste → opción 1,
-      // o auto-asignación nueva). Eso SÍ es inscribir, así que exige menú activo.
-      if (!minuta.activo) {
-        return res.status(403).json({ message: "Minuta inactiva" });
-      }
+      // o auto-asignación nueva). El tótem es flujo de CONSUMO: si el trabajador
+      // está en la fila, debe recibir su comida aunque el menú esté "cerrado".
+      // No validamos minuta.activo (mismo criterio que no validar periodo activo).
       if (existing && existing.opcionSeleccionada === 0) {
         // Tenía "no_asiste" — cliente pidió que el tótem SIEMPRE pueda emitir
         // vale (opción 1) aunque el usuario haya declarado no asistir. Lo
