@@ -341,11 +341,19 @@ export default function Kiosk() {
     try {
       const res = await apiRequest("POST", "/api/auth/login", { rut: normalizeRutForApi(rutRaw), password: submittedPwd });
       const data = await res.json();
+      if (!res.ok) {
+        const srv = data?.message || `HTTP ${res.status}`;
+        setErrMsg(res.status === 401 ? "RUT o contraseña incorrectos" : `Error ${res.status}: ${srv}`);
+        setPwdRaw("");
+        setBusy(false);
+        return;
+      }
       if (!data.user) throw new Error("Sin sesión");
       u = data.user;
       setLastLoginPwd(submittedPwd);
-    } catch {
-      setErrMsg("RUT o contraseña incorrectos");
+    } catch (err: any) {
+      const detail = err?.message || String(err) || "";
+      setErrMsg(detail && detail !== "Sin sesión" ? `Error al iniciar sesión: ${detail}` : "RUT o contraseña incorrectos");
       setPwdRaw("");
       setBusy(false);
       return;
@@ -436,12 +444,23 @@ export default function Kiosk() {
         setStep("error");
         return;
       }
+      let dataFetchErr = "";
       const [minutasArrays, pedidosRes] = await Promise.all([
         Promise.all(
           casinoIdsAccesibles.map(cid =>
             fetch(`/api/minutas/${cid}?all=true&_t=${Date.now()}`, { credentials: "include" })
-              .then(r => r.ok ? r.json() as Promise<Minuta[]> : [] as Minuta[])
-              .catch(() => [] as Minuta[])
+              .then(async r => {
+                if (!r.ok) {
+                  const d = await r.json().catch(() => ({}));
+                  dataFetchErr = `Error al cargar menú (HTTP ${r.status}): ${(d as any)?.message || r.statusText}`;
+                  return [] as Minuta[];
+                }
+                return r.json() as Promise<Minuta[]>;
+              })
+              .catch((e: any) => {
+                dataFetchErr = `Error de red al cargar menú: ${e?.message || String(e)}`;
+                return [] as Minuta[];
+              })
           )
         ),
         fetch(`/api/pedidos/${u!.id}?_t=${Date.now()}`, { credentials: "include" }),
@@ -454,7 +473,13 @@ export default function Kiosk() {
           if (!seenIds.has(m.id)) { seenIds.add(m.id); minutasData.push(m); }
         }
       }
-      const pedidosData: Pedido[] = pedidosRes.ok ? await pedidosRes.json() : [];
+      let pedidosData: Pedido[] = [];
+      if (pedidosRes.ok) {
+        pedidosData = await pedidosRes.json();
+      } else {
+        const d = await pedidosRes.json().catch(() => ({}));
+        dataFetchErr = dataFetchErr || `Error al cargar pedidos (HTTP ${pedidosRes.status}): ${(d as any)?.message || pedidosRes.statusText}`;
+      }
 
       // Minutas de hoy: TODAS (para resolver/imprimir pedidos ya existentes,
       // aunque el menú se haya apagado después de inscribirse) y SOLO ACTIVAS
@@ -481,8 +506,9 @@ export default function Kiosk() {
 
       // Bloquear SOLO si no existe ninguna minuta para hoy (ni activa ni inactiva).
       // Si hay minuta, el tótem puede emitir vale aunque el menú esté "cerrado".
+      // Si hubo error en los fetches, mostrarlo exacto en lugar de "sin menú".
       if (!existingToday && todayMinsAll.length === 0) {
-        setErrMsg("No hay menú disponible para hoy en tu casino.");
+        setErrMsg(dataFetchErr || "No hay menú disponible para hoy en tu casino.");
         setStep("error");
         return;
       }
