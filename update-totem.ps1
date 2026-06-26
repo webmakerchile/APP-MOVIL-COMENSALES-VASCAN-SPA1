@@ -79,6 +79,15 @@ if (Test-Path "$extractDir\totem\register.js") {
     Write-Host "   totem\register.js actualizado" -ForegroundColor Green
 }
 
+# better-sqlite3 binario nativo para Windows (Node 20)
+$sqliteSrc = "$extractDir\node_modules\better-sqlite3\build\Release\better_sqlite3.node"
+if (Test-Path $sqliteSrc) {
+    $sqliteDest = "$installDir\node_modules\better-sqlite3\build\Release"
+    New-Item -ItemType Directory -Force -Path $sqliteDest | Out-Null
+    Copy-Item $sqliteSrc "$sqliteDest\better_sqlite3.node" -Force
+    Write-Host "   better-sqlite3 binario Windows actualizado" -ForegroundColor Green
+}
+
 # 4. Reiniciar servicio Node
 Write-Host "[4/5] Iniciando servicio..." -ForegroundColor Yellow
 schtasks /Run /TN "BuenaMezclaTotem" | Out-Null

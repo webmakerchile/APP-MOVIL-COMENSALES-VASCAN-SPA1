@@ -3802,6 +3802,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     console.log(`[update-package] compiled: [${compiled.join(", ")}]${errors.length ? " errors: " + errors.join("; ") : ""}`);
 
+    // Descargar binario nativo de better-sqlite3 para Windows x64 / Node 20 (ABI 115)
+    let sqliteNodePath: string | null = null;
+    try {
+      const bsqlPkg = JSON.parse(fs.readFileSync(path.join(cwd, "node_modules", "better-sqlite3", "package.json"), "utf8"));
+      const bsqlVersion = bsqlPkg.version as string;
+      const bsqlUrl = `https://github.com/WiseLibs/better-sqlite3/releases/download/v${bsqlVersion}/better-sqlite3-v${bsqlVersion}-node-v115-win32-x64.tar.gz`;
+      const bsqlTgz  = path.join(totemTmpDir, "bsql-win.tar.gz");
+      const bsqlExtract = path.join(totemTmpDir, "bsql-win");
+      fs.mkdirSync(bsqlExtract, { recursive: true });
+
+      const dlResult = spawnSync("curl", ["-fsSL", bsqlUrl, "-o", bsqlTgz], { encoding: "utf8", timeout: 60_000 });
+      if (dlResult.status === 0 && fs.existsSync(bsqlTgz)) {
+        const tarResult = spawnSync("tar", ["-xzf", bsqlTgz, "-C", bsqlExtract], { encoding: "utf8", timeout: 30_000 });
+        if (tarResult.status === 0) {
+          const nodeFile = path.join(bsqlExtract, "build", "Release", "better_sqlite3.node");
+          if (fs.existsSync(nodeFile)) {
+            sqliteNodePath = nodeFile;
+            console.log(`[update-package] better-sqlite3 v${bsqlVersion} win32-x64 descargado OK`);
+          }
+        } else {
+          console.error("[update-package] tar extract error:", tarResult.stderr);
+        }
+      } else {
+        console.error("[update-package] curl download error:", dlResult.stderr);
+      }
+    } catch (e) {
+      console.error("[update-package] error descargando better-sqlite3 win binary:", e);
+    }
+
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="totem-update-${Date.now()}.zip"`);
 
@@ -3818,6 +3847,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const jsPath = path.join(totemTmpDir, jsFile);
         if (fs.existsSync(jsPath)) archive.file(jsPath, { name: `totem/${jsFile}` });
       }
+    }
+
+    // Incluir binario nativo de better-sqlite3 para Windows (Node 20 / ABI 115)
+    if (sqliteNodePath) {
+      archive.file(sqliteNodePath, { name: "node_modules/better-sqlite3/build/Release/better_sqlite3.node" });
     }
 
     await archive.finalize();
