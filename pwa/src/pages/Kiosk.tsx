@@ -61,6 +61,21 @@ type Step =
   | "ya_impreso"
   | "no_asiste_msg";
 
+// ── Error helper ────────────────────────────────────────────────────────────
+// apiRequest (api.ts) lanza Error("STATUS: BODY") cuando el servidor responde
+// con código ≥ 400. BODY suele ser JSON `{"message":"..."}`. Esta función
+// extrae status + message y devuelve un string legible sin JSON en bruto.
+function parseApiErr(err: unknown, fallback = "Error desconocido"): string {
+  if (!(err instanceof Error)) return fallback;
+  const m = err.message.match(/^(\d{3}):\s*([\s\S]*)$/);
+  if (!m) return err.message || fallback;
+  const status = m[1];
+  const body = m[2].trim();
+  let msg = body;
+  try { const p = JSON.parse(body); msg = p.message || p.error || body; } catch {}
+  return `Error ${status}: ${msg}`;
+}
+
 // ── RUT helpers (same logic as PWA) ────────────────────────────────────────
 function formatRutDisplay(raw: string): string {
   const cleaned = raw.replace(/[^0-9kK]/g, "").toUpperCase();
@@ -341,19 +356,11 @@ export default function Kiosk() {
     try {
       const res = await apiRequest("POST", "/api/auth/login", { rut: normalizeRutForApi(rutRaw), password: submittedPwd });
       const data = await res.json();
-      if (!res.ok) {
-        const srv = data?.message || res.statusText || `HTTP ${res.status}`;
-        setErrMsg(`Error ${res.status}: ${srv}`);
-        setPwdRaw("");
-        setBusy(false);
-        return;
-      }
       if (!data.user) throw new Error("Sin sesión");
       u = data.user;
       setLastLoginPwd(submittedPwd);
     } catch (err: any) {
-      const detail = err?.message || String(err) || "Error de red";
-      setErrMsg(`Error al iniciar sesión: ${detail}`);
+      setErrMsg(parseApiErr(err, "RUT o contraseña incorrecta"));
       setPwdRaw("");
       setBusy(false);
       return;
@@ -458,7 +465,7 @@ export default function Kiosk() {
                 return r.json() as Promise<Minuta[]>;
               })
               .catch((e: any) => {
-                dataFetchErr = `Error de red al cargar menú: ${e?.message || String(e)}`;
+                dataFetchErr = parseApiErr(e, "Error de red al cargar menú");
                 return [] as Minuta[];
               })
           )
@@ -546,21 +553,9 @@ export default function Kiosk() {
           minutaId: minutaUsada.id,
           fecha: todayISO(),
         });
-        const data = await res.json();
-        if (!res.ok) {
-          // Mensaje detallado del servidor + código HTTP para que el cliente
-          // pueda enviarnos screenshot si vuelve a fallar.
-          const serverMsg = data?.message || data?.error || res.statusText;
-          setErrMsg(`Error ${res.status}: ${serverMsg}`);
-          setStep("error");
-          try { await apiRequest("POST", "/api/auth/logout"); } catch {}
-          return;
-        }
-        pedido = data;
+        pedido = await res.json();
       } catch (err: any) {
-        // Falló la llamada misma (red, parse). Mostramos el mensaje real.
-        const detail = err?.message || String(err) || "Error de red";
-        setErrMsg(`Error al emitir vale: ${detail}`);
+        setErrMsg(parseApiErr(err, "Error al emitir vale"));
         setStep("error");
         return;
       }
