@@ -3780,8 +3780,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!fs.existsSync(src)) continue;
         const outFile = path.join(totemTmpDir, file.replace(".ts", ".js"));
         const result = spawnSync(
-          "npx", ["esbuild", src, "--platform=node", "--packages=external", "--bundle", "--format=cjs", `--outfile=${outFile}`],
-          { cwd, encoding: "utf8", timeout: 60_000 }
+          "npx", [
+            "esbuild", src,
+            "--platform=node",
+            "--bundle",
+            "--format=cjs",
+            "--external:better-sqlite3",
+            "--external:fsevents",
+            `--outfile=${outFile}`
+          ],
+          { cwd, encoding: "utf8", timeout: 120_000 }
         );
         if (result.status === 0) {
           compiled.push(file.replace(".ts", ".js"));
