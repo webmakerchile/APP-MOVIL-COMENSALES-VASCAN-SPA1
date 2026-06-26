@@ -1,0 +1,100 @@
+PS C:\Users\buena> $ErrorActionPreference = "Stop"
+PS C:\Users\buena> # ─── ÚNICA LÍNEA QUE DEBES EDITAR ────────────────────────────────────────────
+>> $serverUrl  = "https://vascan.replit.app"
+>> $updateKey  = "toIGLjr2isxiM1aXCxWbkyHjrr1vJKRdn6p9EOoHltXOnhbJeDZFtFVyY6/Rv9IgLJJn0Y730SNzhGDnDrgcbA=="
+>> $installDir = "C:\BuenaMezcla"
+>> # ─────────────────────────────────────────────────────────────────────────────
+>>
+>> $ErrorActionPreference = "Stop"
+>> $zipFile    = "$env:TEMP\totem-update.zip"
+>> $extractDir = "$env:TEMP\totem-update-ext"
+>>
+>> Write-Host ""
+>> Write-Host "=================================================" -ForegroundColor Cyan
+>> Write-Host "  ACTUALIZACION TOTEM BUENAMEZCLA" -ForegroundColor Cyan
+>> Write-Host "=================================================" -ForegroundColor Cyan
+>> Write-Host ""
+>>
+>> Write-Host "[1/5] Deteniendo servicio y Chrome..." -ForegroundColor Yellow
+>> schtasks /End /TN "BuenaMezclaTotemKiosk" 2>$null | Out-Null
+>> schtasks /End /TN "BuenaMezclaTotem"      2>$null | Out-Null
+>> Stop-Process -Name "chrome" -ErrorAction SilentlyContinue
+>> Stop-Process -Name "msedge" -ErrorAction SilentlyContinue
+>> Start-Sleep -Seconds 5
+>> Write-Host "   OK" -ForegroundColor Green
+>>
+>> Write-Host "[2/5] Descargando actualizacion desde $serverUrl ..." -ForegroundColor Yellow
+>> try {
+>>     Invoke-WebRequest `
+>>         -Uri "$serverUrl/api/totem/update-package?key=$updateKey" `
+>>         -OutFile $zipFile `
+>>         -UseBasicParsing
+>>     $sizeMB = [Math]::Round((Get-Item $zipFile).Length / 1MB, 2)
+>>     Write-Host "   Descargado: $sizeMB MB" -ForegroundColor Green
+>> } catch {
+>>     Write-Host "ERROR al descargar: $_" -ForegroundColor Red
+>>     Write-Host "Verifica que la URL y la clave sean correctas." -ForegroundColor Red
+>>     exit 1
+>> }
+>>
+>> Write-Host "[3/5] Instalando archivos nuevos..." -ForegroundColor Yellow
+>> Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+>> Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
+>>
+>> if (Test-Path "$extractDir\pwa\dist") {
+>>     Remove-Item "$installDir\pwa\dist" -Recurse -Force -ErrorAction SilentlyContinue
+>>     New-Item -ItemType Directory -Force -Path "$installDir\pwa" | Out-Null
+>>     Copy-Item "$extractDir\pwa\dist" "$installDir\pwa\dist" -Recurse -Force
+>>     Write-Host "   pwa\dist actualizado" -ForegroundColor Green
+>> }
+>> if (Test-Path "$extractDir\totem\runtime.js") {
+>>     New-Item -ItemType Directory -Force -Path "$installDir\totem" | Out-Null
+>>     Copy-Item "$extractDir\totem\runtime.js"     "$installDir\totem\runtime.js"     -Force
+>>     Write-Host "   totem\runtime.js actualizado" -ForegroundColor Green
+>> }
+>> if (Test-Path "$extractDir\totem\sync-worker.js") {
+>>     Copy-Item "$extractDir\totem\sync-worker.js" "$installDir\totem\sync-worker.js" -Force
+>>     Write-Host "   totem\sync-worker.js actualizado" -ForegroundColor Green
+>> }
+>> if (Test-Path "$extractDir\totem\register.js") {
+>>     Copy-Item "$extractDir\totem\register.js"    "$installDir\totem\register.js"    -Force
+>>     Write-Host "   totem\register.js actualizado" -ForegroundColor Green
+>> }
+>>
+>> Write-Host "[4/5] Iniciando servicio..." -ForegroundColor Yellow
+>> schtasks /Run /TN "BuenaMezclaTotem" | Out-Null
+>> Write-Host "   Esperando que el servidor responda..." -ForegroundColor Yellow
+>>
+>> $tries = 0; $ok = $false
+>> while ($tries -lt 20 -and -not $ok) {
+>>     Start-Sleep -Seconds 2; $tries++
+>>     try {
+>>         Invoke-WebRequest -Uri "http://127.0.0.1:5000/api/auth/me" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop | Out-Null
+>>         $ok = $true
+>>     } catch {
+>>         if ($_.Exception.Response -and $_.Exception.Response.StatusCode.value__ -eq 401) { $ok = $true }
+>>     }
+>> }
+>> if ($ok) { Write-Host "   Servidor OK (listo en $($tries * 2)s)" -ForegroundColor Green }
+>> else { Write-Host "   Servidor tardando, abriendo totem igual..." -ForegroundColor Yellow }
+>>
+>> Write-Host "[5/5] Abriendo totem..." -ForegroundColor Yellow
+>> $kioskCmd = "$installDir\scripts\start-kiosk.cmd"
+>> if (Test-Path $kioskCmd) {
+>>     Start-Process -FilePath $kioskCmd
+>> } else {
+>>     $chromeExe = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+>>     if (-not (Test-Path $chromeExe)) { $chromeExe = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe" }
+>>     if (Test-Path $chromeExe) {
+>>         & $chromeExe --kiosk --kiosk-printing --no-first-run --noerrdialogs --disable-translate --disable-pinch --user-data-dir="$env:LOCALAPPDATA\BuenaMezclaTotem\ChromeProfile" "http://127.0.0.1:5000/kiosk"
+>>     }
+>> }
+>>
+>> Remove-Item $zipFile    -Force -ErrorAction SilentlyContinue
+>> Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+>>
+>> Write-Host ""
+>> Write-Host "=================================================" -ForegroundColor Green
+>> Write-Host "  TOTEM ACTUALIZADO CORRECTAMENTE" -ForegroundColor Green
+>> Write-Host "=================================================" -ForegroundColor Green
+>> Write-Host ""
