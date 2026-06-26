@@ -9,6 +9,7 @@ import ExcelJS from "exceljs";
 import * as path from "path";
 import * as fs from "fs";
 import archiver from "archiver";
+import { spawnSync } from "child_process";
 import { storage } from "./storage";
 import { pool, db } from "./db";
 import { loginSchema, insertUserSchema, insertMinutaSchema, insertPedidoSchema, insertCasinoSchema, pedidos as pedidosTable, totems as totemsTable, totemReleases as totemReleasesTable } from "@shared/schema";
@@ -3758,12 +3759,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "Clave inválida" });
     }
 
-    const pwaDistDir    = path.join(process.cwd(), "pwa", "dist");
-    const serverDistDir = path.join(process.cwd(), "server_dist");
+    const cwd        = process.cwd();
+    const pwaDistDir = path.join(cwd, "pwa", "dist");
+    const totemSrcDir = path.join(cwd, "totem");
+    const totemTmpDir = path.join("/tmp", `totem-compiled-${Date.now()}`);
 
-    if (!fs.existsSync(pwaDistDir) || !fs.existsSync(serverDistDir)) {
-      return res.status(500).json({ message: "Archivos compilados no encontrados. Ejecuta el build primero." });
+    if (!fs.existsSync(pwaDistDir)) {
+      return res.status(500).json({ message: "pwa/dist no encontrado. Ejecuta el build primero." });
     }
+
+    // Compilar los archivos TS del tótem con esbuild (bundle autocontenido)
+    const totemFiles = ["runtime.ts", "register.ts", "sync-worker.ts"];
+    const compiled: string[] = [];
+    const errors: string[] = [];
+
+    if (fs.existsSync(totemSrcDir)) {
+      fs.mkdirSync(totemTmpDir, { recursive: true });
+      for (const file of totemFiles) {
+        const src = path.join(totemSrcDir, file);
+        if (!fs.existsSync(src)) continue;
+        const outFile = path.join(totemTmpDir, file.replace(".ts", ".js"));
+        const result = spawnSync(
+          "npx", ["esbuild", src, "--platform=node", "--packages=external", "--bundle", "--format=cjs", `--outfile=${outFile}`],
+          { cwd, encoding: "utf8", timeout: 60_000 }
+        );
+        if (result.status === 0) {
+          compiled.push(file.replace(".ts", ".js"));
+        } else {
+          errors.push(`${file}: ${result.stderr?.slice(0, 200) ?? "error"}`);
+          console.error(`[update-package] esbuild error for ${file}:`, result.stderr);
+        }
+      }
+    }
+
+    console.log(`[update-package] compiled: [${compiled.join(", ")}]${errors.length ? " errors: " + errors.join("; ") : ""}`);
 
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="totem-update-${Date.now()}.zip"`);
@@ -3771,9 +3800,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const archive = archiver("zip", { zlib: { level: 6 } });
     archive.on("error", (err) => { console.error("[update-package] archiver error:", err); res.end(); });
     archive.pipe(res);
-    archive.directory(pwaDistDir,    "pwa/dist");
-    archive.directory(serverDistDir, "server_dist");
+
+    // Siempre incluir el frontend
+    archive.directory(pwaDistDir, "pwa/dist");
+
+    // Incluir archivos del tótem compilados (si se pudieron compilar)
+    if (compiled.length > 0) {
+      for (const jsFile of compiled) {
+        const jsPath = path.join(totemTmpDir, jsFile);
+        if (fs.existsSync(jsPath)) archive.file(jsPath, { name: `totem/${jsFile}` });
+      }
+    }
+
     await archive.finalize();
+
+    // Limpiar temp
+    try { fs.rmSync(totemTmpDir, { recursive: true, force: true }); } catch {}
   });
 
   const httpServer = createServer(app);
