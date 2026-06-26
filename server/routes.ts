@@ -311,6 +311,83 @@ async function backfillRutPasswords() {
   }
 }
 
+// Datos mínimos de prueba para el entorno de desarrollo local.
+// Solo se ejecuta fuera de producción y fuera de modo tótem.
+// Idempotente: verifica existencia antes de crear cada entidad.
+async function seedDevTestData() {
+  if (process.env.NODE_ENV === "production") return;
+  try {
+    // 1. Asegurar CASINO UNION QUIMICA
+    const allCasinos = await storage.getAllCasinos();
+    let uqCasino = allCasinos.find((c: any) => c.nombre === "CASINO UNION QUIMICA");
+    if (!uqCasino) {
+      uqCasino = await storage.createCasino({ nombre: "CASINO UNION QUIMICA", direccion: "Unión Química, Chile" });
+      console.log("[dev-seed] Casino UNION QUIMICA creado.");
+    }
+
+    // 2. Asegurar usuario de prueba 21870734-K / clave 2187
+    const testRut = "21870734-K";
+    const existing = await storage.getUserByRut(testRut);
+    if (!existing) {
+      const hashed = await bcrypt.hash("2187", 10);
+      await storage.createUser({
+        rut: testRut,
+        password: hashed,
+        nombre: "Usuario",
+        apellido: "Prueba Tótem",
+        role: "comensal",
+        casinoId: uqCasino.id,
+        passwordChangeRequired: false,
+      } as any);
+      console.log("[dev-seed] Usuario 21870734-K creado.");
+    }
+
+    // 3. Asegurar minutas para los próximos 7 días (Chile timezone)
+    const todayStr = todayChile();
+    const dates: string[] = [];
+    const base = new Date(todayStr + "T12:00:00-04:00");
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+      const get = (t: string) => parts.find((p: any) => p.type === t)?.value ?? "";
+      dates.push(`${get("year")}-${get("month")}-${get("day")}`);
+    }
+    const existingMinutas = await storage.getAllMinutasByCasino(uqCasino.id);
+    const existingDates = new Set((existingMinutas as any[]).map((m: any) => m.fecha));
+    let minutasCreated = 0;
+    for (const fecha of dates) {
+      if (!existingDates.has(fecha)) {
+        await storage.createMinuta({ casinoId: uqCasino.id, fecha, familia: "COLACION GENERAL", opcion1: "Cazuela de vacuno con verduras", opcion2: "Lomo saltado con arroz", opcion3: "Tortilla española con ensalada" });
+        minutasCreated++;
+      }
+    }
+    if (minutasCreated > 0) console.log(`[dev-seed] ${minutasCreated} minutas creadas para CASINO UNION QUIMICA.`);
+
+    // 4. Asegurar período activo
+    const periodosList = await storage.getPeriodosByCasino(uqCasino.id);
+    const activePeriodo = (periodosList as any[]).find((p: any) => p.activo);
+    if (!activePeriodo) {
+      const inicio = new Date();
+      inicio.setHours(0, 0, 0, 0);
+      const fin = new Date(inicio);
+      fin.setDate(inicio.getDate() + 14);
+      fin.setHours(23, 59, 59, 0);
+      await storage.createPeriodo({
+        casinoId: uqCasino.id,
+        nombre: "Período prueba dev",
+        fechaInicio: inicio,
+        fechaFin: fin,
+        fechaServicioInicio: dates[0],
+        fechaServicioFin: dates[dates.length - 1],
+      });
+      console.log("[dev-seed] Período activo creado para CASINO UNION QUIMICA.");
+    }
+  } catch (err) {
+    console.error("[dev-seed] Error:", err);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // In totem mode there is no Postgres pool, fall back to in-memory session
   // store. The totem only has one logged-in operator at a time so memory is fine.
@@ -337,6 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   if (process.env.DB_MODE !== "totem") {
     await autoSeed();
     await ensureSuperAdmin();
+    await seedDevTestData();
     // backfillRutPasswords() queda DESACTIVADO a partir de Marcha Blanca: el
     // cliente reactivó el cambio de clave forzado en el primer ingreso, por lo
     // que ya NO debemos limpiar `passwordChangeRequired` ni resetear claves al
