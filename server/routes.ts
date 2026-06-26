@@ -3849,9 +3849,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
-    // Incluir binario nativo de better-sqlite3 para Windows (Node 20 / ABI 115)
+    // Incluir paquete completo de better-sqlite3 (JS files) + deps, con binario Windows
+    const nmDir = path.join(cwd, "node_modules");
+    const bsqlDir = path.join(nmDir, "better-sqlite3");
+    if (fs.existsSync(bsqlDir)) {
+      // JS files y package.json, excluyendo el binario Linux
+      (archive as any).glob("**/*", {
+        cwd: bsqlDir,
+        ignore: ["build/Release/better_sqlite3.node", "build/Release/*.node", "build/Release/*.pdb"],
+        dot: true,
+      }, { prefix: "node_modules/better-sqlite3" });
+    }
+    // Reemplazar con el binario correcto para Windows (Node 20)
     if (sqliteNodePath) {
       archive.file(sqliteNodePath, { name: "node_modules/better-sqlite3/build/Release/better_sqlite3.node" });
+    }
+    // Dependencias de better-sqlite3 que pueden faltar
+    for (const dep of ["bindings", "prebuild-install"]) {
+      const depDir = path.join(nmDir, dep);
+      if (fs.existsSync(depDir)) {
+        archive.directory(depDir, `node_modules/${dep}`);
+      }
     }
 
     await archive.finalize();

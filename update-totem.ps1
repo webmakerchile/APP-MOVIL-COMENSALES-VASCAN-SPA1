@@ -79,13 +79,20 @@ if (Test-Path "$extractDir\totem\register.js") {
     Write-Host "   totem\register.js actualizado" -ForegroundColor Green
 }
 
-# better-sqlite3 binario nativo para Windows (Node 20)
-$sqliteSrc = "$extractDir\node_modules\better-sqlite3\build\Release\better_sqlite3.node"
-if (Test-Path $sqliteSrc) {
-    $sqliteDest = "$installDir\node_modules\better-sqlite3\build\Release"
-    New-Item -ItemType Directory -Force -Path $sqliteDest | Out-Null
-    Copy-Item $sqliteSrc "$sqliteDest\better_sqlite3.node" -Force
-    Write-Host "   better-sqlite3 binario Windows actualizado" -ForegroundColor Green
+# better-sqlite3 paquete completo + binario Windows (Node 20)
+if (Test-Path "$extractDir\node_modules\better-sqlite3") {
+    Remove-Item "$installDir\node_modules\better-sqlite3" -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path "$installDir\node_modules" | Out-Null
+    Copy-Item "$extractDir\node_modules\better-sqlite3" "$installDir\node_modules\better-sqlite3" -Recurse -Force
+    Write-Host "   better-sqlite3 paquete + binario Windows actualizado" -ForegroundColor Green
+}
+if (Test-Path "$extractDir\node_modules\bindings") {
+    Copy-Item "$extractDir\node_modules\bindings" "$installDir\node_modules\bindings" -Recurse -Force
+    Write-Host "   bindings actualizado" -ForegroundColor Green
+}
+if (Test-Path "$extractDir\node_modules\prebuild-install") {
+    Copy-Item "$extractDir\node_modules\prebuild-install" "$installDir\node_modules\prebuild-install" -Recurse -Force
+    Write-Host "   prebuild-install actualizado" -ForegroundColor Green
 }
 
 # 4. Reiniciar servicio Node
