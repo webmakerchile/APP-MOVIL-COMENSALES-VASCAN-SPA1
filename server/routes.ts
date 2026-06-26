@@ -8,6 +8,7 @@ import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import * as path from "path";
 import * as fs from "fs";
+import archiver from "archiver";
 import { storage } from "./storage";
 import { pool, db } from "./db";
 import { loginSchema, insertUserSchema, insertMinutaSchema, insertPedidoSchema, insertCasinoSchema, pedidos as pedidosTable, totems as totemsTable, totemReleases as totemReleasesTable } from "@shared/schema";
@@ -3741,6 +3742,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       res.status(500).json({ message: "Error al actualizar versión" });
     }
+  });
+
+  // ── Endpoint de actualización del tótem ─────────────────────────────────────
+  // GET /api/totem/update-package?key=SECRET
+  // Descarga un ZIP con pwa/dist + server_dist listos para reemplazar en el
+  // PC Windows del tótem. No requiere sesión; usa clave TOTEM_UPDATE_KEY
+  // (o SESSION_SECRET si no está definida). Solo disponible fuera de modo tótem.
+  app.get("/api/totem/update-package", async (req: Request, res: Response) => {
+    if (process.env.DB_MODE === "totem") return res.status(404).end();
+
+    const expectedKey = process.env.TOTEM_UPDATE_KEY || process.env.SESSION_SECRET || "";
+    const providedKey = (req.query.key as string) || "";
+    if (!expectedKey || providedKey !== expectedKey) {
+      return res.status(401).json({ message: "Clave inválida" });
+    }
+
+    const pwaDistDir    = path.join(process.cwd(), "pwa", "dist");
+    const serverDistDir = path.join(process.cwd(), "server_dist");
+
+    if (!fs.existsSync(pwaDistDir) || !fs.existsSync(serverDistDir)) {
+      return res.status(500).json({ message: "Archivos compilados no encontrados. Ejecuta el build primero." });
+    }
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="totem-update-${Date.now()}.zip"`);
+
+    const archive = archiver("zip", { zlib: { level: 6 } });
+    archive.on("error", (err) => { console.error("[update-package] archiver error:", err); res.end(); });
+    archive.pipe(res);
+    archive.directory(pwaDistDir,    "pwa/dist");
+    archive.directory(serverDistDir, "server_dist");
+    await archive.finalize();
   });
 
   const httpServer = createServer(app);
