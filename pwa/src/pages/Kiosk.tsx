@@ -1034,12 +1034,63 @@ export default function Kiosk() {
         )}
 
         {step === "resumen" && user && (
-          <div className="w-full max-w-3xl flex flex-col gap-6">
+          <div className="w-full max-w-3xl flex flex-col gap-5">
             <div className="text-center">
               <p className="text-vascan-goldLight text-lg">Hola, <span className="text-white font-semibold">{user.nombre} {user.apellido}</span></p>
               <h2 className="text-3xl font-bold mt-1">Resumen del día</h2>
               {casino && <p className="text-white/50 mt-1">{casino.nombre}</p>}
             </div>
+
+            {/* Sección gestión del día — solo para staff con datos de gestión */}
+            {resumen?.gestion && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+                <p className="text-xs font-semibold text-white/40 uppercase tracking-widest">Gestión del día</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center bg-white/5 rounded-xl py-3 px-2">
+                    <p className="text-xs text-white/40 mb-1">Inscritos</p>
+                    <p className="text-3xl font-bold text-vascan-gold">{resumen.gestion.inscritos}</p>
+                  </div>
+                  <div className="text-center bg-white/5 rounded-xl py-3 px-2">
+                    <p className="text-xs text-white/40 mb-1">No asiste manual</p>
+                    <p className="text-3xl font-bold text-orange-300">{resumen.gestion.noAsiste}</p>
+                  </div>
+                  <div className="text-center bg-white/5 rounded-xl py-3 px-2">
+                    <p className="text-xs text-white/40 mb-1">Pendientes</p>
+                    <p className="text-3xl font-bold text-yellow-300">{resumen.gestion.pendientes}</p>
+                  </div>
+                  <div className="text-center bg-white/5 rounded-xl py-3 px-2">
+                    <p className="text-xs text-white/40 mb-1">Pasaron tótem</p>
+                    <p className="text-3xl font-bold text-green-300">{resumen.gestion.pasoTotem}</p>
+                  </div>
+                </div>
+                {resumen.gestion.delivery.length > 0 && (
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+                    <p className="text-xs font-bold text-blue-300 uppercase tracking-wide mb-2">
+                      Delivery ({resumen.gestion.delivery.length})
+                    </p>
+                    <div className="space-y-0.5">
+                      {resumen.gestion.delivery.map((n: string, i: number) => (
+                        <p key={i} className="text-sm text-white/80">· {n}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {resumen.gestion.bajas.length > 0 && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                    <p className="text-xs font-bold text-red-300 uppercase tracking-wide mb-2">
+                      Bajas ({resumen.gestion.bajas.length})
+                    </p>
+                    <div className="space-y-0.5">
+                      {resumen.gestion.bajas.map((n: string, i: number) => (
+                        <p key={i} className="text-sm text-white/80">· {n}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Sección menú del día */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               {resumen?.minuta ? (
                 <>
@@ -1076,6 +1127,7 @@ export default function Kiosk() {
                 <p className="text-white/60 text-center py-6">No hay menú para hoy.</p>
               )}
             </div>
+
             <div className="flex justify-center gap-3 flex-wrap">
               <button onClick={() => selectedCasinoId && loadResumen(selectedCasinoId)} className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
                 Actualizar
@@ -1090,7 +1142,6 @@ export default function Kiosk() {
                 Terminar
               </button>
             </div>
-
           </div>
         )}
 
@@ -1558,6 +1609,53 @@ export default function Kiosk() {
                       </div>
                     );
                   })}
+
+                  {/* Sección gestión del día — solo cuando resumen.gestion existe (staff) */}
+                  {resumen?.gestion && (() => {
+                    const g = resumen.gestion;
+                    return (
+                      <>
+                        <hr className="pr-hr" />
+                        <div className="pr-section">Gestión del día</div>
+                        <div className="pr-gest-grid">
+                          <div className="pr-gest-cell">
+                            <span className="pr-gest-lbl">Inscritos</span>
+                            <span className="pr-gest-val">{g.inscritos}</span>
+                          </div>
+                          <div className="pr-gest-cell">
+                            <span className="pr-gest-lbl">No asiste</span>
+                            <span className="pr-gest-val">{g.noAsiste}</span>
+                          </div>
+                          <div className="pr-gest-cell">
+                            <span className="pr-gest-lbl">Pendientes</span>
+                            <span className="pr-gest-val">{g.pendientes}</span>
+                          </div>
+                          <div className="pr-gest-cell">
+                            <span className="pr-gest-lbl">Tótem</span>
+                            <span className="pr-gest-val">{g.pasoTotem}</span>
+                          </div>
+                        </div>
+                        {g.delivery.length > 0 && (
+                          <>
+                            <hr className="pr-hr" />
+                            <div className="pr-section">Delivery ({g.delivery.length})</div>
+                            {(g.delivery as string[]).map((n, i) => (
+                              <div key={i} className="pr-name-row">· {n}</div>
+                            ))}
+                          </>
+                        )}
+                        {g.bajas.length > 0 && (
+                          <>
+                            <hr className="pr-hr" />
+                            <div className="pr-section">Bajas ({g.bajas.length})</div>
+                            {(g.bajas as string[]).map((n, i) => (
+                              <div key={i} className="pr-name-row">· {n}</div>
+                            ))}
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </>
               ) : (
                 <div className="pr-center">Sin menú para hoy.</div>

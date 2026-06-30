@@ -2007,10 +2007,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (fa !== fb) return fa.localeCompare(fb);
         return a.numero - b.numero;
       });
+
+      // Datos de gestión del día para encargado_casino / interlocutor / admin.
+      // Incluye inscritos, no-asiste manuales, pendientes, pasaron tótem, delivery y bajas con nombres.
+      const isStaff = ["admin", "encargado_casino", "interlocutor"].includes(sessionUser.role);
+      let gestion: any = null;
+      if (isStaff) {
+        const selPedidos = allPedidos.filter(
+          (p) => p.tipo === "seleccion" && (p.opcionSeleccionada ?? 0) > 0,
+        );
+        const noAsistePedidos = allPedidos.filter((p) => p.tipo === "no_asiste");
+        const userCache2 = new Map<string, any>();
+        const getU = async (uid: string) => {
+          if (!userCache2.has(uid)) userCache2.set(uid, await storage.getUser(uid));
+          return userCache2.get(uid);
+        };
+        const gItems = (
+          await Promise.all(
+            selPedidos.map(async (p) => {
+              const u = await getU(p.userId);
+              if (!u) return null;
+              return {
+                nombre: `${u.nombre} ${u.apellido}`.trim(),
+                pasoTotem: !!(p as any).impresoEn,
+                gestionEstado: (p as any).gestionEstado ?? null,
+              };
+            }),
+          )
+        ).filter(Boolean) as { nombre: string; pasoTotem: boolean; gestionEstado: string | null }[];
+        gestion = {
+          inscritos: gItems.length,
+          noAsiste: noAsistePedidos.length,
+          pendientes: gItems.filter((i) => !i.pasoTotem && !i.gestionEstado).length,
+          pasoTotem: gItems.filter((i) => i.pasoTotem).length,
+          delivery: gItems.filter((i) => i.gestionEstado === "delivery").map((i) => i.nombre),
+          bajas: gItems.filter((i) => i.gestionEstado === "baja").map((i) => i.nombre),
+        };
+      }
+
       return res.json({
         fecha, casinoId, periodo: periodoOut,
         minuta: { id: dayMinutas[0].id, familia: dayMinutas.map(m => m.familia).filter(Boolean).join(" + ") || null },
         opciones, totalSeleccion: sel.length, totalNoAsiste: noAsiste, totalVisitas: visitas,
+        ...(gestion ? { gestion } : {}),
       });
     } catch (error) {
       console.error("Resumen dia error:", error);

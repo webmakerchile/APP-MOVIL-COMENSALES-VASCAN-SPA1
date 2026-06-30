@@ -179,6 +179,13 @@ body,
   .print-resumen .pr-opt-desc { flex: 1; min-width: 0; font-size: 9px; padding-right: 1mm; word-break: break-word; overflow-wrap: anywhere; }
   .print-resumen .pr-opt-qty  { width: 10mm; text-align: right; font-weight: 700; flex-shrink: 0; }
   .print-resumen .pr-opt-total { display: flex; font-size: 11px; font-weight: 800; border-top: 1px solid #000; margin-top: 0.5mm; padding-top: 0.5mm; }
+  /* Gestión del día — cuadrícula 2×2 de conteos */
+  .print-resumen .pr-gest-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5mm 2mm; margin: 1mm 0; }
+  .print-resumen .pr-gest-cell  { display: flex; flex-direction: column; font-size: 10px; }
+  .print-resumen .pr-gest-lbl   { font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; color: #555; }
+  .print-resumen .pr-gest-val   { font-size: 13px; font-weight: 800; line-height: 1.2; }
+  /* Lista de nombres (delivery / bajas) */
+  .print-resumen .pr-name-row   { font-size: 10px; margin: 0.3mm 0; word-break: break-word; overflow-wrap: anywhere; }
   .print-vale .pv-title   { font-size: 13px; font-weight: 800; letter-spacing: 3px; text-align: center; }
   .print-vale .pv-sub     { font-size: 11px; text-align: center; margin: 0.5mm 0; }
   .print-vale .pv-hr      { border: 0; border-top: 1px dashed #000; margin: 2.5mm 0; }
