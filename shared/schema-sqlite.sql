@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
   codigo_qr TEXT,
   origen_totem_id TEXT,
   impreso_en INTEGER,
+  gestion_estado TEXT,
   created_at INTEGER,
   updated_at INTEGER NOT NULL,
   deleted_at INTEGER,

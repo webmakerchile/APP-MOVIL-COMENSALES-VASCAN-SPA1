@@ -94,6 +94,7 @@ export const pedidos = sqliteTable("pedidos", {
   codigoQr: text("codigo_qr"),
   origenTotemId: text("origen_totem_id"),
   impresoEn: integer("impreso_en", { mode: "timestamp_ms" }),
+  gestionEstado: text("gestion_estado"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }),
   ...syncCols,
 });

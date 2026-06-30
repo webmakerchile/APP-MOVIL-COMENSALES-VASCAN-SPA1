@@ -54,6 +54,7 @@ if (DB_MODE === "cloud") {
     } catch {/* swallow — table may not exist on first boot */}
   }
   ensureColumn("pedidos", "impreso_en", "impreso_en INTEGER");
+  ensureColumn("pedidos", "gestion_estado", "gestion_estado TEXT");
 
   _db = drizzle(_sqlite, { schema });
   _schema = schema;
