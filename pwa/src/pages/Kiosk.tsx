@@ -1045,22 +1045,26 @@ export default function Kiosk() {
             {resumen?.gestion && (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
                 <p className="text-xs font-semibold text-white/40 uppercase tracking-widest">Gestión del día</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-5 gap-3">
                   <div className="text-center bg-white/5 rounded-xl py-3 px-2">
                     <p className="text-xs text-white/40 mb-1">Inscritos</p>
-                    <p className="text-3xl font-bold text-vascan-gold">{resumen.gestion.inscritos}</p>
+                    <p className="text-3xl font-bold text-white">{resumen.gestion.inscritos}</p>
                   </div>
                   <div className="text-center bg-white/5 rounded-xl py-3 px-2">
-                    <p className="text-xs text-white/40 mb-1">No asiste manual</p>
-                    <p className="text-3xl font-bold text-orange-300">{resumen.gestion.noAsiste}</p>
+                    <p className="text-xs text-white/40 mb-1">Pasaron tótem</p>
+                    <p className="text-3xl font-bold text-green-300">{resumen.gestion.pasoTotem}</p>
                   </div>
                   <div className="text-center bg-white/5 rounded-xl py-3 px-2">
                     <p className="text-xs text-white/40 mb-1">Pendientes</p>
                     <p className="text-3xl font-bold text-yellow-300">{resumen.gestion.pendientes}</p>
                   </div>
                   <div className="text-center bg-white/5 rounded-xl py-3 px-2">
-                    <p className="text-xs text-white/40 mb-1">Pasaron tótem</p>
-                    <p className="text-3xl font-bold text-green-300">{resumen.gestion.pasoTotem}</p>
+                    <p className="text-xs text-white/40 mb-1">Delivery</p>
+                    <p className="text-3xl font-bold text-blue-300">{resumen.gestion.delivery.length}</p>
+                  </div>
+                  <div className="text-center bg-white/5 rounded-xl py-3 px-2">
+                    <p className="text-xs text-white/40 mb-1">Baja</p>
+                    <p className="text-3xl font-bold text-red-300">{resumen.gestion.bajas.length}</p>
                   </div>
                 </div>
                 {resumen.gestion.delivery.length > 0 && (
@@ -1078,7 +1082,7 @@ export default function Kiosk() {
                 {resumen.gestion.bajas.length > 0 && (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                     <p className="text-xs font-bold text-red-300 uppercase tracking-wide mb-2">
-                      Bajas ({resumen.gestion.bajas.length})
+                      Baja ({resumen.gestion.bajas.length})
                     </p>
                     <div className="space-y-0.5">
                       {resumen.gestion.bajas.map((n: string, i: number) => (
@@ -1623,8 +1627,8 @@ export default function Kiosk() {
                             <span className="pr-gest-val">{g.inscritos}</span>
                           </div>
                           <div className="pr-gest-cell">
-                            <span className="pr-gest-lbl">No asiste</span>
-                            <span className="pr-gest-val">{g.noAsiste}</span>
+                            <span className="pr-gest-lbl">Baja</span>
+                            <span className="pr-gest-val">{g.bajas.length}</span>
                           </div>
                           <div className="pr-gest-cell">
                             <span className="pr-gest-lbl">Pendientes</span>
