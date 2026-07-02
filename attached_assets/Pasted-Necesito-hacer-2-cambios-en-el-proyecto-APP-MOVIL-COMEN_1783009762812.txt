@@ -1,0 +1,63 @@
+Necesito hacer 2 cambios en el proyecto APP-MOVIL-COMENSALES-VASCAN-SPA:
+
+## Cambio 1: Gestión Diaria — mostrar también encargados e interlocutores
+
+En la vista Gestión Diaria del panel admin, actualmente solo se ven los comensales. Necesito que también aparezcan los encargados de casino (encargado_casino) e interlocutores (interlocutor), con la misma información: nombre, RUT, opción de comida, hora tótem, estado.
+
+Archivos a modificar:
+- server/routes.ts — endpoint GET /api/gestion-diaria
+- web/src/admin.html — función GestionDiariaView
+
+Qué hacer:
+1. En server/routes.ts, dentro del endpoint GET /api/gestion-diaria, donde se construye el objeto items.push({...}), agregar el campo "role: u.role" (ya existe u.role del usuario). El backend ya incluye a staff gracias a ensureStaffPedidosForDate, solo falta exponer el rol.
+
+2. En web/src/admin.html, en GestionDiariaView:
+   - Agregar mapeo de labels y colores para cada rol: 
+     roleLabels = { admin: 'Admin', comensal: 'Comensal', interlocutor: 'Interlocutor', encargado_casino: 'Encargado' }
+     roleBadge = { admin: 'bg-purple-500/20 text-purple-400', comensal: 'bg-blue-500/20 text-blue-400', interlocutor: 'bg-vascan-gold/20 text-vascan-gold', encargado_casino: 'bg-emerald-500/20 text-emerald-400' }
+   - En la tabla (que ya agrupa por casino), agregar columna "Rol" entre "Persona" y "Opción", renderizando un badge con el color según el role de la fila.
+   - En el encabezado de cada grupo de casino, actualizar el texto para reflejar los 3 roles.
+
+NO cambiar agrupación, filtros ni nada más de la vista.
+
+## Cambio 2: Vale impreso del resumen — 3 mejoras
+
+En el ticket térmico que imprime el resumen del día (vale de control interno), necesito 3 mejoras:
+
+Archivos a modificar:
+- server/routes.ts — endpoint GET /api/reportes/resumen-dia/:casinoId
+- pwa/src/pages/Kiosk.tsx — sección print-resumen y resumen on-screen
+
+### 2a. Delivery con opción de comida
+
+Actualmente gestion.delivery solo devuelve un array de nombres. Debe devolver objetos con nombre y la opción de comida seleccionada.
+
+En server/routes.ts, en el bloque donde se construye "gestion" dentro del endpoint resumen-dia:
+- En gItems, agregar el campo "opcionSeleccionada: p.opcionSeleccionada" a cada item
+- En gestion.delivery, cambiar de "gItems.filter(...).map(i => i.nombre)" a "gItems.filter(...).map(i => ({ nombre: i.nombre, opcion: i.opcionSeleccionada }))"
+- En gestion.bajas, hacer el mismo cambio
+
+En pwa/src/pages/Kiosk.tsx:
+- En la sección on-screen de resumen (donde se renderiza gestion.delivery), cambiar de mostrar solo "· {n}" a mostrar "· {n.nombre} — Opc {n.opcion}"
+- En el print-resumen (sección Delivery), mismo cambio en la línea que renderiza "· {n}"
+
+### 2b. Pasaron tótem por menú
+
+Cada opción de comida debe mostrar cuántos de los que la eligieron ya pasaron por el tótem.
+
+En server/routes.ts, en el endpoint resumen-dia, en el bloque donde se construye opcionesMap con "cantidad", también calcular "pasoTotem" contando los pedidos que tienen impresoEn != null:
+- pasoTotem = pedidosOfM.filter(p => p.opcionSeleccionada === numero && p.impresoEn).length
+- Agregar pasoTotem al objeto guardado en opcionesMap
+- Agregar al response un campo "totalPasoTotem" que sume todos los sel.filter(p => p.impresoEn).length
+
+En pwa/src/pages/Kiosk.tsx:
+- En la sección on-screen de opciones de menú, al lado de "o.cantidad" mostrar también "(o.pasoTotem tótem)"
+- En el print-resumen, en cada fila de opción de menú, agregar al lado de la cantidad el conteo de pasaron tótem
+
+### 2c. Total de pasaron tótem al lado del total de inscritos
+
+En el print-resumen, en la sección RESUMEN DE SERVICIOS (línea donde se muestra TOTAL), mostrar también el total de personas que pasaron por el tótem.
+- En el granTotal (actualmente suma seleccion + visitas), agregar un totalPasoTotem
+- En las filas de gestión del día del ticket, asegurar que "Inscritos" y "Tótem" estén visibles uno al lado del otro
+
+NO modificar ningún otro archivo ni funcionalidad.

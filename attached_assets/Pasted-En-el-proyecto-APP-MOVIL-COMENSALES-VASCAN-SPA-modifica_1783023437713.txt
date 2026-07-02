@@ -1,0 +1,125 @@
+En el proyecto APP-MOVIL-COMENSALES-VASCAN-SPA, modifica 2 archivos para que el vale impreso (ticket térmico 80mm en Kiosk.tsx + pantalla resumen) incluya la opción de comida elegida por los delivery y el conteo de pasaron tótem por cada opción de menú.
+
+---
+
+### Archivo 1: server/routes.ts
+
+**A) En GET /api/reportes/resumen-dia/:casinoId (~línea 2070-2090):**
+
+Cambia gItems para incluir opción de comida:
+
+```ts
+return {
+  nombre: `${u.nombre} ${u.apellido}`.trim(),
+  opcionSeleccionada: p.opcionSeleccionada,
+  opcionTexto: null as string | null,
+  pasoTotem: !!(p as any).impresoEn,
+  gestionEstado: (p as any).gestionEstado ?? null,
+};
+Justo después de llenar gItems (antes de construir gestion), agrega este bloque para llenar opcionTexto:
+for (const item of gItems) {
+  if (!item) continue;
+  for (const m of dayMinutas) {
+    const opts = [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5];
+    if (
+      item.opcionSeleccionada >= 1 &&
+      item.opcionSeleccionada <= opts.length &&
+      opts[item.opcionSeleccionada - 1]
+    ) {
+      item.opcionTexto = opts[item.opcionSeleccionada - 1];
+      break;
+    }
+  }
+}
+Luego modifica el delivery map para entregar objetos:
+delivery: gItems
+  .filter((i) => i.gestionEstado === "delivery")
+  .map((i) => ({
+    nombre: i.nombre,
+    opcionSeleccionada: i.opcionSeleccionada,
+    opcionTexto: i.opcionTexto,
+  })),
+B) En el mismo endpoint, en la construcción de opcionesMap (~línea 2030-2046):
+Agrega campo pasoTotem:
+const opcionesMap = new Map<
+  string,
+  {
+    familia: string | null;
+    numero: number;
+    descripcion: string;
+    cantidad: number;
+    pasoTotem: number;
+  }
+>();
+Dentro del for loop, calcula pasoTotem:
+const pasoTotemCount = pedidosOfM.filter(
+  (p) =>
+    p.opcionSeleccionada === numero && !!(p as any).impresoEn,
+).length;
+Acumula: prev.pasoTotem += pasoTotemCount y en el set: pasoTotem: pasoTotemCount.
+Actualiza el type cast de gItems:
+.filter(Boolean) as {
+  nombre: string;
+  opcionSeleccionada: number;
+  opcionTexto: string | null;
+  pasoTotem: boolean;
+  gestionEstado: string | null;
+}[];
+Archivo 2: pwa/src/pages/Kiosk.tsx
+A) En la sección print-resumen (~línea 1544-1550):
+Agrega pasoTotem al tipo:
+const familiaOpciones = new Map<
+  string,
+  Array<{
+    numero: number;
+    descripcion: string;
+    cantidad: number;
+    pasoTotem: number;
+  }>
+>();
+En el push: pasoTotem: o.pasoTotem ?? 0.
+B) En el render de cada opción (~línea 1602-1607):
+- <span className="pr-opt-qty">{o.cantidad}</span>
++ <span className="pr-opt-qty">
++   {o.cantidad}
++   {o.pasoTotem > 0 ? ` (${o.pasoTotem} tótem)` : ""}
++ </span>
+C) Delivery con opción de comida (~línea 1642-1650):
+ {
+   g.delivery.map((d, i) => (
+     <div key={i} className="pr-name-row">
+-      · {d}
++      · {d.nombre}
++      {d.opcionSeleccionada
++        ? ` — Opc ${d.opcionSeleccionada}${
++            d.opcionTexto ? ` (${d.opcionTexto})` : ""
++          }`
++        : ""}
+     </div>
+   ));
+ }
+D) Total pasoTotem junto al total en RESUMEN DE SERVICIOS (~línea 1586-1589):
+ <div className="pr-total-row">
+   <span className="pr-col-svc">TOTAL</span>
+   <span className="pr-col-qty">{grandTotal}</span>
+ </div>
++{resumen?.gestion && (
++  <div className="pr-total-row" style={{ borderTop: "none" }}>
++    <span className="pr-col-svc">PASARON TÓTEM</span>
++    <span className="pr-col-qty">{resumen.gestion.pasoTotem}</span>
++  </div>
++)}
+E) En la sección en pantalla step==="resumen" (~línea 1116-1127):
+Localiza el .map de resumen.opciones y modifica para mostrar pasoTotem de la misma forma que en el print.
+Resumen de cambios
+Archivo	Línea	Cambio
+server/routes.ts	~2075	gItems agrega opcionSeleccionada, opcionTexto
+server/routes.ts	~2080	loop llenar opcionTexto desde dayMinutas
+server/routes.ts	~2088	delivery cambia de string[] a objetos
+server/routes.ts	~2030	opcionesMap agrega campo pasoTotem
+server/routes.ts	~2042	calcular y acumular pasoTotemCount
+pwa/Kiosk.tsx	~1544	familiaOpciones tipo agrega pasoTotem
+pwa/Kiosk.tsx	~1550	push incluye pasoTotem
+pwa/Kiosk.tsx	~1606	mostrar "(N tótem)" junto a cantidad
+pwa/Kiosk.tsx	~1646	delivery muestra opción de comida
+pwa/Kiosk.tsx	~1589	fila "PASARON TÓTEM" en resumen servicios
