@@ -269,7 +269,7 @@
       const allItems = [
         { id: 'dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', roles: ['admin', 'interlocutor'] },
         { id: 'consolidacion', label: 'Consolidación', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', roles: ['admin', 'interlocutor'] },
-        { id: 'gestionDiaria', label: 'Gestión Diaria', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', roles: ['admin', 'interlocutor'] },
+        { id: 'gestionDiaria', label: 'Gestión Diaria', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', roles: ['admin', 'interlocutor', 'encargado_casino'] },
         { id: 'usuarios', label: 'Usuarios', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', roles: ['admin', 'interlocutor'] },
         { id: 'casinos', label: 'Casinos', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', roles: ['admin'] },
         { id: 'minutas', label: 'Minutas', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', roles: ['admin', 'interlocutor'] },
@@ -2752,6 +2752,8 @@
       const [error, setError] = useState('');
       const [actingId, setActingId] = useState(null);
       const [filtro, setFiltro] = useState('');
+      const roleLabels = { admin: 'Admin', comensal: 'Comensal', interlocutor: 'Interlocutor', encargado_casino: 'Encargado' };
+      const roleBadge = { admin: 'bg-purple-500/20 text-purple-400', comensal: 'bg-blue-500/20 text-blue-400', interlocutor: 'bg-vascan-gold/20 text-vascan-gold', encargado_casino: 'bg-emerald-500/20 text-emerald-400' };
 
       useEffect(() => {
         apiFetch('/api/casinos').then(list => {
@@ -2809,6 +2811,24 @@
         return (`${it.nombre} ${it.apellido}`.toLowerCase().includes(q)) || (it.rut || '').toLowerCase().includes(q);
       });
 
+      const groupsByCasino = React.useMemo(() => {
+        const map = new Map();
+        for (const it of items) {
+          const key = it.casinoNombre || '—';
+          if (!map.has(key)) map.set(key, []);
+          map.get(key).push(it);
+        }
+        return Array.from(map.entries())
+          .sort((a, b) => a[0].localeCompare(b[0], 'es'))
+          .map(([casinoNombre, rows]) => ({
+            casinoNombre,
+            rows,
+            comensales: rows.filter(r => r.role === 'comensal').length,
+            encargados: rows.filter(r => r.role === 'encargado_casino').length,
+            interlocutores: rows.filter(r => r.role === 'interlocutor').length,
+          }));
+      }, [items]);
+
       function EstadoBadge({ row }) {
         if (row.gestionEstado === 'delivery') return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300">Delivery</span>;
         if (row.gestionEstado === 'baja') return <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-300">Baja</span>;
@@ -2851,7 +2871,7 @@
                 className="bg-vascan-bg border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
             </div>
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs text-white/50 mb-1">Buscar comensal</label>
+              <label className="block text-xs text-white/50 mb-1">Buscar persona</label>
               <input type="text" value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Nombre o RUT…"
                 className="w-full bg-vascan-bg border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
             </div>
@@ -2889,8 +2909,8 @@
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-white/50 text-left">
-                    <th className="px-4 py-3 font-medium">Comensal</th>
-                    <th className="px-4 py-3 font-medium">Casino</th>
+                    <th className="px-4 py-3 font-medium">Persona</th>
+                    <th className="px-4 py-3 font-medium">Rol</th>
                     <th className="px-4 py-3 font-medium">Opción</th>
                     <th className="px-4 py-3 font-medium">Hora tótem</th>
                     <th className="px-4 py-3 font-medium">Estado</th>
@@ -2904,43 +2924,54 @@
                   {!loading && items.length === 0 && (
                     <tr><td colSpan={6} className="px-4 py-8 text-center text-white/40">No hay inscritos para este día.</td></tr>
                   )}
-                  {!loading && items.map(row => (
-                    <tr key={row.pedidoId} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="px-4 py-3 text-white">
-                        <div className="font-medium">{row.nombre} {row.apellido}</div>
-                        <div className="text-white/40 text-xs">{row.rut}</div>
-                      </td>
-                      <td className="px-4 py-3 text-white/70">{row.casinoNombre}</td>
-                      <td className="px-4 py-3 text-white/70">
-                        <span className="text-vascan-gold font-semibold">Opc {row.opcionSeleccionada}</span>
-                        {row.opcionTexto ? <span className="text-white/50"> · {row.opcionTexto}</span> : null}
-                      </td>
-                      <td className="px-4 py-3 text-white/60">{fmtHora(row.impresoEn)}</td>
-                      <td className="px-4 py-3"><EstadoBadge row={row} /></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          {row.pasoTotem ? (
-                            <span className="text-white/30 text-xs">—</span>
-                          ) : row.gestionEstado ? (
-                            <button onClick={() => aplicar(row, null)} disabled={actingId === row.pedidoId}
-                              className="px-3 py-1.5 rounded-lg bg-white/10 text-white/70 text-xs font-semibold hover:bg-white/20 disabled:opacity-50">
-                              Deshacer
-                            </button>
-                          ) : (
-                            <>
-                              <button onClick={() => aplicar(row, 'delivery')} disabled={actingId === row.pedidoId}
-                                className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 text-xs font-semibold hover:bg-blue-500/30 disabled:opacity-50">
-                                Delivery
-                              </button>
-                              <button onClick={() => aplicar(row, 'baja')} disabled={actingId === row.pedidoId}
-                                className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 text-xs font-semibold hover:bg-red-500/30 disabled:opacity-50">
-                                Baja
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                  {!loading && groupsByCasino.map(group => (
+                    <React.Fragment key={group.casinoNombre}>
+                      <tr className="bg-white/5">
+                        <td colSpan={6} className="px-4 py-2 text-xs font-semibold text-white/70">
+                          {group.casinoNombre} — {group.comensales} comensales · {group.encargados} encargados · {group.interlocutores} interlocutores
+                        </td>
+                      </tr>
+                      {group.rows.map(row => (
+                        <tr key={row.pedidoId} className="border-b border-white/5 hover:bg-white/5">
+                          <td className="px-4 py-3 text-white">
+                            <div className="font-medium">{row.nombre} {row.apellido}</div>
+                            <div className="text-white/40 text-xs">{row.rut}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${roleBadge[row.role] || 'bg-white/10 text-white/60'}`}>{roleLabels[row.role] || row.role}</span>
+                          </td>
+                          <td className="px-4 py-3 text-white/70">
+                            <span className="text-vascan-gold font-semibold">Opc {row.opcionSeleccionada}</span>
+                            {row.opcionTexto ? <span className="text-white/50"> · {row.opcionTexto}</span> : null}
+                          </td>
+                          <td className="px-4 py-3 text-white/60">{fmtHora(row.impresoEn)}</td>
+                          <td className="px-4 py-3"><EstadoBadge row={row} /></td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-2">
+                              {row.pasoTotem ? (
+                                <span className="text-white/30 text-xs">—</span>
+                              ) : row.gestionEstado ? (
+                                <button onClick={() => aplicar(row, null)} disabled={actingId === row.pedidoId}
+                                  className="px-3 py-1.5 rounded-lg bg-white/10 text-white/70 text-xs font-semibold hover:bg-white/20 disabled:opacity-50">
+                                  Deshacer
+                                </button>
+                              ) : (
+                                <>
+                                  <button onClick={() => aplicar(row, 'delivery')} disabled={actingId === row.pedidoId}
+                                    className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 text-xs font-semibold hover:bg-blue-500/30 disabled:opacity-50">
+                                    Delivery
+                                  </button>
+                                  <button onClick={() => aplicar(row, 'baja')} disabled={actingId === row.pedidoId}
+                                    className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-300 text-xs font-semibold hover:bg-red-500/30 disabled:opacity-50">
+                                    Baja
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

@@ -1073,8 +1073,13 @@ export default function Kiosk() {
                       Delivery ({resumen.gestion.delivery.length})
                     </p>
                     <div className="space-y-0.5">
-                      {resumen.gestion.delivery.map((n: string, i: number) => (
-                        <p key={i} className="text-sm text-white/80">· {n}</p>
+                      {resumen.gestion.delivery.map((d: any, i: number) => (
+                        <p key={i} className="text-sm text-white/80">
+                          · {d.nombre}
+                          {d.opcionSeleccionada ? (
+                            <span className="text-white/50"> — Opc {d.opcionSeleccionada}{d.opcionTexto ? ` (${d.opcionTexto})` : ""}</span>
+                          ) : null}
+                        </p>
                       ))}
                     </div>
                   </div>
@@ -1085,8 +1090,8 @@ export default function Kiosk() {
                       Baja ({resumen.gestion.bajas.length})
                     </p>
                     <div className="space-y-0.5">
-                      {resumen.gestion.bajas.map((n: string, i: number) => (
-                        <p key={i} className="text-sm text-white/80">· {n}</p>
+                      {resumen.gestion.bajas.map((b: any, i: number) => (
+                        <p key={i} className="text-sm text-white/80">· {b.nombre}</p>
                       ))}
                     </div>
                   </div>
@@ -1122,7 +1127,12 @@ export default function Kiosk() {
                             <span className="text-white truncate block">{o.descripcion}</span>
                           </div>
                         </div>
-                        <span className="text-vascan-gold font-bold text-xl shrink-0 ml-3">{o.cantidad}</span>
+                        <span className="text-vascan-gold font-bold text-xl shrink-0 ml-3">
+                          {o.cantidad}
+                          {typeof o.pasoTotem === "number" && (
+                            <span className="text-green-300 text-sm font-semibold ml-1">({o.pasoTotem} tótem)</span>
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -1541,15 +1551,16 @@ export default function Kiosk() {
           const titleCase = (s: string) =>
             s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
           const familiaServicio = new Map<string, number>();
-          const familiaOpciones = new Map<string, Array<{ numero: number; descripcion: string; cantidad: number }>>();
+          const familiaOpciones = new Map<string, Array<{ numero: number; descripcion: string; cantidad: number; pasoTotem: number }>>();
           for (const o of (resumen?.opciones || [])) {
             const famRaw = (o.familia || "Servicio").trim();
             const fam = titleCase(famRaw);
             familiaServicio.set(fam, (familiaServicio.get(fam) || 0) + o.cantidad);
             if (!familiaOpciones.has(fam)) familiaOpciones.set(fam, []);
-            familiaOpciones.get(fam)!.push({ numero: o.numero, descripcion: o.descripcion, cantidad: o.cantidad });
+            familiaOpciones.get(fam)!.push({ numero: o.numero, descripcion: o.descripcion, cantidad: o.cantidad, pasoTotem: o.pasoTotem || 0 });
           }
           const grandTotal = (resumen?.totalSeleccion || 0) + (resumen?.totalVisitas || 0);
+          const grandPasoTotem = (resumen?.opciones || []).reduce((acc: number, o: any) => acc + (o.pasoTotem || 0), 0);
           return (
             <>
               {/* Cabecera: 3 líneas centradas según mockup aprobado por cliente. */}
@@ -1587,6 +1598,12 @@ export default function Kiosk() {
                     <span className="pr-col-svc">TOTAL</span>
                     <span className="pr-col-qty">{grandTotal}</span>
                   </div>
+                  {resumen?.gestion && (
+                    <div className="pr-total-row">
+                      <span className="pr-col-svc">PASARON TÓTEM</span>
+                      <span className="pr-col-qty">{grandPasoTotem}</span>
+                    </div>
+                  )}
                   <hr className="pr-hr" />
                   <div className="pr-section">OPCIONES DE MENÚ</div>
                   {[...familiaOpciones.entries()]
@@ -1603,7 +1620,7 @@ export default function Kiosk() {
                           <div key={`${familia}:${o.numero}:${i}`} className="pr-opt-row">
                             <span className="pr-opt-num">{o.numero}.</span>
                             <span className="pr-opt-desc">{o.descripcion}</span>
-                            <span className="pr-opt-qty">{o.cantidad}</span>
+                            <span className="pr-opt-qty">{o.cantidad}{o.pasoTotem > 0 ? ` (${o.pasoTotem} tótem)` : ""}</span>
                           </div>
                         ))}
                         <div className="pr-opt-total">
@@ -1643,8 +1660,11 @@ export default function Kiosk() {
                           <>
                             <hr className="pr-hr" />
                             <div className="pr-section">Delivery ({g.delivery.length})</div>
-                            {(g.delivery as string[]).map((n, i) => (
-                              <div key={i} className="pr-name-row">· {n}</div>
+                            {(g.delivery as any[]).map((d, i) => (
+                              <div key={i} className="pr-name-row">
+                                · {d.nombre}
+                                {d.opcionSeleccionada ? ` — Opc ${d.opcionSeleccionada}${d.opcionTexto ? ` (${d.opcionTexto})` : ""}` : ""}
+                              </div>
                             ))}
                           </>
                         )}
@@ -1652,8 +1672,8 @@ export default function Kiosk() {
                           <>
                             <hr className="pr-hr" />
                             <div className="pr-section">Bajas ({g.bajas.length})</div>
-                            {(g.bajas as string[]).map((n, i) => (
-                              <div key={i} className="pr-name-row">· {n}</div>
+                            {(g.bajas as any[]).map((b, i) => (
+                              <div key={i} className="pr-name-row">· {b.nombre}</div>
                             ))}
                           </>
                         )}

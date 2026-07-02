@@ -200,6 +200,50 @@ async function assertCasinoAccess(req: Request, res: Response, casinoId: string 
   return true;
 }
 
+// Auto-crea un pedido "seleccion" (opción 1 por defecto) para el staff
+// (interlocutor/encargado_casino) activo y asignado al casino que aún no
+// tenga una inscripción para la fecha dada, para que aparezcan en la
+// gestión diaria / resumen del día igual que los comensales. Idempotente:
+// si el usuario ya tiene un pedido en alguna de las minutas del día, no
+// crea uno nuevo.
+async function ensureStaffPedidosForDate(casinoId: string, fecha: string, dayMinutas: any[]): Promise<void> {
+  if (!casinoId || dayMinutas.length === 0) return;
+  try {
+    const allUsers = await storage.getAllUsers();
+    const staffUsers = allUsers.filter(
+      (u) => u.activo && (u.role === "interlocutor" || u.role === "encargado_casino"),
+    );
+    if (staffUsers.length === 0) return;
+    const targetMinuta = dayMinutas[0];
+    for (const u of staffUsers) {
+      let assigned = u.casinoId === casinoId;
+      if (!assigned) {
+        const extraCasinos = await storage.getUserCasinoIds(u.id);
+        assigned = extraCasinos.includes(casinoId);
+      }
+      if (!assigned) continue;
+
+      let already = false;
+      for (const m of dayMinutas) {
+        const existing = await storage.getPedidoByUserAndMinuta(u.id, m.id);
+        if (existing) { already = true; break; }
+      }
+      if (already) continue;
+
+      const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await storage.createPedido({
+        userId: u.id,
+        minutaId: targetMinuta.id,
+        opcionSeleccionada: 1,
+        tipo: "seleccion",
+        codigoQr,
+      });
+    }
+  } catch (err) {
+    console.error("ensureStaffPedidosForDate error:", err);
+  }
+}
+
 async function autoSeed() {
   try {
     const existingCasinos = await storage.getCasinos();
@@ -1603,6 +1647,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (m) => m.fecha === fecha && m.activo && (allowedIds === null || allowedIds.has(m.casinoId)),
       );
 
+      // Auto-inscribir staff (interlocutor/encargado_casino) sin pedido aún,
+      // agrupando las minutas del día por casino.
+      const minutasByCasino = new Map<string, typeof minutasDia>();
+      for (const m of minutasDia) {
+        if (!minutasByCasino.has(m.casinoId)) minutasByCasino.set(m.casinoId, []);
+        minutasByCasino.get(m.casinoId)!.push(m);
+      }
+      for (const [cId, ms] of minutasByCasino) {
+        await ensureStaffPedidosForDate(cId, fecha, ms);
+      }
+
       const userCache = new Map<string, any>();
       const items: any[] = [];
       for (const minuta of minutasDia) {
@@ -1623,6 +1678,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             rut: u.rut,
             nombre: u.nombre,
             apellido: u.apellido,
+            role: u.role,
             casinoId: minuta.casinoId,
             casinoNombre: casinoNombre[minuta.casinoId] ?? "—",
             fecha: minuta.fecha,
@@ -1974,6 +2030,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (dayMinutas.length === 0) {
         return res.json({ fecha, casinoId, periodo: periodoOut, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
       }
+      // Auto-inscribir staff (interlocutor/encargado_casino) sin pedido aún para este casino/fecha.
+      await ensureStaffPedidosForDate(casinoId, fecha, dayMinutas);
       // Acumular pedidos de todas las minutas del día.
       const pedidosByMinuta = await Promise.all(dayMinutas.map(m => storage.getPedidosByMinuta(m.id)));
       const allPedidos = pedidosByMinuta.flat();
@@ -1982,7 +2040,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const visitas = allPedidos.filter(p => p.tipo === "visita").length;
       // Opciones agregadas: agrupar por (familia + número + descripción) para
       // diferenciar "Opción 1 - Almuerzo" de "Opción 1 - Colación".
-      const opcionesMap = new Map<string, { familia: string | null; numero: number; descripcion: string; cantidad: number }>();
+      const opcionesMap = new Map<string, { familia: string | null; numero: number; descripcion: string; cantidad: number; pasoTotem: number }>();
       for (let mi = 0; mi < dayMinutas.length; mi++) {
         const m = dayMinutas[mi];
         const pedidosOfM = pedidosByMinuta[mi].filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
@@ -1993,11 +2051,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const numero = i + 1;
           const key = `${m.familia || "—"}|${numero}|${d}`;
           const prev = opcionesMap.get(key);
-          const cantidad = pedidosOfM.filter(p => p.opcionSeleccionada === numero).length;
+          const pedidosOpcion = pedidosOfM.filter(p => p.opcionSeleccionada === numero);
+          const cantidad = pedidosOpcion.length;
+          const pasoTotemOpcion = pedidosOpcion.filter(p => !!(p as any).impresoEn).length;
           if (prev) {
             prev.cantidad += cantidad;
+            prev.pasoTotem += pasoTotemOpcion;
           } else {
-            opcionesMap.set(key, { familia: m.familia ?? null, numero, descripcion: d, cantidad });
+            opcionesMap.set(key, { familia: m.familia ?? null, numero, descripcion: d, cantidad, pasoTotem: pasoTotemOpcion });
           }
         }
       }
@@ -2022,26 +2083,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!userCache2.has(uid)) userCache2.set(uid, await storage.getUser(uid));
           return userCache2.get(uid);
         };
+        const minutaOptsById = new Map<string, string[]>();
+        for (const m of dayMinutas) {
+          minutaOptsById.set(m.id, [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5]);
+        }
         const gItems = (
           await Promise.all(
             selPedidos.map(async (p) => {
               const u = await getU(p.userId);
               if (!u) return null;
+              const opts = minutaOptsById.get(p.minutaId) || [];
               return {
                 nombre: `${u.nombre} ${u.apellido}`.trim(),
+                role: u.role,
                 pasoTotem: !!(p as any).impresoEn,
                 gestionEstado: (p as any).gestionEstado ?? null,
+                opcionSeleccionada: p.opcionSeleccionada,
+                opcionTexto: opts[(p.opcionSeleccionada || 1) - 1] || null,
               };
             }),
           )
-        ).filter(Boolean) as { nombre: string; pasoTotem: boolean; gestionEstado: string | null }[];
+        ).filter(Boolean) as { nombre: string; role: string; pasoTotem: boolean; gestionEstado: string | null; opcionSeleccionada: number | null; opcionTexto: string | null }[];
         gestion = {
           inscritos: gItems.length,
           noAsiste: noAsistePedidos.length,
           pendientes: gItems.filter((i) => !i.pasoTotem && !i.gestionEstado).length,
           pasoTotem: gItems.filter((i) => i.pasoTotem).length,
-          delivery: gItems.filter((i) => i.gestionEstado === "delivery").map((i) => i.nombre),
-          bajas: gItems.filter((i) => i.gestionEstado === "baja").map((i) => i.nombre),
+          delivery: gItems
+            .filter((i) => i.gestionEstado === "delivery")
+            .map((i) => ({ nombre: i.nombre, role: i.role, opcionSeleccionada: i.opcionSeleccionada, opcionTexto: i.opcionTexto })),
+          bajas: gItems
+            .filter((i) => i.gestionEstado === "baja")
+            .map((i) => ({ nombre: i.nombre, role: i.role })),
         };
       }
 
