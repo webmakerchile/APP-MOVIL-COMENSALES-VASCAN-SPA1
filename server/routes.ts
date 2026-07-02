@@ -2030,8 +2030,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (dayMinutas.length === 0) {
         return res.json({ fecha, casinoId, periodo: periodoOut, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
       }
-      // Auto-inscribir staff (interlocutor/encargado_casino) sin pedido aún para este casino/fecha.
-      await ensureStaffPedidosForDate(casinoId, fecha, dayMinutas);
+      // Auto-inscribir staff (interlocutor/encargado_casino) sin pedido aún para
+      // este casino/fecha. Esto es una escritura, así que sólo se ejecuta si
+      // quien consulta tiene acceso real a este casino (admin o asignado a él);
+      // un comensal consultando su propio casino para el tótem NO dispara esto.
+      const requesterAccessible = await getAccessibleCasinoIds(sessionUser);
+      if (requesterAccessible === null || requesterAccessible.includes(casinoId)) {
+        await ensureStaffPedidosForDate(casinoId, fecha, dayMinutas);
+      }
       // Acumular pedidos de todas las minutas del día.
       const pedidosByMinuta = await Promise.all(dayMinutas.map(m => storage.getPedidosByMinuta(m.id)));
       const allPedidos = pedidosByMinuta.flat();
