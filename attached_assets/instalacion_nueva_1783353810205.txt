@@ -1,4 +1,4 @@
-$serverUrl  = "https://vascan.replit.app"
+$serverUrl  = "https://app.buenamezcla.cl"
 $updateKey  = "toIGLjr2isxiM1aXCxWbkyHjrr1vJKRdn6p9EOoHltXOnhbJeDZFtFVyY6/Rv9IgLJJn0Y730SNzhGDnDrgcbA=="
 $installDir = "C:\BuenaMezcla"
 
@@ -58,11 +58,14 @@ foreach ($dep in @("bindings","prebuild-install")) {
 }
 
 Write-Host "[4/5] Iniciando servidor..." -ForegroundColor Yellow
-$nodeExe = "$installDir\node\node.exe"
-if (-not (Test-Path $nodeExe)) { $nodeExe = "node" }
+# Se reinicia via la tarea programada "BuenaMezclaTotem" (no lanzando node.exe
+# directo): esa tarea apunta a scripts\run-totem.cmd, que es el que define
+# DB_MODE, TOTEM_DB_PATH, CLOUD_URL, PORT y NODE_ENV antes de levantar runtime.js.
+# Lanzar node.exe a mano aqui saltaria ese wrapper y el server arrancaria sin
+# esas variables de entorno.
 Stop-Process -Name "node" -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
-Start-Process -FilePath $nodeExe -ArgumentList "$installDir\totem\runtime.js" -WorkingDirectory $installDir -WindowStyle Hidden
+schtasks /Run /TN "BuenaMezclaTotem" | Out-Null
 
 $ok = $false
 for ($i = 0; $i -lt 30; $i++) {
@@ -76,7 +79,7 @@ for ($i = 0; $i -lt 30; $i++) {
     }
 }
 if ($ok) { Write-Host "   Servidor OK ($($i*2)s)" -ForegroundColor Green }
-else { Write-Host "   Tardando — verificar con: .\node\node.exe .\totem\runtime.js" -ForegroundColor Yellow }
+else { Write-Host "   Tardando — verificar con: schtasks /Query /TN `"BuenaMezclaTotem`" o revisar $installDir\logs\service.err.log" -ForegroundColor Yellow }
 
 Write-Host "[5/5] Abriendo totem..." -ForegroundColor Yellow
 $chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
