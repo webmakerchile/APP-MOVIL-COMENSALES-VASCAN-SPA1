@@ -527,7 +527,7 @@
           const usuariosUrl = filterCasino && filterCasino !== 'all'
             ? `/api/usuarios?casinoId=${encodeURIComponent(filterCasino)}`
             : '/api/usuarios';
-          const [u, c] = await Promise.all([apiFetch(usuariosUrl), apiFetch('/api/casinos')]);
+          const [u, c] = await Promise.all([apiFetch(usuariosUrl), apiFetch('/api/casinos/all')]);
           setUsers(u);
           setCasinos(c);
         } catch (e) { console.error(e); }
