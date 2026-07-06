@@ -519,12 +519,15 @@
       const [form, setForm] = useState({ rut: '', nombre: '', apellido: '', telefono: '', role: 'comensal', casinoId: '', casinoIds: [], fechaNacimiento: '', password: '' });
       const [filterCasino, setFilterCasino] = useState('all');
 
-      useEffect(() => { loadData(); }, []);
+      useEffect(() => { loadData(); }, [filterCasino]);
 
       async function loadData() {
         setLoading(true);
         try {
-          const [u, c] = await Promise.all([apiFetch('/api/usuarios'), apiFetch('/api/casinos')]);
+          const usuariosUrl = filterCasino && filterCasino !== 'all'
+            ? `/api/usuarios?casinoId=${encodeURIComponent(filterCasino)}`
+            : '/api/usuarios';
+          const [u, c] = await Promise.all([apiFetch(usuariosUrl), apiFetch('/api/casinos')]);
           setUsers(u);
           setCasinos(c);
         } catch (e) { console.error(e); }
@@ -591,20 +594,11 @@
         }
       }
 
+      // El filtro por casino ya lo aplica el backend (?casinoId=), sobre todos
+      // los roles por igual. Acá solo queda filtrar por el texto de búsqueda.
       const filtered = users.filter(u => {
         const txt = (u.nombre + ' ' + u.apellido + ' ' + u.rut).toLowerCase();
         if (search && !txt.includes(search.toLowerCase())) return false;
-        if (filterCasino && filterCasino !== 'all') {
-          // El filtro por casino aplica SOLO a comensales (que pertenecen a un
-          // casino concreto). Los roles de gestión (admin, interlocutor,
-          // encargado) se muestran siempre, aunque no tengan un casino base
-          // asignado: de lo contrario un interlocutor sin casino desaparecía
-          // del listado al filtrar y parecía que solo se mostraban comensales.
-          if (u.role === 'comensal') {
-            const ids = [u.casinoId, ...(u.casinoIds || [])].filter(Boolean);
-            if (!ids.includes(filterCasino)) return false;
-          }
-        }
         return true;
       });
 
@@ -634,16 +628,15 @@
             <div className="p-4 border-b border-white/10 flex flex-col md:flex-row gap-3">
               <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, apellido o RUT..."
                 className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:border-vascan-gold/50 transition text-sm" />
-              {/* Interlocutor: el backend ya filtra a sus casinos asignados;
-                  ocultamos el desplegable para no inducir a creer que puede
-                  ver el resto de los casinos. */}
-              {currentUser?.role !== 'interlocutor' && (
-                <select value={filterCasino} onChange={e => setFilterCasino(e.target.value)}
-                  className="bg-vascan-dark border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm" style={{colorScheme:'dark'}}>
-                  <option value="all">Todos los casinos</option>
-                  {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
-              )}
+              {/* El backend ya scopea el resultado a los casinos accesibles por
+                  el usuario actual (admin ve todos, interlocutor/encargado
+                  solo los suyos), así que el desplegable es seguro para
+                  cualquier rol de gestión. */}
+              <select value={filterCasino} onChange={e => setFilterCasino(e.target.value)}
+                className="bg-vascan-dark border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm" style={{colorScheme:'dark'}}>
+                <option value="all">Todos los casinos</option>
+                {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
