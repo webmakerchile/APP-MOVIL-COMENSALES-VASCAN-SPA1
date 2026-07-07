@@ -4053,9 +4053,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!fs.existsSync(scriptPath)) {
       return res.status(404).json({ message: "Script no encontrado" });
     }
+    const realServerUrl = `${req.protocol}://${req.get("host")}`;
+    const realKey = process.env.TOTEM_UPDATE_KEY || process.env.SESSION_SECRET || "";
+    let scriptContent = fs.readFileSync(scriptPath, "utf8");
+    scriptContent = scriptContent.replace(
+      /^\$serverUrl\s*=\s*"[^"]*"/m,
+      `$serverUrl  = "${realServerUrl}"`
+    );
+    scriptContent = scriptContent.replace(
+      /^\$updateKey\s*=\s*"[^"]*"/m,
+      `$updateKey  = "${realKey}"`
+    );
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader("Content-Disposition", 'attachment; filename="update-totem.ps1"');
-    res.sendFile(scriptPath);
+    res.send(scriptContent);
   });
 
   const httpServer = createServer(app);
