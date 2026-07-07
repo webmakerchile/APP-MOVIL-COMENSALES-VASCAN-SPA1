@@ -4035,8 +4035,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!fs.existsSync(scriptPath)) return res.status(404).end();
     const realServerUrl = `${req.protocol}://${req.get("host")}`;
     let content = fs.readFileSync(scriptPath, "utf8");
-    content = content.replace(/https:\/\/app\.buenamezcla\.cl/g, realServerUrl);
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    content = content.replace(
+      /^\$Cloud\s*=\s*"[^"]*"/m,
+      `$Cloud      = "${realServerUrl}"`
+    );
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", 'attachment; filename="install.ps1"');
     res.send(content);
   });
 
