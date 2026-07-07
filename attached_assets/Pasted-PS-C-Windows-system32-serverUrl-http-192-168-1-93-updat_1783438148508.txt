@@ -1,0 +1,133 @@
+PS C:\Windows\system32> $serverUrl  = "http://192.168.1.93"
+>> $updateKey  = "toIGLjr2isxiM1aXCxWbkyHjrr1vJKRdn6p9EOoHltXOnhbJeDZFtFVyY6/Rv9IgLJJn0Y730SNzhGDnDrgcbA=="
+>> $installDir = "C:\BuenaMezcla"
+>>
+>> $zipFile    = "$env:TEMP\totem-update.zip"
+>> $extractDir = "$env:TEMP\totem-update-ext"
+>>
+>> Write-Host "=================================================" -ForegroundColor Cyan
+>> Write-Host "  ACTUALIZACION TOTEM BUENAMEZCLA" -ForegroundColor Cyan
+>> Write-Host "=================================================" -ForegroundColor Cyan
+>>
+>> Write-Host "[1/5] Deteniendo servicios..." -ForegroundColor Yellow
+>> schtasks /End /TN "BuenaMezclaTotemKiosk" 2>$null; $LASTEXITCODE = 0
+>> schtasks /End /TN "BuenaMezclaTotem"      2>$null; $LASTEXITCODE = 0
+>> Stop-Process -Name "node"   -ErrorAction SilentlyContinue
+>> Stop-Process -Name "chrome" -ErrorAction SilentlyContinue
+>> Start-Sleep -Seconds 3
+>> Write-Host "   OK" -ForegroundColor Green
+>>
+>> Write-Host "[2/5] Descargando..." -ForegroundColor Yellow
+>> try {
+>>     Invoke-WebRequest -Uri "$serverUrl/api/totem/update-package?key=$updateKey" -OutFile $zipFile -UseBasicParsing
+>>     $mb = [Math]::Round((Get-Item $zipFile).Length / 1MB, 1)
+>>     Write-Host "   $mb MB descargados" -ForegroundColor Green
+>> } catch {
+>>     Write-Host "ERROR: $_" -ForegroundColor Red
+>>     Read-Host "Enter para cerrar"; exit 1
+>> }
+>>
+>> Write-Host "[3/5] Instalando archivos..." -ForegroundColor Yellow
+>> Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+>> Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
+>>
+>> if (Test-Path "$extractDir\pwa\dist") {
+>>     Remove-Item "$installDir\pwa\dist" -Recurse -Force -ErrorAction SilentlyContinue
+>>     New-Item -ItemType Directory -Force -Path "$installDir\pwa" | Out-Null
+>>     Copy-Item "$extractDir\pwa\dist" "$installDir\pwa\dist" -Recurse -Force
+>>     Write-Host "   pwa\dist OK" -ForegroundColor Green
+>> }
+>> foreach ($f in @("runtime.js","sync-worker.js","register.js")) {
+>>     if (Test-Path "$extractDir\totem\$f") {
+>>         New-Item -ItemType Directory -Force -Path "$installDir\totem" | Out-Null
+>>         Copy-Item "$extractDir\totem\$f" "$installDir\totem\$f" -Force
+>>         Write-Host "   totem\$f OK" -ForegroundColor Green
+>>     }
+>> }
+>> if (Test-Path "$extractDir\node_modules\better-sqlite3") {
+>>     Remove-Item "$installDir\node_modules\better-sqlite3" -Recurse -Force -ErrorAction SilentlyContinue
+>>     New-Item -ItemType Directory -Force -Path "$installDir\node_modules" | Out-Null
+>>     Copy-Item "$extractDir\node_modules\better-sqlite3" "$installDir\node_modules\better-sqlite3" -Recurse -Force
+>>     Write-Host "   better-sqlite3 OK" -ForegroundColor Green
+>> }
+>> foreach ($dep in @("bindings","prebuild-install")) {
+>>     if (Test-Path "$extractDir\node_modules\$dep") {
+>>         Copy-Item "$extractDir\node_modules\$dep" "$installDir\node_modules\$dep" -Recurse -Force
+>>         Write-Host "   $dep OK" -ForegroundColor Green
+>>     }
+>> }
+>>
+>> Write-Host "[4/5] Iniciando servidor..." -ForegroundColor Yellow
+>> $nodeExe = "$installDir\node\node.exe"
+>> if (-not (Test-Path $nodeExe)) { $nodeExe = "node" }
+>> Stop-Process -Name "node" -ErrorAction SilentlyContinue
+>> Start-Sleep -Seconds 2
+>> Start-Process -FilePath $nodeExe -ArgumentList "$installDir\totem\runtime.js" -WorkingDirectory $installDir -WindowStyle Hidden
+>>
+>> $ok = $false
+>> for ($i = 0; $i -lt 30; $i++) {
+>>     Start-Sleep -Seconds 2
+>>     try {
+>>         Invoke-WebRequest -Uri "http://127.0.0.1:5000/api/auth/me" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop | Out-Null
+>>         $ok = $true; break
+>>     } catch {
+>>         $resp = $_.Exception.Response
+>>         if ($resp -ne $null -and $resp.StatusCode.value__ -eq 401) { $ok = $true; break }
+>>     }
+>> }
+>> if ($ok) { Write-Host "   Servidor OK ($($i*2)s)" -ForegroundColor Green }
+>> else { Write-Host "   Tardando - verificar con: .\node\node.exe .\totem\runtime.js" -ForegroundColor Yellow }
+>>
+>> Write-Host "[5/5] Abriendo totem..." -ForegroundColor Yellow
+>> $chrome = "$env:ProgramFiles\Google\Chrome\Application\chrome.exe"
+>> if (-not (Test-Path $chrome)) { $chrome = "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe" }
+>> if (Test-Path $chrome) {
+>>     & $chrome --kiosk --kiosk-printing --no-first-run --noerrdialogs --disable-translate --disable-pinch --user-data-dir="$env:LOCALAPPDATA\BuenaMezclaTotem\ChromeProfile" "http://127.0.0.1:5000/kiosk"
+>> } else { Start-Process "http://127.0.0.1:5000/kiosk" }
+>>
+>> Remove-Item $zipFile    -Force -ErrorAction SilentlyContinue
+>> Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+>> Write-Host "=================================================" -ForegroundColor Green
+>> Write-Host "  LISTO" -ForegroundColor Green
+>> Write-Host "=================================================" -ForegroundColor Green
+>> Read-Host "Enter para cerrar"
+>>
+=================================================
+  ACTUALIZACION TOTEM BUENAMEZCLA
+=================================================
+[1/5] Deteniendo servicios...
+CORRECTO: la tarea programada "BuenaMezclaTotemKiosk" ha finalizado correctamente.
+CORRECTO: la tarea programada "BuenaMezclaTotem" ha finalizado correctamente.
+   OK
+[2/5] Descargando...
+ERROR: No es posible conectar con el servidor remoto
+Enter para cerrar:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
