@@ -3,11 +3,11 @@
 # ==============================================================
 #  USO (PowerShell como Administrador):
 #    Set-ExecutionPolicy -Scope Process Bypass -Force
-#    iwr https://app.buenamezcla.cl/totem/install.ps1 -UseBasicParsing | iex
+#    iwr https://vascan.replit.app/totem/install.ps1 -UseBasicParsing | iex
 # ==============================================================
 
 param(
-  [string] $Cloud      = "https://app.buenamezcla.cl",
+  [string] $Cloud      = "https://vascan.replit.app",
   [string] $Token      = "",
   [string] $Nombre     = "",
   [string] $InstallDir = "C:\BuenaMezcla"
