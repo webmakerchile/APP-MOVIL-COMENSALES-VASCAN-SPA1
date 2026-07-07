@@ -1,0 +1,67 @@
+PS C:\Users\USER> # 1. Ver las últimas líneas del log de error del servicio
+>> Get-Content C:\BuenaMezcla\logs\service.err.log -Tail 40
+>>
+>> # 2. Intentar arrancar manualmente (verás el error directo en pantalla)
+>> cd C:\BuenaMezcla
+>> C:\BuenaMezcla\node\node.exe C:\BuenaMezcla\totem\runtime.js
+[sync] pull network error: fetch failed
+[sync] pull network error: fetch failed
+[2026-07-04T03:00:01.285Z] [PID: 3912] [NODE-CRON] [WARN] missed execution at Fri Jul 03 2026 23:00:00 GMT-0400 (hora estÃ¡ndar de Chile)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[2026-07-04T04:00:01.300Z] [PID: 3912] [NODE-CRON] [WARN] missed execution at Sat Jul 04 2026 00:00:00 GMT-0400 (hora estÃ¡ndar de Chile)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[sync] pull failed: 500
+[sync] pull failed: 500
+[sync] pull failed: 500
+[sync] pull network error: fetch failed
+[2026-07-05T03:00:01.707Z] [PID: 3912] [NODE-CRON] [WARN] missed execution at Sat Jul 04 2026 23:00:00 GMT-0400 (hora estÃ¡ndar de Chile)! Possible blocking IO or high CPU user at the same process used by node-cron.
+[2026-07-05T04:00:01.697Z] [PID: 3912] [NODE-CRON] [WARN] missed execution at Sun Jul 05 2026 00:00:00 GMT-0400 (hora estÃ¡ndar de Chile)! Possible blocking IO or high CPU user at the same process used by node-cron.
+^Cnode:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'file-uri-to-path'
+Require stack:
+- C:\BuenaMezcla\node_modules\bindings\bindings.js
+- C:\BuenaMezcla\node_modules\better-sqlite3\lib\database.js
+- C:\BuenaMezcla\node_modules\better-sqlite3\lib\index.js
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at Object.<anonymous> (C:\BuenaMezcla\node_modules\bindings\bindings.js:7:19)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14)                                                           at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)                                                    at Module.load (node:internal/modules/cjs/loader:1288:32)                                                               at Module._load (node:internal/modules/cjs/loader:1104:12)                                                              at Module.require (node:internal/modules/cjs/loader:1311:19) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\BuenaMezcla\\node_modules\\bindings\\bindings.js',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\lib\\database.js',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\lib\\index.js',
+    'C:\\BuenaMezcla\\totem\\runtime.js'                                                                                  ]                                                                                                                     }                                                                                                                                                                                                                                               Node.js v20.18.0                                                                                                        node:internal/modules/cjs/loader:1228
+  throw err;
+  ^
+
+Error: Cannot find module 'file-uri-to-path'
+Require stack:
+- C:\BuenaMezcla\node_modules\bindings\bindings.js
+- C:\BuenaMezcla\node_modules\better-sqlite3\lib\database.js
+- C:\BuenaMezcla\node_modules\better-sqlite3\lib\index.js
+- C:\BuenaMezcla\totem\runtime.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)
+    at Module._load (node:internal/modules/cjs/loader:1051:27)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at Object.<anonymous> (C:\BuenaMezcla\node_modules\bindings\bindings.js:7:19)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+    at Module.load (node:internal/modules/cjs/loader:1288:32)
+    at Module._load (node:internal/modules/cjs/loader:1104:12)
+    at Module.require (node:internal/modules/cjs/loader:1311:19) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\BuenaMezcla\\node_modules\\bindings\\bindings.js',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\lib\\database.js',
+    'C:\\BuenaMezcla\\node_modules\\better-sqlite3\\lib\\index.js',
+    'C:\\BuenaMezcla\\totem\\runtime.js'
+  ]
+}
+
+Node.js v20.18.0
