@@ -12,7 +12,7 @@
 # =============================================================================
 
 # ─── CONFIGURACIÓN (edita estas 3 variables) ──────────────────────────────────
-$serverUrl  = "https://vascan.replit.app"   # URL de producción (sin / final)
+$serverUrl  = "https://app.buenamezcla.cl"  # URL de producción (sin / final)
 $updateKey  = "TU-CLAVE-SECRETA"            # Valor de TOTEM_UPDATE_KEY (o SESSION_SECRET) en Replit Secrets
 $installDir = "C:\BuenaMezcla"             # Carpeta de instalación del tótem
 # ──────────────────────────────────────────────────────────────────────────────

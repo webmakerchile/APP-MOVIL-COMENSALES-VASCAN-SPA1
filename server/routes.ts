@@ -4008,6 +4008,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try { fs.rmSync(totemTmpDir, { recursive: true, force: true }); } catch {}
   });
 
+  // ── Descarga del script de actualización ────────────────────────────────────
+  // GET /api/totem/update-script
+  // Devuelve update-totem.ps1 como descarga. Acepta autenticación por clave
+  // (igual que update-package) O por sesión de administrador, para que el
+  // botón del panel admin pueda descargarlo sin exponer la clave al cliente.
+  app.get("/api/totem/update-script", async (req: Request, res: Response) => {
+    if (process.env.DB_MODE === "totem") return res.status(404).end();
+
+    const expectedKey = process.env.TOTEM_UPDATE_KEY || process.env.SESSION_SECRET || "";
+    const providedKey = (req.query.key as string) || "";
+    const keyOk = expectedKey && providedKey === expectedKey;
+
+    let sessionOk = false;
+    if (!keyOk) {
+      const userId = (req.session as any).userId;
+      if (userId) {
+        const user = await storage.getUser(userId).catch(() => null);
+        sessionOk = user?.role === "admin";
+      }
+    }
+
+    if (!keyOk && !sessionOk) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    const scriptPath = path.join(process.cwd(), "update-totem.ps1");
+    if (!fs.existsSync(scriptPath)) {
+      return res.status(404).json({ message: "Script no encontrado" });
+    }
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", 'attachment; filename="update-totem.ps1"');
+    res.sendFile(scriptPath);
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
