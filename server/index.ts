@@ -303,6 +303,23 @@ function setupErrorHandler(app: express.Application) {
   setupBodyParsing(app);
   setupRequestLogging(app);
 
+  // Ruta dinámica: sirve install.ps1 con $Cloud ya relleno con la URL real.
+  // DEBE registrarse ANTES de configureExpoAndLanding, que monta express.static(public).
+  app.get("/totem/install.ps1", (req: Request, res: Response) => {
+    if (process.env.DB_MODE === "totem") return res.status(404).end();
+    const scriptPath = path.resolve(process.cwd(), "public", "totem", "install.ps1");
+    if (!fs.existsSync(scriptPath)) return res.status(404).end();
+    const realServerUrl = `${req.protocol}://${req.get("host")}`;
+    let content = fs.readFileSync(scriptPath, "utf8");
+    content = content.replace(
+      /(\[string\]\s*\$Cloud\s*=\s*")[^"]*(")/m,
+      `$1${realServerUrl}$2`
+    );
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", 'attachment; filename="install.ps1"');
+    res.send(content);
+  });
+
   configureExpoAndLanding(app);
 
   const server = await registerRoutes(app);

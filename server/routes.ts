@@ -4025,25 +4025,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Descarga del script de actualización ────────────────────────────────────
-  // GET /totem/install.ps1
-  // Sirve el script de instalación dinámicamente con la URL real del servidor
-  // ya rellena, para que el admin pueda ejecutarlo directamente sin edición.
-  // Es público (sin autenticación): el script solo descarga software, no datos.
-  app.get("/totem/install.ps1", (req: Request, res: Response) => {
-    if (process.env.DB_MODE === "totem") return res.status(404).end();
-    const scriptPath = path.join(process.cwd(), "public", "totem", "install.ps1");
-    if (!fs.existsSync(scriptPath)) return res.status(404).end();
-    const realServerUrl = `${req.protocol}://${req.get("host")}`;
-    let content = fs.readFileSync(scriptPath, "utf8");
-    content = content.replace(
-      /^\$Cloud\s*=\s*"[^"]*"/m,
-      `$Cloud      = "${realServerUrl}"`
-    );
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Disposition", 'attachment; filename="install.ps1"');
-    res.send(content);
-  });
-
   // GET /api/totem/update-script
   // Devuelve update-totem.ps1 como descarga. Acepta autenticación por clave
   // (igual que update-package) O por sesión de administrador, para que el
