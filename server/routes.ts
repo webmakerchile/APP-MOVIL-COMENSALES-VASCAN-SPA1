@@ -449,7 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: process.env.DB_MODE !== "totem" && process.env.NODE_ENV === "production",
         sameSite: "lax",
       },
     }),
