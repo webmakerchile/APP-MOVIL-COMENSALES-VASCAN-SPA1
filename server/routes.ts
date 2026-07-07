@@ -3995,7 +3995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
     // Dependencias de better-sqlite3
-    for (const dep of ["bindings", "prebuild-install"]) {
+    for (const dep of ["bindings", "prebuild-install", "file-uri-to-path"]) {
       const depDir = path.join(nmDir, dep);
       if (fs.existsSync(depDir)) {
         archive.directory(depDir, `node_modules/${dep}`);
