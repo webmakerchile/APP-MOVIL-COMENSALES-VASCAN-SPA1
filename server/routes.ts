@@ -3994,8 +3994,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
     }
-    // Dependencias de better-sqlite3
-    for (const dep of ["bindings", "prebuild-install", "file-uri-to-path"]) {
+    // Dependencias de better-sqlite3 — resueltas automáticamente desde package.json
+    function collectDeps(pkgName: string, nmRoot: string, seen: Set<string>): void {
+      if (seen.has(pkgName)) return;
+      seen.add(pkgName);
+      const pkgJson = path.join(nmRoot, pkgName, "package.json");
+      if (!fs.existsSync(pkgJson)) return;
+      try {
+        const meta = JSON.parse(fs.readFileSync(pkgJson, "utf8"));
+        for (const dep of Object.keys(meta.dependencies ?? {})) {
+          collectDeps(dep, nmRoot, seen);
+        }
+      } catch {}
+    }
+    const sqliteDeps = new Set<string>();
+    collectDeps("better-sqlite3", nmDir, sqliteDeps);
+    sqliteDeps.delete("better-sqlite3"); // ya incluido arriba como paquete completo
+    console.log("[update-package] deps transitivas incluidas:", [...sqliteDeps].sort().join(", "));
+    for (const dep of sqliteDeps) {
       const depDir = path.join(nmDir, dep);
       if (fs.existsSync(depDir)) {
         archive.directory(depDir, `node_modules/${dep}`);
