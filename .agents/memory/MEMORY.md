@@ -10,3 +10,4 @@
 - [Admin panel CDN/Babel](admin-panel-cdn.md) — /admin transpila JSX en el navegador con @babel/standalone del CDN; mantenerlo pinneado a 7.x o se rompe (pantalla negra) cuando el CDN sube de versión.
 - [db:push borra session](db-push-session-drop.md) — drizzle-kit quiere DROP de la tabla session (no está en schema.ts); nunca confirmar; agregar columnas con ALTER TABLE directo.
 - [Dominio de producción del tótem](totem-installer-domain.md) — app.buenamezcla.cl es el dominio real; vascan.replit.app en scripts viejos es un remanente sin actualizar, no una alternativa válida.
+- [Casinos nunca se hard-delete](casino-hard-delete-fk.md) — múltiples tablas (minutas, periodos, users, totems) tienen FK sin cascade a casinos.id; borrado de casino siempre debe ser soft-delete.
