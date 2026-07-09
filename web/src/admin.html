@@ -808,13 +808,17 @@
 
       async function handleDelete() {
         try {
-          const historyRes = await apiFetch(`/api/casinos/${deleteTarget.id}/has-history`);
-          if (historyRes.hasHistory) {
-            await apiFetch(`/api/casinos/${deleteTarget.id}`, { method: 'DELETE' });
-            setToast({ message: `Casino desactivado (tiene ${historyRes.minutas} minutas y ${historyRes.usuarios} usuarios asociados)`, type: 'success' });
+          const historyRes = await apiFetch(`/api/casinos/${deleteTarget.id}/has-history`).catch(() => null);
+          await apiFetch(`/api/casinos/${deleteTarget.id}`, { method: 'DELETE' });
+          if (historyRes && historyRes.hasHistory) {
+            const partes = [];
+            if (historyRes.minutas) partes.push(`${historyRes.minutas} minutas`);
+            if (historyRes.usuarios) partes.push(`${historyRes.usuarios} usuarios`);
+            if (historyRes.periodos) partes.push(`${historyRes.periodos} periodos`);
+            if (historyRes.totems) partes.push(`${historyRes.totems} tótems`);
+            setToast({ message: `Casino desactivado (tiene ${partes.join(', ')} asociados)`, type: 'success' });
           } else {
-            await apiFetch(`/api/casinos/${deleteTarget.id}`, { method: 'DELETE' });
-            setToast({ message: 'Casino eliminado permanentemente', type: 'success' });
+            setToast({ message: 'Casino desactivado', type: 'success' });
           }
           setDeleteTarget(null);
           loadData();

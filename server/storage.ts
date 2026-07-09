@@ -203,10 +203,6 @@ export class DatabaseStorage implements IStorage {
     const [casino] = await db.update(casinos).set(tombstone()).where(eq(casinos.id, id)).returning();
     return !!casino;
   }
-  async hardDeleteCasino(id: string): Promise<boolean> {
-    const [casino] = await db.delete(casinos).where(eq(casinos.id, id)).returning();
-    return !!casino;
-  }
 
   // ── Minutas ──
   async getMinutasByCasino(casinoId: string): Promise<Minuta[]> {

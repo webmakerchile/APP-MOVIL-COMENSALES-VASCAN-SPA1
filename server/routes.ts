@@ -943,36 +943,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const casinoMinutas = await storage.getAllMinutasByCasino(id);
       const allUsers = await storage.getAllUsers();
       const usersInCasino = allUsers.filter(u => u.casinoId === id);
-      const hasHistory = casinoMinutas.length > 0 || usersInCasino.length > 0;
-      return res.json({ hasHistory, minutas: casinoMinutas.length, usuarios: usersInCasino.length });
+      const casinoPeriodos = await storage.getPeriodosByCasino(id);
+      const casinoTotems = await db.select().from(totemsTable).where(eqOp(totemsTable.casinoId, id));
+      const hasHistory =
+        casinoMinutas.length > 0 ||
+        usersInCasino.length > 0 ||
+        casinoPeriodos.length > 0 ||
+        casinoTotems.length > 0;
+      return res.json({
+        hasHistory,
+        minutas: casinoMinutas.length,
+        usuarios: usersInCasino.length,
+        periodos: casinoPeriodos.length,
+        totems: casinoTotems.length,
+      });
     } catch (error) {
       return res.status(500).json({ message: "Error al verificar historial" });
     }
   });
 
+  // Nota: los casinos SIEMPRE se desactivan (soft-delete / tombstone), nunca
+  // se borran físicamente. Hay múltiples tablas (minutas, periodos, totems,
+  // users) con FK a casinos.id SIN onDelete:cascade, así que un hard-delete
+  // real fallaría (o peor, dejaría huérfanos) apenas el casino tuviera
+  // cualquier historial asociado. El tombstone es seguro siempre.
   app.delete("/api/casinos/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const force = req.query.force === "true";
-
-      const casinoMinutas = await storage.getAllMinutasByCasino(id);
-      const allUsers = await storage.getAllUsers();
-      const usersInCasino = allUsers.filter(u => u.casinoId === id);
-      const hasHistory = casinoMinutas.length > 0 || usersInCasino.length > 0;
-
-      if (hasHistory && !force) {
-        const deleted = await storage.deleteCasino(id);
-        if (!deleted) return res.status(404).json({ message: "Casino no encontrado" });
-        return res.json({ message: "Casino desactivado (tiene historial asociado)", action: "deactivated" });
-      }
-
-      if (!hasHistory || force) {
-        const result = await storage.hardDeleteCasino(id);
-        if (!result) return res.status(404).json({ message: "Casino no encontrado" });
-        return res.json({ message: "Casino eliminado permanentemente", action: "deleted" });
-      }
-
-      return res.json({ message: "Casino desactivado" });
+      const deleted = await storage.deleteCasino(id);
+      if (!deleted) return res.status(404).json({ message: "Casino no encontrado" });
+      return res.json({ message: "Casino desactivado", action: "deactivated" });
     } catch (error) {
       console.error("Delete casino error:", error);
       return res.status(500).json({ message: "Error interno del servidor" });
