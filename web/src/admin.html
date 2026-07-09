@@ -597,6 +597,7 @@
       // El filtro por casino ya lo aplica el backend (?casinoId=), sobre todos
       // los roles por igual. Acá solo queda filtrar por el texto de búsqueda.
       const filtered = users.filter(u => {
+        if (!u.activo) return false;
         const txt = (u.nombre + ' ' + u.apellido + ' ' + u.rut).toLowerCase();
         if (search && !txt.includes(search.toLowerCase())) return false;
         return true;
@@ -635,7 +636,7 @@
               <select value={filterCasino} onChange={e => setFilterCasino(e.target.value)}
                 className="bg-vascan-dark border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm" style={{colorScheme:'dark'}}>
                 <option value="all">Todos los casinos</option>
-                {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                {casinos.filter(c => c.activo).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </div>
             <div className="overflow-x-auto">
@@ -865,8 +866,8 @@
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {casinosList.map(c => (
-              <div key={c.id} className={`bg-vascan-surface rounded-2xl border p-5 ${c.activo ? 'border-white/10' : 'border-red-500/20 opacity-60'}`}>
+            {casinosList.filter(c => c.activo).map(c => (
+              <div key={c.id} className="bg-vascan-surface rounded-2xl border border-white/10 p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="font-semibold text-lg">{c.nombre}</h3>
@@ -2383,7 +2384,7 @@
         }
       }
 
-      const filtered = selectedCasino ? periodos.filter(p => p.casinoId === selectedCasino) : periodos;
+      const filtered = (selectedCasino ? periodos.filter(p => p.casinoId === selectedCasino) : periodos).filter(p => p.activo);
       const getCasinoName = id => casinos.find(c => c.id === id)?.nombre || 'N/A';
       const isActive = p => {
         if (!p.activo) return false;
@@ -2412,7 +2413,7 @@
               <select value={selectedCasino} onChange={e => setSelectedCasino(e.target.value)}
                 className="bg-vascan-dark border border-white/10 text-white rounded-xl px-4 py-2.5 text-sm appearance-none cursor-pointer" style={{colorScheme: 'dark'}}>
                 <option value="">Todos los casinos</option>
-                {casinos.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                {casinos.filter(c => c.activo).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </div>
           )}
@@ -2481,20 +2482,20 @@
                     <input value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Ej: Inscripción Almuerzo Lunes"
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm" />
                   </div>
-                  {!editing && casinos.length > 0 && (
+                  {!editing && casinos.filter(c => c.activo).length > 0 && (
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="block text-sm font-medium text-white/60">Casinos</label>
                         <button type="button" onClick={() => {
-                          const allIds = casinos.map(c => c.id);
+                          const allIds = casinos.filter(c => c.activo).map(c => c.id);
                           const allSel = allIds.every(id => form.casinoIds.includes(id));
                           setForm({...form, casinoIds: allSel ? [] : allIds});
                         }} className="text-xs font-medium text-vascan-gold hover:text-vascan-gold/80 transition px-2 py-0.5 rounded-lg bg-vascan-gold/10">
-                          {casinos.every(c => form.casinoIds.includes(c.id)) ? 'Ninguno' : 'Todos'}
+                          {casinos.filter(c => c.activo).every(c => form.casinoIds.includes(c.id)) ? 'Ninguno' : 'Todos'}
                         </button>
                       </div>
                       <div className="space-y-2 max-h-36 overflow-y-auto bg-white/5 rounded-xl p-3 border border-white/10">
-                        {casinos.map(c => (
+                        {casinos.filter(c => c.activo).map(c => (
                           <label key={c.id} className="flex items-center gap-3 cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1.5 transition">
                             <input type="checkbox" checked={form.casinoIds.includes(c.id)} onChange={() => toggleCasinoInPeriodo(c.id)}
                               className="w-4 h-4 rounded accent-amber-500" />
