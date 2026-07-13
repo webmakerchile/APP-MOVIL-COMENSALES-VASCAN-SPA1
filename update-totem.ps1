@@ -6,16 +6,22 @@
 # Preserva la base de datos (totem-data\) y la configuración (.env).
 #
 # USO:
-#   .\update-totem.ps1
-#
-# Ejecutar como Administrador si schtasks requiere permisos elevados.
+#   .\update-totem.ps1          (se auto-eleva a Administrador si es necesario)
 # =============================================================================
 
 # ─── CONFIGURACIÓN (edita estas 3 variables) ──────────────────────────────────
-$serverUrl  = "https://app.buenamezcla.cl"  # URL de producción (sin / final)
+$serverUrl  = "https://vascan.replit.app"   # URL de producción (sin / final)
 $updateKey  = "TU-CLAVE-SECRETA"            # Valor de TOTEM_UPDATE_KEY (o SESSION_SECRET) en Replit Secrets
 $installDir = "C:\BuenaMezcla"             # Carpeta de instalación del tótem
 # ──────────────────────────────────────────────────────────────────────────────
+
+# ─── Verificar / elevar permisos de Administrador ────────────────────────────
+if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "Se requieren permisos de Administrador. Elevando..." -ForegroundColor Yellow
+    Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    exit
+}
+# ─────────────────────────────────────────────────────────────────────────────
 
 $ErrorActionPreference = "Stop"
 $zipFile    = "$env:TEMP\totem-update.zip"
