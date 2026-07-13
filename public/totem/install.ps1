@@ -196,12 +196,40 @@ if exist "%CHROME%" (
 )
 "@ | Set-Content -Encoding ASCII $kioskCmd
 
+$watchdogCmd = "$InstallDir\scripts\watchdog.cmd"
+@"
+@echo off
+set "LOG=$InstallDir\logs\watchdog.log"
+if not exist "$InstallDir\logs" mkdir "$InstallDir\logs" >nul 2>&1
+
+set /a FAILS=0
+:CHECK
+powershell -NoProfile -Command "try{`$c=New-Object Net.Sockets.TcpClient;`$c.Connect('127.0.0.1',5000);`$c.Close();exit 0}catch{exit 1}" >nul 2>&1
+if not errorlevel 1 exit /b 0
+set /a FAILS+=1
+if %FAILS% LSS 3 (
+    timeout /t 10 /nobreak >nul
+    goto CHECK
+)
+echo [%date% %time%] No responde. Reiniciando BuenaMezclaTotem... >> "$InstallDir\logs\watchdog.log"
+schtasks /Run /TN "BuenaMezclaTotem" >> "$InstallDir\logs\watchdog.log" 2>&1
+timeout /t 15 /nobreak >nul
+powershell -NoProfile -Command "try{`$c=New-Object Net.Sockets.TcpClient;`$c.Connect('127.0.0.1',5000);`$c.Close();exit 0}catch{exit 1}" >nul 2>&1
+if not errorlevel 1 (
+    echo [%date% %time%] Reiniciado OK. >> "$InstallDir\logs\watchdog.log"
+) else (
+    echo [%date% %time%] ADVERTENCIA: Sigue sin responder. >> "$InstallDir\logs\watchdog.log"
+)
+"@ | Set-Content -Encoding ASCII $watchdogCmd
+
 # ── Tareas programadas ──
 Step "7/8 Registrando tareas de inicio automatico"
 schtasks /Delete /TN "BuenaMezclaTotem"      /F 2>$null | Out-Null
 schtasks /Delete /TN "BuenaMezclaTotemKiosk" /F 2>$null | Out-Null
+schtasks /Delete /TN "BuenaMezclaWatchdog"   /F 2>$null | Out-Null
 schtasks /Create /TN "BuenaMezclaTotem"      /TR "`"$serviceCmd`"" /SC ONSTART  /RU "SYSTEM" /RL HIGHEST /F | Out-Null
 schtasks /Create /TN "BuenaMezclaTotemKiosk" /TR "`"$kioskCmd`""   /SC ONLOGON  /RL HIGHEST  /F | Out-Null
+schtasks /Create /TN "BuenaMezclaWatchdog"   /TR "`"$watchdogCmd`"" /SC MINUTE /MO 5 /RU "SYSTEM" /RL HIGHEST /F | Out-Null
 
 # ── Lanzar ahora ──
 Step "8/8 Iniciando servicio"

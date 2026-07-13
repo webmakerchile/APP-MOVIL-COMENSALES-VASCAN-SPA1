@@ -128,6 +128,18 @@ if ($ok) {
     Write-Host "   Advertencia: servidor tardando, abriendo tótem igual..." -ForegroundColor Yellow
 }
 
+# Registrar/actualizar tarea watchdog (reinicio automático si el proceso cae)
+$watchdogScript = "$installDir\scripts\watchdog.cmd"
+if (Test-Path "$extractDir\scripts\watchdog.cmd") {
+    New-Item -ItemType Directory -Force -Path "$installDir\scripts" | Out-Null
+    Copy-Item "$extractDir\scripts\watchdog.cmd" $watchdogScript -Force
+    Write-Host "   watchdog.cmd actualizado" -ForegroundColor Green
+}
+if (Test-Path $watchdogScript) {
+    schtasks /Create /TN "BuenaMezclaWatchdog" /TR "`"$watchdogScript`"" /SC MINUTE /MO 5 /RU "SYSTEM" /RL HIGHEST /F 2>$null | Out-Null
+    Write-Host "   Tarea watchdog registrada (cada 5 min)" -ForegroundColor Green
+}
+
 # 5. Abrir Chrome en modo kiosk
 Write-Host "[5/5] Abriendo totem..." -ForegroundColor Yellow
 $kioskCmd = "$installDir\scripts\start-kiosk.cmd"

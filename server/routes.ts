@@ -4018,6 +4018,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
+    // Incluir watchdog.cmd para instalaciones/actualizaciones
+    const watchdogSrc = path.join(cwd, "windows", "scripts", "watchdog.cmd");
+    if (fs.existsSync(watchdogSrc)) {
+      archive.file(watchdogSrc, { name: "scripts/watchdog.cmd" });
+    }
+
     await archive.finalize();
 
     // Limpiar temp

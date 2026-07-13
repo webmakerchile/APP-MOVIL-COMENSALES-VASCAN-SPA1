@@ -41,6 +41,10 @@ npx vite build --config pwa/vite.config.ts --outDir "$payload\pwa\dist" --emptyO
 Write-Host "== Copying public/ assets =="
 Copy-Item -Recurse public "$payload\public"
 
+Write-Host "== Copying scripts/ =="
+New-Item -ItemType Directory -Force -Path "$payload\scripts" | Out-Null
+Copy-Item "$PSScriptRoot\scripts\*" "$payload\scripts\" -Recurse
+
 Write-Host "== Writing minimal package.json =="
 @'
 {
