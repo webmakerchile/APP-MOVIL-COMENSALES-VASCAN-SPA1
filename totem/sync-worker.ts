@@ -237,13 +237,18 @@ async function applyUpdate(marker: { version: string; obligatoria?: boolean }): 
     }
 
     // 3. Replace JS bundles (runtime.js, sync-worker.js)
-    for (const f of ["runtime.js", "sync-worker.js"]) {
+    // Both files are required — abort if either is missing from the ZIP
+    const required = ["runtime.js", "sync-worker.js"];
+    const missingFiles = required.filter(f => !fs.existsSync(path.join(tmpDir, "totem", f)));
+    if (missingFiles.length > 0) {
+      console.error(`[sync] ZIP incompleto — faltan archivos requeridos: ${missingFiles.join(", ")}. Se reintentará.`);
+      return; // marker stays → retry next cycle
+    }
+    for (const f of required) {
       const src = path.join(tmpDir, "totem", f);
       const dst = path.join(installDir, "totem", f);
-      if (fs.existsSync(src)) {
-        fs.copyFileSync(src, dst);
-        console.log(`[sync] ${f} reemplazado`);
-      }
+      fs.copyFileSync(src, dst);
+      console.log(`[sync] ${f} reemplazado`);
     }
 
     // 4. Replace pwa/dist if bundled
@@ -255,7 +260,7 @@ async function applyUpdate(marker: { version: string; obligatoria?: boolean }): 
       console.log("[sync] pwa/dist reemplazado");
     }
 
-    // 5. Persist new version and remove marker (before restart so no loop)
+    // 5. Persist new version and remove marker ONLY after all files replaced successfully
     setCfg("version", marker.version);
     fs.rmSync(path.join(installDir, "totem-data", "update-pending.json"), { force: true });
 

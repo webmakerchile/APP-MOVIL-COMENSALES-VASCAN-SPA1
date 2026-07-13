@@ -334,6 +334,16 @@ export function registerSyncRoutes(app: Express) {
       }
     }
 
+    // Fail fast if required JS files could not be compiled
+    const requiredFiles = ["runtime.js", "sync-worker.js"];
+    const missing = requiredFiles.filter(f => !compiled.includes(f));
+    if (missing.length > 0) {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ok */ }
+      return res.status(500).json({
+        message: `Error compilando archivos requeridos: ${missing.join(", ")}. Revisa los logs del servidor.`,
+      });
+    }
+
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="totem-pull-update-${Date.now()}.zip"`);
 
