@@ -194,6 +194,110 @@ async function runHeartbeat() {
 }
 
 // ── AUTO-UPDATE check ─────────────────────────────────────────────────────
+
+/** Returns true if current hour (local time) is in the low-traffic window. */
+function isNightWindow(): boolean {
+  const h = new Date().getHours();
+  return h >= 2 && h < 5;
+}
+
+/**
+ * Downloads the lightweight pull-update bundle (runtime.js + sync-worker.js +
+ * pwa/dist), applies it in-place, then restarts the Node service.
+ * Safe to call from within the running process: files are replaced while the
+ * server is still serving, then a detached cmd restarts via schtasks.
+ */
+async function applyUpdate(marker: { version: string; obligatoria?: boolean }): Promise<void> {
+  const installDir = process.cwd();
+  const tmpZip = path.join(installDir, "totem-data", "update-pull.zip");
+  const tmpDir = path.join(installDir, "totem-data", "update-pull-tmp");
+  console.log(`[sync] Aplicando actualización ${marker.version}...`);
+  try {
+    // 1. Download lightweight bundle via totem-authenticated endpoint
+    const res = await cloudFetch("/api/totem/pull-update");
+    if (!res.ok) {
+      console.error(`[sync] pull-update HTTP ${res.status} — se reintentará en el próximo ciclo`);
+      return;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    fs.mkdirSync(path.dirname(tmpZip), { recursive: true });
+    fs.writeFileSync(tmpZip, buf);
+
+    // 2. Extract using PowerShell (always available on Windows)
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const { spawnSync } = require("child_process") as typeof import("child_process");
+    const ex = spawnSync("powershell", [
+      "-NoProfile", "-Command",
+      `Expand-Archive -Path '${tmpZip}' -DestinationPath '${tmpDir}' -Force`,
+    ], { timeout: 60_000 });
+    if (ex.status !== 0) {
+      console.error("[sync] Error extrayendo ZIP de actualización:", ex.stderr?.toString().slice(0, 200));
+      return;
+    }
+
+    // 3. Replace JS bundles (runtime.js, sync-worker.js)
+    for (const f of ["runtime.js", "sync-worker.js"]) {
+      const src = path.join(tmpDir, "totem", f);
+      const dst = path.join(installDir, "totem", f);
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, dst);
+        console.log(`[sync] ${f} reemplazado`);
+      }
+    }
+
+    // 4. Replace pwa/dist if bundled
+    const pwaSrc = path.join(tmpDir, "pwa", "dist");
+    const pwaDst = path.join(installDir, "pwa", "dist");
+    if (fs.existsSync(pwaSrc)) {
+      fs.rmSync(pwaDst, { recursive: true, force: true });
+      fs.cpSync(pwaSrc, pwaDst, { recursive: true });
+      console.log("[sync] pwa/dist reemplazado");
+    }
+
+    // 5. Persist new version and remove marker (before restart so no loop)
+    setCfg("version", marker.version);
+    fs.rmSync(path.join(installDir, "totem-data", "update-pending.json"), { force: true });
+
+    console.log(`[sync] Actualización ${marker.version} aplicada. Reiniciando en 3s...`);
+
+    // 6. Restart: spawn a detached cmd that waits 3s then re-runs the task.
+    //    Our process exits first via process.exit(0) after 2s.
+    //    The watchdog (task #46) will also cover the gap if schtasks /Run races.
+    const { spawn } = require("child_process") as typeof import("child_process");
+    const child = spawn(
+      "cmd.exe",
+      ["/C", `timeout /T 3 /NOBREAK >nul && schtasks /Run /TN "BuenaMezclaTotem"`],
+      { detached: true, stdio: "ignore", windowsHide: true },
+    );
+    child.unref();
+
+    setTimeout(() => process.exit(0), 2_000);
+  } catch (e: any) {
+    console.error("[sync] Error aplicando actualización:", e?.message ?? e);
+  } finally {
+    // Cleanup temp files (best-effort — the process may exit before this runs)
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ok */ }
+    try { fs.rmSync(tmpZip, { force: true }); } catch { /* ok */ }
+  }
+}
+
+/**
+ * Reads update-pending.json and applies the update if the conditions are met:
+ * - obligatoria=true: apply immediately (no time-window check)
+ * - otherwise: only apply during the 02:00–05:00 low-traffic window
+ */
+async function tryApplyPendingUpdate(): Promise<void> {
+  const markerPath = path.join(process.cwd(), "totem-data", "update-pending.json");
+  if (!fs.existsSync(markerPath)) return;
+  let marker: any;
+  try { marker = JSON.parse(fs.readFileSync(markerPath, "utf8")); } catch { return; }
+  if (!marker?.version) return;
+  if (marker.obligatoria || isNightWindow()) {
+    await applyUpdate(marker);
+  }
+}
+
 async function checkUpdate() {
   if (!getCfg("totem_id")) return;
   try {
@@ -204,10 +308,14 @@ async function checkUpdate() {
     const current = getCfg("version") || "0.0.0";
     if (json.version === current) return;
     console.log(`[sync] nueva versión disponible: ${json.version} (actual ${current})`);
-    // Drop a marker for the updater scheduled task to act on
+    // Persist marker so the update survives reboots and retries
     const marker = path.join(process.cwd(), "totem-data", "update-pending.json");
     fs.mkdirSync(path.dirname(marker), { recursive: true });
     fs.writeFileSync(marker, JSON.stringify(json, null, 2));
+    // Mandatory updates are applied immediately, bypassing the night window
+    if (json.obligatoria) {
+      await applyUpdate(json);
+    }
   } catch {/* swallow */}
 }
 
@@ -217,11 +325,13 @@ function startWorker() {
   setInterval(runPush, 15 * 1000);
   setInterval(runHeartbeat, 60 * 1000);
   setInterval(checkUpdate, 30 * 60 * 1000);
+  setInterval(tryApplyPendingUpdate, 10 * 60 * 1000); // Check pending update every 10 min
   // Initial kicks (delayed so the HTTP server is up first)
   setTimeout(runHeartbeat, 5_000);
   setTimeout(runPull, 7_000);
   setTimeout(runPush, 10_000);
   setTimeout(checkUpdate, 60_000);
+  setTimeout(tryApplyPendingUpdate, 30_000); // Check at startup (30s delay for network)
 }
 
-export { runPull, runPush, runHeartbeat, checkUpdate };
+export { runPull, runPush, runHeartbeat, checkUpdate, tryApplyPendingUpdate };

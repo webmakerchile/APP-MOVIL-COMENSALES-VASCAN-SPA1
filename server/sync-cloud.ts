@@ -10,7 +10,12 @@
 //                          (scoped to the totem's casino)
 //   POST /push           — accepts an array of pedido upserts
 //   GET  /version/latest — returns latest published release (for self-update)
+//   GET  /pull-update    — lightweight update bundle (runtime.js + sync-worker.js + pwa/dist)
 import type { Express, Request, Response, NextFunction } from "express";
+import * as fs from "fs";
+import * as path from "path";
+import { spawnSync } from "child_process";
+import archiver from "archiver";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { totems, totemReleases, users, casinos, minutas, familias, periodos, pedidos, type Totem } from "@shared/schema";
@@ -288,6 +293,65 @@ export function registerSyncRoutes(app: Express) {
       console.error("version latest error", err);
       return res.status(500).json({ message: "Error al consultar versión" });
     }
+  });
+
+  // ── Latest release info (for auto-update) — already above ──────────────
+
+  // ── Lightweight pull-update bundle ──────────────────────────────────────
+  // GET /api/totem/pull-update
+  // Authenticated via totem credentials (X-Totem-Id + X-Totem-Secret).
+  // Returns a ZIP with only: totem/runtime.js + totem/sync-worker.js + pwa/dist
+  // (no node_modules/better-sqlite3 — much smaller than update-package).
+  app.get("/api/totem/pull-update", requireTotem, async (_req: AuthedTotemRequest, res: Response) => {
+    if (process.env.DB_MODE === "totem") return res.status(404).end();
+
+    const cwd = process.cwd();
+    const pwaDistDir = path.join(cwd, "pwa", "dist");
+    const totemSrcDir = path.join(cwd, "totem");
+    const tmpDir = path.join("/tmp", `totem-pull-update-${Date.now()}`);
+
+    // Compile runtime.ts and sync-worker.ts (lightweight — no register.ts needed)
+    const totemFiles = ["runtime.ts", "sync-worker.ts"];
+    const compiled: string[] = [];
+
+    if (fs.existsSync(totemSrcDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+      for (const file of totemFiles) {
+        const src = path.join(totemSrcDir, file);
+        if (!fs.existsSync(src)) continue;
+        const outFile = path.join(tmpDir, file.replace(".ts", ".js"));
+        const result = spawnSync(
+          "npx",
+          ["esbuild", src, "--platform=node", "--bundle", "--format=cjs",
+            "--external:better-sqlite3", "--external:fsevents", `--outfile=${outFile}`],
+          { cwd, encoding: "utf8", timeout: 120_000 },
+        );
+        if (result.status === 0) {
+          compiled.push(file.replace(".ts", ".js"));
+        } else {
+          console.error(`[pull-update] esbuild error for ${file}:`, result.stderr?.slice(0, 200));
+        }
+      }
+    }
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="totem-pull-update-${Date.now()}.zip"`);
+
+    const archive = archiver("zip", { zlib: { level: 6 } });
+    archive.on("error", (err) => { console.error("[pull-update] archiver error:", err); res.end(); });
+    archive.pipe(res);
+
+    for (const jsFile of compiled) {
+      const jsPath = path.join(tmpDir, jsFile);
+      if (fs.existsSync(jsPath)) archive.file(jsPath, { name: `totem/${jsFile}` });
+    }
+
+    if (fs.existsSync(pwaDistDir)) {
+      archive.directory(pwaDistDir, "pwa/dist");
+    }
+
+    await archive.finalize();
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ok */ }
   });
 
   // ── Fleet view (admin-only) ─────────────────────────────────────────────
