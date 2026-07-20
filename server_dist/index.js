@@ -58,7 +58,8 @@ import {
   date,
   timestamp,
   boolean,
-  pgEnum
+  pgEnum,
+  uniqueIndex
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -153,13 +154,32 @@ var init_schema = __esm({
       codigoQr: text("codigo_qr"),
       origenTotemId: varchar("origen_totem_id"),
       impresoEn: timestamp("impreso_en"),
+      // Gestión diaria (módulo admin): acción tomada sobre un inscrito que NO pasó
+      // por el tótem a la hora de corte. null = sin gestión; 'delivery' = se envía
+      // a domicilio/puesto; 'baja' = se da de baja (no consume, descontar del conteo).
+      gestionEstado: text("gestion_estado"),
       createdAt: timestamp("created_at").defaultNow(),
       ...syncCols
-    });
+    }, (t) => ({
+      // Defensa a nivel BD: un comensal NO puede tener dos pedidos vivos para la
+      // misma minuta. Garantiza unicidad incluso si una ruta de aplicación falla
+      // o si el tótem Windows offline crea un duplicado por race condition.
+      // Partial index sobre deleted_at IS NULL para permitir tombstones múltiples.
+      // Se excluyen los vales de visita (tipo='visita'): un mismo interlocutor/staff
+      // emite MÚLTIPLES visitas el mismo día sobre la misma minuta (todas quedan
+      // bajo su userId), por lo que NO deben colisionar contra esta restricción.
+      uniqUserMinutaActive: uniqueIndex("uniq_pedidos_user_minuta_active").on(t.userId, t.minutaId).where(sql`deleted_at IS NULL AND tipo <> 'visita'`)
+    }));
     totems = pgTable("totems", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
       nombre: text("nombre").notNull(),
       casinoId: varchar("casino_id").notNull().references(() => casinos.id),
+      // IDs de casinos secundarios que este tótem también sirve (JSON array de varchar).
+      // El tótem principal sigue siendo casinoId; éstos son adicionales.
+      extraCasinoIds: text("extra_casino_ids").notNull().default("[]"),
+      // Hash del scope actual (sorted JSON de todos los casinoIds). Si cambia respecto
+      // al pull anterior, el servidor fuerza since=0 para backfill automático.
+      scopeHash: text("scope_hash").notNull().default(""),
       secretHash: text("secret_hash").notNull(),
       version: text("version"),
       ipPublica: text("ip_publica"),
@@ -343,6 +363,7 @@ var init_schema_sqlite = __esm({
       codigoQr: text2("codigo_qr"),
       origenTotemId: text2("origen_totem_id"),
       impresoEn: integer2("impreso_en", { mode: "timestamp_ms" }),
+      gestionEstado: text2("gestion_estado"),
       createdAt: integer2("created_at", { mode: "timestamp_ms" }),
       ...syncCols2
     });
@@ -381,8 +402,10 @@ import bcrypt2 from "bcryptjs";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
-import * as path2 from "path";
-import * as fs2 from "fs";
+import * as path3 from "path";
+import * as fs3 from "fs";
+import archiver2 from "archiver";
+import { spawnSync as spawnSync2 } from "child_process";
 
 // server/storage.ts
 import { eq, and, isNull, isNotNull, ne } from "drizzle-orm";
@@ -428,6 +451,7 @@ if (DB_MODE === "cloud") {
   const ddl = fs.readFileSync(path.resolve(__dirname, "../shared/schema-sqlite.sql"), "utf-8");
   _sqlite.exec(ddl);
   ensureColumn("pedidos", "impreso_en", "impreso_en INTEGER");
+  ensureColumn("pedidos", "gestion_estado", "gestion_estado TEXT");
   _db = drizzle(_sqlite, { schema });
   _schema = schema;
 }
@@ -477,16 +501,37 @@ var DatabaseStorage = class {
     const [user] = await db.select().from(users3).where(eq(users3.id, id));
     return user;
   }
+  // Convierte cualquier RUT a su forma canónica "12345678-5" / "12345678-K":
+  // sin puntos, con guion y dígito verificador en MAYÚSCULA. Si la entrada no
+  // parece un RUT, la devuelve tal cual (trim). Única fuente de verdad para
+  // guardar y comparar RUTs en el backend.
+  canonRut(raw) {
+    const cleaned = (raw || "").replace(/[^0-9kK]/g, "").toUpperCase();
+    const looks = cleaned.length > 1 && /^[0-9]+[0-9K]$/.test(cleaned);
+    return looks ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : (raw || "").trim();
+  }
   async getUserByRut(rut) {
     const raw = (rut || "").trim();
     const cleaned = raw.replace(/[^0-9kK]/g, "").toUpperCase();
-    const looksLikeRut2 = cleaned.length > 1 && /^[0-9]+[0-9kK]$/.test(cleaned);
-    const normalized = looksLikeRut2 ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : raw;
-    const [user] = await db.select().from(users3).where(eq(users3.rut, normalized));
+    const looks = cleaned.length > 1 && /^[0-9]+[0-9K]$/.test(cleaned);
+    const normalized = looks ? cleaned.slice(0, -1) + "-" + cleaned.slice(-1) : raw;
+    let [user] = await db.select().from(users3).where(eq(users3.rut, normalized));
     if (user) return user;
-    if (looksLikeRut2) return void 0;
-    const [byRaw] = await db.select().from(users3).where(eq(users3.rut, raw));
-    return byRaw;
+    [user] = await db.select().from(users3).where(eq(users3.rut, raw));
+    if (user) return user;
+    if (looks) {
+      const all = await db.select().from(users3);
+      const matches = all.filter(
+        (u) => (u.rut || "").replace(/[^0-9kK]/g, "").toUpperCase() === cleaned
+      );
+      if (matches.length > 1) {
+        throw new Error(
+          `RUT ambiguo: existen ${matches.length} usuarios con el RUT ${normalized}. Contacta al administrador para corregir el duplicado.`
+        );
+      }
+      return matches[0];
+    }
+    return void 0;
   }
   async getAllUsers() {
     return db.select().from(users3);
@@ -494,11 +539,14 @@ var DatabaseStorage = class {
   async createUser(insertUser) {
     const v = touch(insertUser);
     if (!v.id) v.id = __require("crypto").randomUUID();
+    if (v.rut) v.rut = this.canonRut(v.rut);
     const [user] = await db.insert(users3).values(v).returning();
     return user;
   }
   async updateUser(id, data) {
-    const [user] = await db.update(users3).set(touch(data)).where(eq(users3.id, id)).returning();
+    const d = touch(data);
+    if (d.rut) d.rut = this.canonRut(d.rut);
+    const [user] = await db.update(users3).set(d).where(eq(users3.id, id)).returning();
     return user;
   }
   async deleteUser(id) {
@@ -528,10 +576,6 @@ var DatabaseStorage = class {
   }
   async deleteCasino(id) {
     const [casino] = await db.update(casinos3).set(tombstone()).where(eq(casinos3.id, id)).returning();
-    return !!casino;
-  }
-  async hardDeleteCasino(id) {
-    const [casino] = await db.delete(casinos3).where(eq(casinos3.id, id)).returning();
     return !!casino;
   }
   // ── Minutas ──
@@ -631,6 +675,10 @@ var DatabaseStorage = class {
     const [pedido] = await db.update(pedidos3).set(touch({ impresoEn: /* @__PURE__ */ new Date() })).where(eq(pedidos3.id, id)).returning();
     return pedido;
   }
+  async setGestionEstado(id, estado) {
+    const [pedido] = await db.update(pedidos3).set(touch({ gestionEstado: estado })).where(eq(pedidos3.id, id)).returning();
+    return pedido;
+  }
   async getAnuladosByMinuta(minutaId) {
     return db.select().from(pedidos3).where(and(eq(pedidos3.minutaId, minutaId), isNotNull(pedidos3.deletedAt)));
   }
@@ -693,6 +741,15 @@ var DatabaseStorage = class {
   async deletePeriodo(id) {
     const [periodo] = await db.update(periodos3).set(tombstone()).where(eq(periodos3.id, id)).returning();
     return !!periodo;
+  }
+  // Comensales (activos) de un casino: por casino base O por relación
+  // usuario_casinos (multi-casino). Usado por "Preparar marcha blanca" para
+  // normalizar las claves de todos los comensales de un casino.
+  async getComensalesByCasino(casinoId) {
+    const linkRows = await db.select().from(usuarioCasinos3).where(eq(usuarioCasinos3.casinoId, casinoId));
+    const linkedIds = new Set(linkRows.map((r) => r.userId));
+    const all = await db.select().from(users3).where(and(eq(users3.role, "comensal"), eq(users3.activo, true), isNull(users3.deletedAt)));
+    return all.filter((u) => u.casinoId === casinoId || linkedIds.has(u.id));
   }
   // ── Usuario ↔ Casinos (multi-casino interlocutor / encargado) ──
   async getUserCasinoIds(userId) {
@@ -802,6 +859,10 @@ function startCronJobs() {
 }
 
 // server/sync-cloud.ts
+import * as fs2 from "fs";
+import * as path2 from "path";
+import { spawnSync } from "child_process";
+import archiver from "archiver";
 import bcrypt from "bcryptjs";
 init_schema();
 import { eq as eq3, and as and3, gt, sql as sql2, inArray } from "drizzle-orm";
@@ -910,16 +971,31 @@ function registerSyncRoutes(app2) {
       const t = req.totem;
       const since = new Date(parseInt(req.query.since || "0", 10));
       const limit = Math.min(parseInt(req.query.limit || "5000", 10), 1e4);
-      const casinoFilter = (col) => eq3(col, t.casinoId);
-      const minutaIdsForCasino = db.select({ id: minutas.id }).from(minutas).where(eq3(minutas.casinoId, t.casinoId));
+      let extraIds = [];
+      try {
+        const parsed = JSON.parse(t.extraCasinoIds || "[]");
+        if (Array.isArray(parsed)) extraIds = parsed.filter((x) => typeof x === "string");
+      } catch {
+      }
+      const targetCasinoIds = [t.casinoId, ...extraIds];
+      const currentScopeHash = JSON.stringify([...targetCasinoIds].sort());
+      const scopeChanged = (t.scopeHash || "") !== currentScopeHash;
+      const effectiveSince = scopeChanged ? /* @__PURE__ */ new Date(0) : since;
+      if (scopeChanged) {
+        await db.update(totems).set({ scopeHash: currentScopeHash }).where(eq3(totems.id, t.id));
+      }
+      const casinoFilter = (col) => targetCasinoIds.length === 1 ? eq3(col, targetCasinoIds[0]) : inArray(col, targetCasinoIds);
+      const minutaIdsForCasino = db.select({ id: minutas.id }).from(minutas).where(
+        targetCasinoIds.length === 1 ? eq3(minutas.casinoId, targetCasinoIds[0]) : inArray(minutas.casinoId, targetCasinoIds)
+      );
       const [casinosRows, familiasRows, usersRows, minutasRows, periodosRows, pedidosRows] = await Promise.all([
-        db.select().from(casinos).where(and3(gt(casinos.updatedAt, since), eq3(casinos.id, t.casinoId))).limit(limit),
-        db.select().from(familias).where(gt(familias.updatedAt, since)).limit(limit),
-        db.select().from(users).where(and3(gt(users.updatedAt, since), casinoFilter(users.casinoId))).limit(limit),
-        db.select().from(minutas).where(and3(gt(minutas.updatedAt, since), casinoFilter(minutas.casinoId))).limit(limit),
-        db.select().from(periodos).where(and3(gt(periodos.updatedAt, since), casinoFilter(periodos.casinoId))).limit(limit),
-        // Pedidos del casino (incluye tombstones para que el tótem mirror anulaciones desde el dashboard).
-        db.select().from(pedidos).where(and3(gt(pedidos.updatedAt, since), inArray(pedidos.minutaId, minutaIdsForCasino))).limit(limit)
+        db.select().from(casinos).where(and3(gt(casinos.updatedAt, effectiveSince), casinoFilter(casinos.id))).limit(limit),
+        db.select().from(familias).where(gt(familias.updatedAt, effectiveSince)).limit(limit),
+        db.select().from(users).where(and3(gt(users.updatedAt, effectiveSince), casinoFilter(users.casinoId))).limit(limit),
+        db.select().from(minutas).where(and3(gt(minutas.updatedAt, effectiveSince), casinoFilter(minutas.casinoId))).limit(limit),
+        db.select().from(periodos).where(and3(gt(periodos.updatedAt, effectiveSince), casinoFilter(periodos.casinoId))).limit(limit),
+        // Pedidos de todos los casinos del tótem (incluye tombstones para mirror de anulaciones).
+        db.select().from(pedidos).where(and3(gt(pedidos.updatedAt, effectiveSince), inArray(pedidos.minutaId, minutaIdsForCasino))).limit(limit)
       ]);
       await db.update(totems).set({ ultimoSync: /* @__PURE__ */ new Date() }).where(eq3(totems.id, t.id));
       const allRows = [...casinosRows, ...familiasRows, ...usersRows, ...minutasRows, ...periodosRows, ...pedidosRows];
@@ -1029,6 +1105,73 @@ function registerSyncRoutes(app2) {
       return res.status(500).json({ message: "Error al consultar versi\xF3n" });
     }
   });
+  app2.get("/api/totem/pull-update", requireTotem, async (_req, res) => {
+    if (process.env.DB_MODE === "totem") return res.status(404).end();
+    const cwd = process.cwd();
+    const pwaDistDir = path2.join(cwd, "pwa", "dist");
+    const totemSrcDir = path2.join(cwd, "totem");
+    const tmpDir = path2.join("/tmp", `totem-pull-update-${Date.now()}`);
+    const totemFiles = ["runtime.ts", "sync-worker.ts"];
+    const compiled = [];
+    if (fs2.existsSync(totemSrcDir)) {
+      fs2.mkdirSync(tmpDir, { recursive: true });
+      for (const file of totemFiles) {
+        const src = path2.join(totemSrcDir, file);
+        if (!fs2.existsSync(src)) continue;
+        const outFile = path2.join(tmpDir, file.replace(".ts", ".js"));
+        const result = spawnSync(
+          "npx",
+          [
+            "esbuild",
+            src,
+            "--platform=node",
+            "--bundle",
+            "--format=cjs",
+            "--external:better-sqlite3",
+            "--external:fsevents",
+            `--outfile=${outFile}`
+          ],
+          { cwd, encoding: "utf8", timeout: 12e4 }
+        );
+        if (result.status === 0) {
+          compiled.push(file.replace(".ts", ".js"));
+        } else {
+          console.error(`[pull-update] esbuild error for ${file}:`, result.stderr?.slice(0, 200));
+        }
+      }
+    }
+    const requiredFiles = ["runtime.js", "sync-worker.js"];
+    const missing = requiredFiles.filter((f) => !compiled.includes(f));
+    if (missing.length > 0) {
+      try {
+        fs2.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+      }
+      return res.status(500).json({
+        message: `Error compilando archivos requeridos: ${missing.join(", ")}. Revisa los logs del servidor.`
+      });
+    }
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="totem-pull-update-${Date.now()}.zip"`);
+    const archive = archiver("zip", { zlib: { level: 6 } });
+    archive.on("error", (err) => {
+      console.error("[pull-update] archiver error:", err);
+      res.end();
+    });
+    archive.pipe(res);
+    for (const jsFile of compiled) {
+      const jsPath = path2.join(tmpDir, jsFile);
+      if (fs2.existsSync(jsPath)) archive.file(jsPath, { name: `totem/${jsFile}` });
+    }
+    if (fs2.existsSync(pwaDistDir)) {
+      archive.directory(pwaDistDir, "pwa/dist");
+    }
+    await archive.finalize();
+    try {
+      fs2.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+    }
+  });
 }
 function generateSecret(len = 48) {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -1043,6 +1186,16 @@ import { eq as eqOp, sql as sqlOp } from "drizzle-orm";
 var PgSession = connectPgSimple(session);
 var upload = multer({ dest: "/tmp/uploads/" });
 var SUPER_ADMIN_RUT = "21212011-1";
+function todayChile() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(/* @__PURE__ */ new Date());
+  const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
 function validarRutChileno(rutCompleto) {
   const cleaned = rutCompleto.replace(/\./g, "").replace(/-/g, "").trim().toUpperCase();
   if (cleaned.length < 2) return false;
@@ -1190,6 +1343,44 @@ async function assertCasinoAccess(req, res, casinoId) {
   }
   return true;
 }
+async function ensureStaffPedidosForDate(casinoId, fecha, dayMinutas) {
+  if (!casinoId || dayMinutas.length === 0) return;
+  try {
+    const allUsers = await storage.getAllUsers();
+    const staffUsers = allUsers.filter(
+      (u) => u.activo && (u.role === "interlocutor" || u.role === "encargado_casino")
+    );
+    if (staffUsers.length === 0) return;
+    const targetMinuta = dayMinutas[0];
+    for (const u of staffUsers) {
+      let assigned = u.casinoId === casinoId;
+      if (!assigned) {
+        const extraCasinos = await storage.getUserCasinoIds(u.id);
+        assigned = extraCasinos.includes(casinoId);
+      }
+      if (!assigned) continue;
+      let already = false;
+      for (const m of dayMinutas) {
+        const existing = await storage.getPedidoByUserAndMinuta(u.id, m.id);
+        if (existing) {
+          already = true;
+          break;
+        }
+      }
+      if (already) continue;
+      const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await storage.createPedido({
+        userId: u.id,
+        minutaId: targetMinuta.id,
+        opcionSeleccionada: 1,
+        tipo: "seleccion",
+        codigoQr
+      });
+    }
+  } catch (err) {
+    console.error("ensureStaffPedidosForDate error:", err);
+  }
+}
 async function autoSeed() {
   try {
     const existingCasinos = await storage.getCasinos();
@@ -1267,23 +1458,70 @@ async function autoSeed() {
     console.error("Auto-seed error:", err);
   }
 }
-async function backfillRutPasswords() {
+async function seedDevTestData() {
+  if (process.env.NODE_ENV === "production") return;
   try {
-    const all = await storage.getAllUsers();
-    const targets = all.filter((u) => u.passwordChangeRequired && u.rut !== "21212011-1");
-    if (targets.length === 0) return;
-    console.log(`[migration] backfilling RUT-based passwords for ${targets.length} usuarios...`);
-    let ok = 0;
-    for (const u of targets) {
-      const digits = (u.rut || "").replace(/[^0-9]/g, "");
-      if (digits.length < 4) continue;
-      const hashed = await bcrypt2.hash(digits.slice(0, 4), 10);
-      await storage.updateUser(u.id, { password: hashed, passwordChangeRequired: false });
-      ok++;
+    const allCasinos = await storage.getAllCasinos();
+    let uqCasino = allCasinos.find((c) => c.nombre === "CASINO UNION QUIMICA");
+    if (!uqCasino) {
+      uqCasino = await storage.createCasino({ nombre: "CASINO UNION QUIMICA", direccion: "Uni\xF3n Qu\xEDmica, Chile" });
+      console.log("[dev-seed] Casino UNION QUIMICA creado.");
     }
-    console.log(`[migration] backfill OK: ${ok}/${targets.length}`);
+    const testRut = "21870734-K";
+    const existing = await storage.getUserByRut(testRut);
+    if (!existing) {
+      const hashed = await bcrypt2.hash("2187", 10);
+      await storage.createUser({
+        rut: testRut,
+        password: hashed,
+        nombre: "Usuario",
+        apellido: "Prueba T\xF3tem",
+        role: "comensal",
+        casinoId: uqCasino.id,
+        passwordChangeRequired: false
+      });
+      console.log("[dev-seed] Usuario 21870734-K creado.");
+    }
+    const todayStr = todayChile();
+    const dates = [];
+    const base = /* @__PURE__ */ new Date(todayStr + "T12:00:00-04:00");
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+      const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
+      dates.push(`${get("year")}-${get("month")}-${get("day")}`);
+    }
+    const existingMinutas = await storage.getAllMinutasByCasino(uqCasino.id);
+    const existingDates = new Set(existingMinutas.map((m) => m.fecha));
+    let minutasCreated = 0;
+    for (const fecha of dates) {
+      if (!existingDates.has(fecha)) {
+        await storage.createMinuta({ casinoId: uqCasino.id, fecha, familia: "COLACION GENERAL", opcion1: "Cazuela de vacuno con verduras", opcion2: "Lomo saltado con arroz", opcion3: "Tortilla espa\xF1ola con ensalada" });
+        minutasCreated++;
+      }
+    }
+    if (minutasCreated > 0) console.log(`[dev-seed] ${minutasCreated} minutas creadas para CASINO UNION QUIMICA.`);
+    const periodosList = await storage.getPeriodosByCasino(uqCasino.id);
+    const activePeriodo = periodosList.find((p) => p.activo);
+    if (!activePeriodo) {
+      const inicio = /* @__PURE__ */ new Date();
+      inicio.setHours(0, 0, 0, 0);
+      const fin = new Date(inicio);
+      fin.setDate(inicio.getDate() + 14);
+      fin.setHours(23, 59, 59, 0);
+      await storage.createPeriodo({
+        casinoId: uqCasino.id,
+        nombre: "Per\xEDodo prueba dev",
+        fechaInicio: inicio,
+        fechaFin: fin,
+        fechaServicioInicio: dates[0],
+        fechaServicioFin: dates[dates.length - 1]
+      });
+      console.log("[dev-seed] Per\xEDodo activo creado para CASINO UNION QUIMICA.");
+    }
   } catch (err) {
-    console.error("[migration] backfill error:", err);
+    console.error("[dev-seed] Error:", err);
   }
 }
 async function registerRoutes(app2) {
@@ -1297,7 +1535,7 @@ async function registerRoutes(app2) {
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1e3,
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: process.env.DB_MODE !== "totem" && process.env.NODE_ENV === "production",
         sameSite: "lax"
       }
     })
@@ -1305,14 +1543,14 @@ async function registerRoutes(app2) {
   if (process.env.DB_MODE !== "totem") {
     await autoSeed();
     await ensureSuperAdmin();
-    await backfillRutPasswords();
+    await seedDevTestData();
   }
   if (process.env.DB_MODE !== "totem") {
     app2.get("/admin", (_req, res) => {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
-      const filePath = path2.resolve(process.cwd(), "web", "src", "admin.html");
+      const filePath = path3.resolve(process.cwd(), "web", "src", "admin.html");
       res.sendFile(filePath);
     });
   } else {
@@ -1440,12 +1678,48 @@ async function registerRoutes(app2) {
         if (!overlap) return res.status(403).json({ message: "Sin acceso a este usuario" });
       }
       const hashed = await bcrypt2.hash(String(newPassword), 10);
-      await storage.updateUser(target.id, { password: hashed, passwordChangeRequired: false });
+      await storage.updateUser(target.id, { password: hashed, passwordChangeRequired: true });
       console.log(`[audit] reset-password-by-rut: actor=${actor.rut} (${actor.role}) \u2192 target=${target.rut}`);
       return res.json({ message: "Clave actualizada", user: { rut: target.rut, nombre: target.nombre, apellido: target.apellido } });
     } catch (error) {
       console.error("Reset password by rut error:", error);
       return res.status(500).json({ message: "Error al resetear la clave" });
+    }
+  });
+  app2.post("/api/casinos/:id/reset-claves-comensales", requireAdminOnly, async (req, res) => {
+    try {
+      const casinoId = req.params.id;
+      const casino = await storage.getCasino(casinoId);
+      if (!casino) return res.status(404).json({ message: "Casino no encontrado" });
+      const comensales = await storage.getComensalesByCasino(casinoId);
+      let reset = 0;
+      let omitidos = 0;
+      let fallidos = 0;
+      for (const u of comensales) {
+        if (u.rut === SUPER_ADMIN_RUT) {
+          omitidos++;
+          continue;
+        }
+        const digits = (u.rut || "").replace(/[^0-9]/g, "");
+        if (digits.length < 4) {
+          omitidos++;
+          continue;
+        }
+        try {
+          const hashed = await bcrypt2.hash(digits.slice(0, 4), 10);
+          await storage.updateUser(u.id, { password: hashed, passwordChangeRequired: true });
+          reset++;
+        } catch (e) {
+          fallidos++;
+          console.error(`[audit] reset-claves-comensales: fallo en comensal rut=${u.rut}`, e);
+        }
+      }
+      const actor = req.currentUser;
+      console.log(`[audit] reset-claves-comensales: actor=${actor?.rut} casino=${casino.nombre} reset=${reset} omitidos=${omitidos} fallidos=${fallidos}`);
+      return res.json({ casino: casino.nombre, total: comensales.length, reset, omitidos, fallidos });
+    } catch (error) {
+      console.error("Reset claves comensales error:", error);
+      return res.status(500).json({ message: "Error al preparar la marcha blanca" });
     }
   });
   app2.post("/api/auth/register", async (req, res) => {
@@ -1530,7 +1804,10 @@ async function registerRoutes(app2) {
         role: role || "comensal",
         casinoId: casinoId || null,
         fechaNacimiento: fechaNacimiento || null,
-        passwordChangeRequired: false
+        // Si el admin NO definió una clave explícita, el usuario arranca con la
+        // clave por defecto (4 dígitos del RUT) y debe cambiarla en su primer
+        // ingreso. Si el admin sí definió una clave, se respeta tal cual.
+        passwordChangeRequired: !pwd
       });
       if (Array.isArray(casinoIds) && casinoIds.length > 0) {
         await storage.setUserCasinos(user.id, casinoIds);
@@ -1656,8 +1933,16 @@ async function registerRoutes(app2) {
       const casinoMinutas = await storage.getAllMinutasByCasino(id);
       const allUsers = await storage.getAllUsers();
       const usersInCasino = allUsers.filter((u) => u.casinoId === id);
-      const hasHistory = casinoMinutas.length > 0 || usersInCasino.length > 0;
-      return res.json({ hasHistory, minutas: casinoMinutas.length, usuarios: usersInCasino.length });
+      const casinoPeriodos = await storage.getPeriodosByCasino(id);
+      const casinoTotems = await db.select().from(totems).where(eqOp(totems.casinoId, id));
+      const hasHistory = casinoMinutas.length > 0 || usersInCasino.length > 0 || casinoPeriodos.length > 0 || casinoTotems.length > 0;
+      return res.json({
+        hasHistory,
+        minutas: casinoMinutas.length,
+        usuarios: usersInCasino.length,
+        periodos: casinoPeriodos.length,
+        totems: casinoTotems.length
+      });
     } catch (error) {
       return res.status(500).json({ message: "Error al verificar historial" });
     }
@@ -1665,22 +1950,9 @@ async function registerRoutes(app2) {
   app2.delete("/api/casinos/:id", requireAdminOnly, async (req, res) => {
     try {
       const { id } = req.params;
-      const force = req.query.force === "true";
-      const casinoMinutas = await storage.getAllMinutasByCasino(id);
-      const allUsers = await storage.getAllUsers();
-      const usersInCasino = allUsers.filter((u) => u.casinoId === id);
-      const hasHistory = casinoMinutas.length > 0 || usersInCasino.length > 0;
-      if (hasHistory && !force) {
-        const deleted = await storage.deleteCasino(id);
-        if (!deleted) return res.status(404).json({ message: "Casino no encontrado" });
-        return res.json({ message: "Casino desactivado (tiene historial asociado)", action: "deactivated" });
-      }
-      if (!hasHistory || force) {
-        const result = await storage.hardDeleteCasino(id);
-        if (!result) return res.status(404).json({ message: "Casino no encontrado" });
-        return res.json({ message: "Casino eliminado permanentemente", action: "deleted" });
-      }
-      return res.json({ message: "Casino desactivado" });
+      const deleted = await storage.deleteCasino(id);
+      if (!deleted) return res.status(404).json({ message: "Casino no encontrado" });
+      return res.json({ message: "Casino desactivado", action: "deactivated" });
     } catch (error) {
       console.error("Delete casino error:", error);
       return res.status(500).json({ message: "Error interno del servidor" });
@@ -1695,7 +1967,7 @@ async function registerRoutes(app2) {
       const allUsers = await storage.getAllUsers();
       const allPedidos = await storage.getAllPedidos();
       const allMinutas = await storage.getAllMinutas();
-      const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const today = todayChile();
       const now = /* @__PURE__ */ new Date();
       const casinoStats = await Promise.all(activeCasinos.map(async (casino) => {
         const casinoUsers = allUsers.filter((u) => u.casinoId === casino.id && u.activo && u.role === "comensal");
@@ -1773,9 +2045,8 @@ async function registerRoutes(app2) {
   app2.get("/api/minutas/:casinoId", async (req, res) => {
     try {
       const { casinoId } = req.params;
-      const isAdmin = !!req.session.userId;
       const all = req.query.all === "true";
-      const minutasList = isAdmin && all ? await storage.getAllMinutasByCasino(casinoId) : await storage.getMinutasByCasino(casinoId);
+      const minutasList = all ? await storage.getAllMinutasByCasino(casinoId) : await storage.getMinutasByCasino(casinoId);
       return res.json(minutasList);
     } catch (error) {
       console.error("Get minutas error:", error);
@@ -2063,6 +2334,65 @@ async function registerRoutes(app2) {
       return res.status(500).json({ message: "Error al eliminar periodo" });
     }
   });
+  app2.get("/api/vales", requireAdmin, async (req, res) => {
+    try {
+      const me = req.currentUser;
+      const accessible = await getAccessibleCasinoIds(me);
+      const { fechaDesde, fechaHasta, casinoId } = req.query;
+      const [allPedidos, allMinutas, allCasinos, allUsers, allFamilias] = await Promise.all([
+        storage.getAllPedidos(),
+        storage.getAllMinutas(),
+        storage.getAllCasinos(),
+        storage.getAllUsers(),
+        storage.getAllFamilias().catch(() => [])
+      ]);
+      const minutaById = new Map(allMinutas.map((m) => [m.id, m]));
+      const casinoById = new Map(allCasinos.map((c) => [c.id, c]));
+      const userById = new Map(allUsers.map((u) => [u.id, u]));
+      const familiaByName = new Map((allFamilias || []).map((f) => [String(f.nombre).toUpperCase(), f]));
+      const vales = allPedidos.filter((p) => !!p.impresoEn && p.tipo !== "no_asiste").map((p) => {
+        const m = minutaById.get(p.minutaId);
+        if (!m) return null;
+        if (fechaDesde && m.fecha < fechaDesde) return null;
+        if (fechaHasta && m.fecha > fechaHasta) return null;
+        if (casinoId && casinoId !== "all" && m.casinoId !== casinoId) return null;
+        if (accessible !== null && !accessible.includes(m.casinoId)) return null;
+        const c = casinoById.get(m.casinoId);
+        const u = userById.get(p.userId);
+        const opNum = Number(p.opcionSeleccionada || 1);
+        const opcionTexto = m[`opcion${opNum}`] || "";
+        const famName = m.familia || "";
+        const familia = familiaByName.get(String(famName).toUpperCase());
+        const nombreCompleto = p.tipo === "visita" ? p.nombreVisita || "Visita" : u ? `${u.nombre || ""} ${u.apellido || ""}`.trim() : "Comensal";
+        return {
+          id: p.id,
+          impresoEn: p.impresoEn,
+          createdAt: p.createdAt,
+          tipo: p.tipo,
+          opcionNumero: opNum,
+          opcionTexto,
+          familia: famName,
+          familiaColor: familia?.color || null,
+          nombre: nombreCompleto,
+          rut: p.tipo === "visita" ? "" : u?.rut || "",
+          nombreVisita: p.nombreVisita || null,
+          emisorNombre: p.tipo === "visita" && u ? `${u.nombre || ""} ${u.apellido || ""}`.trim() : null,
+          emisorRut: p.tipo === "visita" ? u?.rut || null : null,
+          casinoId: m.casinoId,
+          casinoNombre: c?.nombre || "Casino",
+          minutaId: m.id,
+          minutaFecha: m.fecha
+        };
+      }).filter(Boolean).sort((a, b) => {
+        if (a.minutaFecha !== b.minutaFecha) return a.minutaFecha < b.minutaFecha ? 1 : -1;
+        return (b.impresoEn || 0) - (a.impresoEn || 0);
+      });
+      return res.json(vales);
+    } catch (error) {
+      console.error("Get vales error:", error);
+      return res.status(500).json({ message: "Error al listar vales" });
+    }
+  });
   app2.get("/api/pedidos/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
@@ -2074,6 +2404,7 @@ async function registerRoutes(app2) {
     }
   });
   app2.post("/api/pedidos/:id/marcar-impreso", async (req, res) => {
+    const __t0 = Date.now();
     try {
       const userId = req.session.userId;
       if (!userId) return res.status(401).json({ message: "No autenticado" });
@@ -2096,8 +2427,10 @@ async function registerRoutes(app2) {
       }
       const updated = await storage.markPedidoImpreso(id);
       if (!updated) return res.status(404).json({ message: "Pedido no encontrado" });
+      console.log(`[TIMING] /api/pedidos/${id}/marcar-impreso ms=${Date.now() - __t0}`);
       return res.json({ ok: true, impresoEn: updated.impresoEn });
     } catch (error) {
+      console.error(`[TIMING] marcar-impreso ERROR ms=${Date.now() - __t0}`);
       console.error("Mark impreso error:", error);
       return res.status(500).json({ message: "Error al marcar impreso" });
     }
@@ -2129,6 +2462,20 @@ async function registerRoutes(app2) {
       const { userId } = req.params;
       const sessionUserId = req.session.userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+      if (sessionUserId !== userId) {
+        const requester = await storage.getUser(sessionUserId);
+        if (!requester) return res.status(401).json({ message: "Usuario no encontrado" });
+        const isStaff = ["admin", "interlocutor", "encargado_casino"].includes(requester.role);
+        if (!isStaff) return res.status(403).json({ message: "Sin permisos para ver este historial" });
+        const accessible = await getAccessibleCasinoIds(requester);
+        if (accessible !== null) {
+          const target = await storage.getUser(userId);
+          if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
+          const targetCasinos = [target.casinoId, ...target.casinoIds || []].filter(Boolean);
+          const inScope = targetCasinos.some((c) => accessible.includes(c));
+          if (!inScope) return res.status(403).json({ message: "Sin acceso a este usuario" });
+        }
+      }
       const pedidosList = await storage.getPedidosByUser(userId);
       const allMinutas = await storage.getAllMinutas();
       const minutaMap = {};
@@ -2161,6 +2508,103 @@ async function registerRoutes(app2) {
       return res.status(500).json({ message: "Error interno del servidor" });
     }
   });
+  app2.get("/api/gestion-diaria", requireAdmin, async (req, res) => {
+    try {
+      const fecha = req.query.fecha || todayChile();
+      const { allowedIds } = await getScopedCasinoFilter(req, req.query.casinoId);
+      if (allowedIds !== null && allowedIds.size === 0) {
+        return res.json({ fecha, items: [] });
+      }
+      const casinos4 = await storage.getCasinos();
+      const casinoNombre = {};
+      for (const c of casinos4) casinoNombre[c.id] = c.nombre;
+      const allMinutas = await storage.getAllMinutas();
+      const minutasDia = allMinutas.filter(
+        (m) => m.fecha === fecha && m.activo && (allowedIds === null || allowedIds.has(m.casinoId))
+      );
+      const minutasByCasino = /* @__PURE__ */ new Map();
+      for (const m of minutasDia) {
+        if (!minutasByCasino.has(m.casinoId)) minutasByCasino.set(m.casinoId, []);
+        minutasByCasino.get(m.casinoId).push(m);
+      }
+      for (const [cId, ms] of minutasByCasino) {
+        await ensureStaffPedidosForDate(cId, fecha, ms);
+      }
+      const userCache = /* @__PURE__ */ new Map();
+      const items = [];
+      for (const minuta of minutasDia) {
+        const opts = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
+        const pedidosMinuta = await storage.getPedidosByMinuta(minuta.id);
+        for (const p of pedidosMinuta) {
+          if (p.tipo !== "seleccion" || (p.opcionSeleccionada ?? 0) <= 0) continue;
+          let u = userCache.get(p.userId);
+          if (u === void 0) {
+            u = await storage.getUser(p.userId);
+            userCache.set(p.userId, u || null);
+          }
+          if (!u) continue;
+          items.push({
+            pedidoId: p.id,
+            userId: p.userId,
+            rut: u.rut,
+            nombre: u.nombre,
+            apellido: u.apellido,
+            role: u.role,
+            casinoId: minuta.casinoId,
+            casinoNombre: casinoNombre[minuta.casinoId] ?? "\u2014",
+            fecha: minuta.fecha,
+            familia: minuta.familia ?? null,
+            opcionSeleccionada: p.opcionSeleccionada,
+            opcionTexto: opts[(p.opcionSeleccionada || 1) - 1] || null,
+            impresoEn: p.impresoEn ?? null,
+            pasoTotem: !!p.impresoEn,
+            gestionEstado: p.gestionEstado ?? null
+          });
+        }
+      }
+      items.sort((a, b) => {
+        const ap = a.pasoTotem || a.gestionEstado ? 1 : 0;
+        const bp = b.pasoTotem || b.gestionEstado ? 1 : 0;
+        if (ap !== bp) return ap - bp;
+        return `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`);
+      });
+      const resumen = {
+        total: items.length,
+        pasaron: items.filter((i) => i.pasoTotem).length,
+        pendientes: items.filter((i) => !i.pasoTotem && !i.gestionEstado).length,
+        delivery: items.filter((i) => i.gestionEstado === "delivery").length,
+        baja: items.filter((i) => i.gestionEstado === "baja").length
+      };
+      return res.json({ fecha, resumen, items });
+    } catch (error) {
+      console.error("Gestion diaria error:", error);
+      return res.status(500).json({ message: "Error al cargar la gesti\xF3n diaria" });
+    }
+  });
+  app2.post("/api/gestion-diaria/:pedidoId/accion", requireAdmin, async (req, res) => {
+    try {
+      const { pedidoId } = req.params;
+      const estadoRaw = req.body?.estado;
+      const estado = estadoRaw === null || estadoRaw === "" ? null : String(estadoRaw);
+      if (estado !== null && estado !== "delivery" && estado !== "baja") {
+        return res.status(400).json({ message: "Acci\xF3n inv\xE1lida. Use 'delivery', 'baja' o vac\xEDo para limpiar." });
+      }
+      const pedido = await storage.getPedidoById(pedidoId);
+      if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
+      const minuta = await storage.getMinuta(pedido.minutaId);
+      if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
+      const accessible = await getAccessibleCasinoIds(req.currentUser);
+      if (accessible !== null && !accessible.includes(minuta.casinoId)) {
+        return res.status(403).json({ message: "Sin acceso a este casino" });
+      }
+      const updated = await storage.setGestionEstado(pedidoId, estado);
+      if (!updated) return res.status(404).json({ message: "Pedido no encontrado" });
+      return res.json({ ok: true, gestionEstado: updated.gestionEstado ?? null });
+    } catch (error) {
+      console.error("Gestion diaria accion error:", error);
+      return res.status(500).json({ message: "Error al aplicar la acci\xF3n" });
+    }
+  });
   app2.post("/api/pedidos", async (req, res) => {
     try {
       const parsed = insertPedidoSchema.safeParse(req.body);
@@ -2178,6 +2622,9 @@ async function registerRoutes(app2) {
       const sessionUserId = req.session.userId;
       const actor = sessionUserId ? await storage.getUser(sessionUserId) : null;
       const isStaff = !!actor && (actor.role === "admin" || actor.role === "interlocutor" || actor.role === "encargado_casino");
+      if (actor && actor.passwordChangeRequired && actor.rut !== SUPER_ADMIN_RUT) {
+        return res.status(403).json({ message: "Debes cambiar tu clave antes de inscribirte." });
+      }
       if (!isStaff && (!actor || actor.id !== parsed.data.userId)) {
         return res.status(403).json({ message: "Solo puedes registrar tu propio pedido" });
       }
@@ -2200,10 +2647,10 @@ async function registerRoutes(app2) {
       } else if ((user.role === "interlocutor" || user.role === "encargado_casino") && tipo !== "visita") {
         opcionFinal = 1;
       }
-      if (user.role === "comensal" && tipo === "seleccion") {
+      if (tipo !== "visita") {
         const existing = await storage.getPedidoByUserAndMinuta(parsed.data.userId, parsed.data.minutaId);
         if (existing) {
-          return res.status(409).json({ message: "Ya tienes un pedido registrado para esta fecha. Solo puedes emitir 1 vale por comida." });
+          return res.status(409).json({ message: "Ya tienes un pedido registrado para esta minuta. Solo puedes emitir 1 vale por comida." });
         }
       }
       const codigoQr = tipo === "no_asiste" ? null : `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -2239,12 +2686,9 @@ async function registerRoutes(app2) {
           return res.status(403).json({ message: "Esta minuta no pertenece a tu casino" });
         }
       }
-      const checkFecha = clientFecha || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const checkFecha = clientFecha || todayChile();
       if (minuta.fecha !== checkFecha) {
         return res.status(403).json({ message: "Solo se puede emitir vale para el men\xFA de hoy" });
-      }
-      if (!minuta.activo) {
-        return res.status(403).json({ message: "Minuta inactiva" });
       }
       const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
       if (existing && existing.opcionSeleccionada > 0) {
@@ -2325,7 +2769,7 @@ async function registerRoutes(app2) {
   app2.get("/api/pedidos/buscar/por-rut", requireAdmin, async (req, res) => {
     try {
       const rut = (req.query.rut || "").replace(/[^0-9kK]/g, "").toUpperCase();
-      const fecha = req.query.fecha || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const fecha = req.query.fecha || todayChile();
       if (!rut) return res.status(400).json({ message: "RUT requerido" });
       const allUsers = await storage.getAllUsers();
       const norm = (s) => s.replace(/[^0-9kK]/g, "").toUpperCase();
@@ -2346,10 +2790,14 @@ async function registerRoutes(app2) {
       return res.status(500).json({ message: "Error" });
     }
   });
-  app2.get("/api/reportes/resumen-dia/:casinoId", requireAdmin, async (req, res) => {
+  app2.get("/api/reportes/resumen-dia/:casinoId", async (req, res) => {
+    const sessionUserId = req.session.userId;
+    if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
+    const sessionUser = await storage.getUser(sessionUserId);
+    if (!sessionUser) return res.status(401).json({ message: "Usuario no encontrado" });
     try {
       const { casinoId } = req.params;
-      const fecha = req.query.fecha || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const fecha = req.query.fecha || todayChile();
       const minutas4 = await storage.getAllMinutasByCasino(casinoId);
       const dayMinutas = minutas4.filter((m) => m.fecha === fecha && m.activo);
       const casinoPeriodos = await storage.getPeriodosByCasino(casinoId);
@@ -2360,6 +2808,10 @@ async function registerRoutes(app2) {
       const periodoOut = activePeriodo ? { fechaInicio: activePeriodo.fechaInicio.toISOString(), fechaFin: activePeriodo.fechaFin.toISOString() } : null;
       if (dayMinutas.length === 0) {
         return res.json({ fecha, casinoId, periodo: periodoOut, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
+      }
+      const requesterAccessible = await getAccessibleCasinoIds(sessionUser);
+      if (requesterAccessible === null || requesterAccessible.includes(casinoId)) {
+        await ensureStaffPedidosForDate(casinoId, fecha, dayMinutas);
       }
       const pedidosByMinuta = await Promise.all(dayMinutas.map((m) => storage.getPedidosByMinuta(m.id)));
       const allPedidos = pedidosByMinuta.flat();
@@ -2377,11 +2829,14 @@ async function registerRoutes(app2) {
           const numero = i + 1;
           const key = `${m.familia || "\u2014"}|${numero}|${d}`;
           const prev = opcionesMap.get(key);
-          const cantidad = pedidosOfM.filter((p) => p.opcionSeleccionada === numero).length;
+          const pedidosOpcion = pedidosOfM.filter((p) => p.opcionSeleccionada === numero);
+          const cantidad = pedidosOpcion.length;
+          const pasoTotemOpcion = pedidosOpcion.filter((p) => !!p.impresoEn).length;
           if (prev) {
             prev.cantidad += cantidad;
+            prev.pasoTotem += pasoTotemOpcion;
           } else {
-            opcionesMap.set(key, { familia: m.familia ?? null, numero, descripcion: d, cantidad });
+            opcionesMap.set(key, { familia: m.familia ?? null, numero, descripcion: d, cantidad, pasoTotem: pasoTotemOpcion });
           }
         }
       }
@@ -2391,6 +2846,46 @@ async function registerRoutes(app2) {
         if (fa !== fb) return fa.localeCompare(fb);
         return a.numero - b.numero;
       });
+      const isStaff = ["admin", "encargado_casino", "interlocutor"].includes(sessionUser.role);
+      let gestion = null;
+      if (isStaff) {
+        const selPedidos = allPedidos.filter(
+          (p) => p.tipo === "seleccion" && (p.opcionSeleccionada ?? 0) > 0
+        );
+        const noAsistePedidos = allPedidos.filter((p) => p.tipo === "no_asiste");
+        const userCache2 = /* @__PURE__ */ new Map();
+        const getU = async (uid) => {
+          if (!userCache2.has(uid)) userCache2.set(uid, await storage.getUser(uid));
+          return userCache2.get(uid);
+        };
+        const minutaOptsById = /* @__PURE__ */ new Map();
+        for (const m of dayMinutas) {
+          minutaOptsById.set(m.id, [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5]);
+        }
+        const gItems = (await Promise.all(
+          selPedidos.map(async (p) => {
+            const u = await getU(p.userId);
+            if (!u) return null;
+            const opts = minutaOptsById.get(p.minutaId) || [];
+            return {
+              nombre: `${u.nombre} ${u.apellido}`.trim(),
+              role: u.role,
+              pasoTotem: !!p.impresoEn,
+              gestionEstado: p.gestionEstado ?? null,
+              opcionSeleccionada: p.opcionSeleccionada,
+              opcionTexto: opts[(p.opcionSeleccionada || 1) - 1] || null
+            };
+          })
+        )).filter(Boolean);
+        gestion = {
+          inscritos: gItems.length,
+          noAsiste: noAsistePedidos.length,
+          pendientes: gItems.filter((i) => !i.pasoTotem && !i.gestionEstado).length,
+          pasoTotem: gItems.filter((i) => i.pasoTotem).length,
+          delivery: gItems.filter((i) => i.gestionEstado === "delivery").map((i) => ({ nombre: i.nombre, role: i.role, opcionSeleccionada: i.opcionSeleccionada, opcionTexto: i.opcionTexto })),
+          bajas: gItems.filter((i) => i.gestionEstado === "baja").map((i) => ({ nombre: i.nombre, role: i.role }))
+        };
+      }
       return res.json({
         fecha,
         casinoId,
@@ -2399,7 +2894,8 @@ async function registerRoutes(app2) {
         opciones,
         totalSeleccion: sel.length,
         totalNoAsiste: noAsiste,
-        totalVisitas: visitas
+        totalVisitas: visitas,
+        ...gestion ? { gestion } : {}
       });
     } catch (error) {
       console.error("Resumen dia error:", error);
@@ -2407,11 +2903,15 @@ async function registerRoutes(app2) {
     }
   });
   app2.post("/api/pedidos/semanal", async (req, res) => {
+    const __t0 = Date.now();
     try {
       const sessionUserId = req.session.userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
       const sessionUser = await storage.getUser(sessionUserId);
       if (!sessionUser) return res.status(401).json({ message: "Usuario no encontrado" });
+      if (sessionUser.passwordChangeRequired && sessionUser.rut !== SUPER_ADMIN_RUT) {
+        return res.status(403).json({ message: "Debes cambiar tu clave antes de inscribirte." });
+      }
       const { selecciones } = req.body;
       let { userId } = req.body;
       if (!userId || userId === sessionUserId) {
@@ -2487,8 +2987,10 @@ async function registerRoutes(app2) {
         });
         results.push(pedido);
       }
+      console.log(`[TIMING] /api/pedidos/semanal user=${userId} items=${selecciones.length} guardados=${results.length} omitidos=${skipped.length} ms=${Date.now() - __t0}`);
       return res.status(201).json({ results, skipped });
     } catch (error) {
+      console.error(`[TIMING] /api/pedidos/semanal ERROR ms=${Date.now() - __t0}`);
       console.error("Create pedidos semanales error:", error);
       return res.status(500).json({ message: "Error al registrar selecciones semanales" });
     }
@@ -2530,7 +3032,7 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/reportes/diario", requireAdminOnly, async (req, res) => {
     try {
-      const fecha = req.body?.fecha || (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+      const fecha = req.body?.fecha || todayChile();
       const entries = await generateDailyReport(fecha);
       console.log(`[reporte manual] Generado para ${fecha}:`, JSON.stringify(entries, null, 2));
       return res.json({ fecha, casinos: entries });
@@ -2950,7 +3452,7 @@ async function registerRoutes(app2) {
           const digits = rut.replace(/[^0-9]/g, "");
           const defaultPassword = digits.slice(0, 4) || "1234";
           const hashedPassword = await bcrypt2.hash(defaultPassword, 10);
-          await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null, passwordChangeRequired: false });
+          await storage.createUser({ rut, nombre, apellido, telefono: telefonoRaw || null, password: hashedPassword, role: rol, casinoId: casinoId || null, passwordChangeRequired: true });
           created++;
         } catch (err) {
           errorDetails.push({ row: rowNum, error: err.message || "Error desconocido" });
@@ -2958,7 +3460,7 @@ async function registerRoutes(app2) {
         }
       }
       try {
-        fs2.unlinkSync(req.file.path);
+        fs3.unlinkSync(req.file.path);
       } catch {
       }
       return res.json({ created, skipped, errors, errorDetails });
@@ -3462,7 +3964,7 @@ async function registerRoutes(app2) {
         }
       }
       try {
-        fs2.unlinkSync(req.file.path);
+        fs3.unlinkSync(req.file.path);
       } catch {
       }
       return res.json({ created, skipped, errors, errorDetails });
@@ -3845,11 +4347,23 @@ async function registerRoutes(app2) {
   app2.put("/api/totems/:id", requireAdminStrict, async (req, res) => {
     try {
       const { id } = req.params;
-      const { nombre, notas, activo } = req.body;
+      const { nombre, notas, activo, extraCasinoIds } = req.body;
       const updateData = {};
       if (nombre !== void 0) updateData.nombre = nombre;
       if (notas !== void 0) updateData.notas = notas;
       if (activo !== void 0) updateData.activo = activo;
+      if (extraCasinoIds !== void 0) {
+        if (Array.isArray(extraCasinoIds)) {
+          updateData.extraCasinoIds = JSON.stringify(extraCasinoIds.filter((x) => typeof x === "string"));
+        } else if (typeof extraCasinoIds === "string") {
+          try {
+            JSON.parse(extraCasinoIds);
+            updateData.extraCasinoIds = extraCasinoIds;
+          } catch {
+          }
+        }
+        updateData.scopeHash = "";
+      }
       const [updated] = await db.update(totems).set(updateData).where(eqOp(totems.id, id)).returning();
       if (!updated) return res.status(404).json({ message: "No encontrado" });
       res.json({ ...updated, secretHash: void 0 });
@@ -3926,13 +4440,189 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Error al actualizar versi\xF3n" });
     }
   });
+  app2.get("/api/totem/update-package", async (req, res) => {
+    if (process.env.DB_MODE === "totem") return res.status(404).end();
+    const expectedKey = process.env.TOTEM_UPDATE_KEY || process.env.SESSION_SECRET || "";
+    const providedKey = req.query.key || "";
+    if (!expectedKey || providedKey !== expectedKey) {
+      return res.status(401).json({ message: "Clave inv\xE1lida" });
+    }
+    const cwd = process.cwd();
+    const pwaDistDir = path3.join(cwd, "pwa", "dist");
+    const totemSrcDir = path3.join(cwd, "totem");
+    const totemTmpDir = path3.join("/tmp", `totem-compiled-${Date.now()}`);
+    if (!fs3.existsSync(pwaDistDir)) {
+      return res.status(500).json({ message: "pwa/dist no encontrado. Ejecuta el build primero." });
+    }
+    const totemFiles = ["runtime.ts", "register.ts", "sync-worker.ts"];
+    const compiled = [];
+    const errors = [];
+    if (fs3.existsSync(totemSrcDir)) {
+      fs3.mkdirSync(totemTmpDir, { recursive: true });
+      for (const file of totemFiles) {
+        const src = path3.join(totemSrcDir, file);
+        if (!fs3.existsSync(src)) continue;
+        const outFile = path3.join(totemTmpDir, file.replace(".ts", ".js"));
+        const result = spawnSync2(
+          "npx",
+          [
+            "esbuild",
+            src,
+            "--platform=node",
+            "--bundle",
+            "--format=cjs",
+            "--external:better-sqlite3",
+            "--external:fsevents",
+            `--outfile=${outFile}`
+          ],
+          { cwd, encoding: "utf8", timeout: 12e4 }
+        );
+        if (result.status === 0) {
+          compiled.push(file.replace(".ts", ".js"));
+        } else {
+          errors.push(`${file}: ${result.stderr?.slice(0, 200) ?? "error"}`);
+          console.error(`[update-package] esbuild error for ${file}:`, result.stderr);
+        }
+      }
+    }
+    console.log(`[update-package] compiled: [${compiled.join(", ")}]${errors.length ? " errors: " + errors.join("; ") : ""}`);
+    let sqliteNodePath = null;
+    try {
+      const bsqlPkg = JSON.parse(fs3.readFileSync(path3.join(cwd, "node_modules", "better-sqlite3", "package.json"), "utf8"));
+      const bsqlVersion = bsqlPkg.version;
+      const bsqlUrl = `https://github.com/WiseLibs/better-sqlite3/releases/download/v${bsqlVersion}/better-sqlite3-v${bsqlVersion}-node-v115-win32-x64.tar.gz`;
+      const bsqlTgz = path3.join(totemTmpDir, "bsql-win.tar.gz");
+      const bsqlExtract = path3.join(totemTmpDir, "bsql-win");
+      fs3.mkdirSync(bsqlExtract, { recursive: true });
+      const dlResult = spawnSync2("curl", ["-fsSL", bsqlUrl, "-o", bsqlTgz], { encoding: "utf8", timeout: 6e4 });
+      if (dlResult.status === 0 && fs3.existsSync(bsqlTgz)) {
+        const tarResult = spawnSync2("tar", ["-xzf", bsqlTgz, "-C", bsqlExtract], { encoding: "utf8", timeout: 3e4 });
+        if (tarResult.status === 0) {
+          const nodeFile = path3.join(bsqlExtract, "build", "Release", "better_sqlite3.node");
+          if (fs3.existsSync(nodeFile)) {
+            sqliteNodePath = nodeFile;
+            console.log(`[update-package] better-sqlite3 v${bsqlVersion} win32-x64 descargado OK`);
+          }
+        } else {
+          console.error("[update-package] tar extract error:", tarResult.stderr);
+        }
+      } else {
+        console.error("[update-package] curl download error:", dlResult.stderr);
+      }
+    } catch (e) {
+      console.error("[update-package] error descargando better-sqlite3 win binary:", e);
+    }
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="totem-update-${Date.now()}.zip"`);
+    const archive = archiver2("zip", { zlib: { level: 6 } });
+    archive.on("error", (err) => {
+      console.error("[update-package] archiver error:", err);
+      res.end();
+    });
+    archive.pipe(res);
+    archive.directory(pwaDistDir, "pwa/dist");
+    if (compiled.length > 0) {
+      for (const jsFile of compiled) {
+        const jsPath = path3.join(totemTmpDir, jsFile);
+        if (fs3.existsSync(jsPath)) archive.file(jsPath, { name: `totem/${jsFile}` });
+      }
+    }
+    const nmDir = path3.join(cwd, "node_modules");
+    const bsqlSrc = path3.join(nmDir, "better-sqlite3");
+    const bsqlTmp = path3.join(totemTmpDir, "nm", "better-sqlite3");
+    if (fs3.existsSync(bsqlSrc)) {
+      try {
+        fs3.mkdirSync(bsqlTmp, { recursive: true });
+        fs3.cpSync(bsqlSrc, bsqlTmp, { recursive: true });
+        if (sqliteNodePath) {
+          const winBinDest = path3.join(bsqlTmp, "build", "Release", "better_sqlite3.node");
+          fs3.mkdirSync(path3.dirname(winBinDest), { recursive: true });
+          fs3.copyFileSync(sqliteNodePath, winBinDest);
+        }
+        archive.directory(bsqlTmp, "node_modules/better-sqlite3");
+        console.log("[update-package] better-sqlite3 paquete completo incluido");
+      } catch (e) {
+        console.error("[update-package] error copiando better-sqlite3:", e);
+        if (sqliteNodePath) {
+          archive.file(sqliteNodePath, { name: "node_modules/better-sqlite3/build/Release/better_sqlite3.node" });
+        }
+      }
+    }
+    function collectDeps(pkgName, nmRoot, seen) {
+      if (seen.has(pkgName)) return;
+      seen.add(pkgName);
+      const pkgJson = path3.join(nmRoot, pkgName, "package.json");
+      if (!fs3.existsSync(pkgJson)) return;
+      try {
+        const meta = JSON.parse(fs3.readFileSync(pkgJson, "utf8"));
+        for (const dep of Object.keys(meta.dependencies ?? {})) {
+          collectDeps(dep, nmRoot, seen);
+        }
+      } catch {
+      }
+    }
+    const sqliteDeps = /* @__PURE__ */ new Set();
+    collectDeps("better-sqlite3", nmDir, sqliteDeps);
+    sqliteDeps.delete("better-sqlite3");
+    console.log("[update-package] deps transitivas incluidas:", [...sqliteDeps].sort().join(", "));
+    for (const dep of sqliteDeps) {
+      const depDir = path3.join(nmDir, dep);
+      if (fs3.existsSync(depDir)) {
+        archive.directory(depDir, `node_modules/${dep}`);
+      }
+    }
+    const watchdogSrc = path3.join(cwd, "windows", "scripts", "watchdog.cmd");
+    if (fs3.existsSync(watchdogSrc)) {
+      archive.file(watchdogSrc, { name: "scripts/watchdog.cmd" });
+    }
+    await archive.finalize();
+    try {
+      fs3.rmSync(totemTmpDir, { recursive: true, force: true });
+    } catch {
+    }
+  });
+  app2.get("/api/totem/update-script", async (req, res) => {
+    if (process.env.DB_MODE === "totem") return res.status(404).end();
+    const expectedKey = process.env.TOTEM_UPDATE_KEY || process.env.SESSION_SECRET || "";
+    const providedKey = req.query.key || "";
+    const keyOk = expectedKey && providedKey === expectedKey;
+    let sessionOk = false;
+    if (!keyOk) {
+      const userId = req.session.userId;
+      if (userId) {
+        const user = await storage.getUser(userId).catch(() => null);
+        sessionOk = user?.role === "admin";
+      }
+    }
+    if (!keyOk && !sessionOk) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+    const scriptPath = path3.join(process.cwd(), "update-totem.ps1");
+    if (!fs3.existsSync(scriptPath)) {
+      return res.status(404).json({ message: "Script no encontrado" });
+    }
+    const realServerUrl = `${req.protocol}://${req.get("host")}`;
+    const realKey = process.env.TOTEM_UPDATE_KEY || process.env.SESSION_SECRET || "";
+    let scriptContent = fs3.readFileSync(scriptPath, "utf8");
+    scriptContent = scriptContent.replace(
+      /^\$serverUrl\s*=\s*"[^"]*"/m,
+      `$serverUrl  = "${realServerUrl}"`
+    );
+    scriptContent = scriptContent.replace(
+      /^\$updateKey\s*=\s*"[^"]*"/m,
+      `$updateKey  = "${realKey}"`
+    );
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", 'attachment; filename="update-totem.ps1"');
+    res.send(scriptContent);
+  });
   const httpServer = createServer(app2);
   return httpServer;
 }
 
 // server/index.ts
-import * as fs3 from "fs";
-import * as path3 from "path";
+import * as fs4 from "fs";
+import * as path4 from "path";
 var app = express();
 var log = console.log;
 function setupNoCache(app2) {
@@ -3985,7 +4675,7 @@ function setupBodyParsing(app2) {
 function setupRequestLogging(app2) {
   app2.use((req, res, next) => {
     const start = Date.now();
-    const path4 = req.path;
+    const path5 = req.path;
     let capturedJsonResponse = void 0;
     const originalResJson = res.json;
     res.json = function(bodyJson, ...args) {
@@ -3998,10 +4688,10 @@ function setupRequestLogging(app2) {
       "/api/auth/login"
     ];
     res.on("finish", () => {
-      if (!path4.startsWith("/api")) return;
+      if (!path5.startsWith("/api")) return;
       const duration = Date.now() - start;
-      let logLine = `${req.method} ${path4} ${res.statusCode} in ${duration}ms`;
-      const isSensitive = SENSITIVE.some((p) => path4.startsWith(p));
+      let logLine = `${req.method} ${path5} ${res.statusCode} in ${duration}ms`;
+      const isSensitive = SENSITIVE.some((p) => path5.startsWith(p));
       if (capturedJsonResponse && !isSensitive) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       } else if (isSensitive) {
@@ -4017,8 +4707,8 @@ function setupRequestLogging(app2) {
 }
 function getAppName() {
   try {
-    const appJsonPath = path3.resolve(process.cwd(), "app.json");
-    const appJsonContent = fs3.readFileSync(appJsonPath, "utf-8");
+    const appJsonPath = path4.resolve(process.cwd(), "app.json");
+    const appJsonContent = fs4.readFileSync(appJsonPath, "utf-8");
     const appJson = JSON.parse(appJsonContent);
     return appJson.expo?.name || "App Landing Page";
   } catch {
@@ -4026,19 +4716,19 @@ function getAppName() {
   }
 }
 function serveExpoManifest(platform, res) {
-  const manifestPath = path3.resolve(
+  const manifestPath = path4.resolve(
     process.cwd(),
     "static-build",
     platform,
     "manifest.json"
   );
-  if (!fs3.existsSync(manifestPath)) {
+  if (!fs4.existsSync(manifestPath)) {
     return res.status(404).json({ error: `Manifest not found for platform: ${platform}` });
   }
   res.setHeader("expo-protocol-version", "1");
   res.setHeader("expo-sfv-version", "0");
   res.setHeader("content-type", "application/json");
-  const manifest = fs3.readFileSync(manifestPath, "utf-8");
+  const manifest = fs4.readFileSync(manifestPath, "utf-8");
   res.send(manifest);
 }
 function serveLandingPage({
@@ -4060,15 +4750,15 @@ function serveLandingPage({
   res.status(200).send(html);
 }
 function configureExpoAndLanding(app2) {
-  const pwaDist = path3.resolve(process.cwd(), "pwa", "dist");
-  const pwaBuild = path3.join(pwaDist, "index.html");
-  const pwaBuildExists = fs3.existsSync(pwaBuild);
+  const pwaDist = path4.resolve(process.cwd(), "pwa", "dist");
+  const pwaBuild = path4.join(pwaDist, "index.html");
+  const pwaBuildExists = fs4.existsSync(pwaBuild);
   if (pwaBuildExists) {
     log("Serving PWA from pwa/dist");
     const noCacheFiles = /* @__PURE__ */ new Set(["index.html", "sw.js", "manifest.json", "manifest.webmanifest"]);
     app2.use(express.static(pwaDist, {
       setHeaders(res, filePath) {
-        const base = path3.basename(filePath);
+        const base = path4.basename(filePath);
         if (noCacheFiles.has(base) || filePath.endsWith(".html")) {
           res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
           res.setHeader("Pragma", "no-cache");
@@ -4078,9 +4768,9 @@ function configureExpoAndLanding(app2) {
         }
       }
     }));
-    app2.use("/assets", express.static(path3.resolve(process.cwd(), "assets")));
-    app2.use(express.static(path3.resolve(process.cwd(), "public")));
-    app2.use(express.static(path3.resolve(process.cwd(), "static-build")));
+    app2.use("/assets", express.static(path4.resolve(process.cwd(), "assets")));
+    app2.use(express.static(path4.resolve(process.cwd(), "public")));
+    app2.use(express.static(path4.resolve(process.cwd(), "static-build")));
     app2.use((req, res, next) => {
       if (req.path.startsWith("/api") || req.path.startsWith("/admin") || req.path.startsWith("/totem/")) {
         return next();
@@ -4092,13 +4782,13 @@ function configureExpoAndLanding(app2) {
     });
     return;
   }
-  const templatePath = path3.resolve(
+  const templatePath = path4.resolve(
     process.cwd(),
     "server",
     "templates",
     "landing-page.html"
   );
-  const landingPageTemplate = fs3.readFileSync(templatePath, "utf-8");
+  const landingPageTemplate = fs4.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
   log("Serving static Expo files with dynamic manifest routing");
   app2.use((req, res, next) => {
@@ -4122,9 +4812,9 @@ function configureExpoAndLanding(app2) {
     }
     next();
   });
-  app2.use("/assets", express.static(path3.resolve(process.cwd(), "assets")));
-  app2.use(express.static(path3.resolve(process.cwd(), "public")));
-  app2.use(express.static(path3.resolve(process.cwd(), "static-build")));
+  app2.use("/assets", express.static(path4.resolve(process.cwd(), "assets")));
+  app2.use(express.static(path4.resolve(process.cwd(), "public")));
+  app2.use(express.static(path4.resolve(process.cwd(), "static-build")));
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
 function setupErrorHandler(app2) {
@@ -4145,6 +4835,20 @@ function setupErrorHandler(app2) {
   setupNoCache(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
+  app.get("/totem/install.ps1", (req, res) => {
+    if (process.env.DB_MODE === "totem") return res.status(404).end();
+    const scriptPath = path4.resolve(process.cwd(), "public", "totem", "install.ps1");
+    if (!fs4.existsSync(scriptPath)) return res.status(404).end();
+    const realServerUrl = `${req.protocol}://${req.get("host")}`;
+    let content = fs4.readFileSync(scriptPath, "utf8");
+    content = content.replace(
+      /(\[string\]\s*\$Cloud\s*=\s*")[^"]*(")/m,
+      `$1${realServerUrl}$2`
+    );
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", 'attachment; filename="install.ps1"');
+    res.send(content);
+  });
   configureExpoAndLanding(app);
   const server = await registerRoutes(app);
   setupErrorHandler(app);

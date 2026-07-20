@@ -166,6 +166,12 @@ export const totems = pgTable("totems", {
     .default(sql`gen_random_uuid()`),
   nombre: text("nombre").notNull(),
   casinoId: varchar("casino_id").notNull().references(() => casinos.id),
+  // IDs de casinos secundarios que este tótem también sirve (JSON array de varchar).
+  // El tótem principal sigue siendo casinoId; éstos son adicionales.
+  extraCasinoIds: text("extra_casino_ids").notNull().default("[]"),
+  // Hash del scope actual (sorted JSON de todos los casinoIds). Si cambia respecto
+  // al pull anterior, el servidor fuerza since=0 para backfill automático.
+  scopeHash: text("scope_hash").notNull().default(""),
   secretHash: text("secret_hash").notNull(),
   version: text("version"),
   ipPublica: text("ip_publica"),

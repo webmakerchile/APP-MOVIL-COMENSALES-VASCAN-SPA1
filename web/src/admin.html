@@ -2992,6 +2992,8 @@
       const [releases, setReleases] = useState([]);
       const [showRelease, setShowRelease] = useState(false);
       const [releaseForm, setReleaseForm] = useState({ version: '', url: '', sha256: '', notas: '', obligatoria: false, publicada: true });
+      const [editingTotem, setEditingTotem] = useState(null);
+      const [editExtraIds, setEditExtraIds] = useState([]);
 
       function load() {
         setLoading(true);
@@ -3041,6 +3043,26 @@
         if (!confirm(`¿Eliminar tótem "${t.nombre}"? Sus pedidos sincronizados se mantendrán.`)) return;
         await apiFetch(`/api/totems/${t.id}`, { method: 'DELETE' });
         load();
+      }
+
+      function openEditCasinos(t) {
+        let extras = [];
+        try { extras = JSON.parse(t.extraCasinoIds || '[]'); } catch {}
+        setEditExtraIds(Array.isArray(extras) ? extras : []);
+        setEditingTotem(t);
+      }
+      async function saveEditCasinos() {
+        try {
+          await apiFetch(`/api/totems/${editingTotem.id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ extraCasinoIds: editExtraIds }),
+          });
+          setEditingTotem(null);
+          load();
+        } catch (err) { alert(err.message || 'Error al guardar'); }
+      }
+      function toggleExtraId(id) {
+        setEditExtraIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
       }
 
       async function createRelease(e) {
@@ -3100,7 +3122,10 @@
                       {t.nombre}
                       {!t.activo && <span className="ml-2 text-xs text-white/40">(inactivo)</span>}
                     </td>
-                    <td className="px-4 py-3 text-white/70">{casinoNombre(t.casinoId)}</td>
+                    <td className="px-4 py-3 text-white/70">
+                      <div>{casinoNombre(t.casinoId)}</div>
+                      {(() => { let ex=[]; try{ex=JSON.parse(t.extraCasinoIds||'[]');}catch{} return ex.length>0 && <div className="text-xs text-vascan-gold mt-0.5">+{ex.map(id=>casinoNombre(id)).join(', ')}</div>; })()}
+                    </td>
                     <td className="px-4 py-3">{badgeFor(t.estado)}</td>
                     <td className="px-4 py-3 text-white/60">
                       {fmtDate(t.ultimaConexion)}
@@ -3115,6 +3140,7 @@
                       <div>local: {t.ipLocal || '—'}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
+                      <button onClick={() => openEditCasinos(t)} className="text-xs text-blue-400 hover:underline mr-3">Casinos extra</button>
                       <button onClick={() => toggleActivo(t)} className="text-xs text-vascan-gold hover:underline mr-3">{t.activo ? 'Desactivar' : 'Activar'}</button>
                       <button onClick={() => deleteTotem(t)} className="text-xs text-red-400 hover:underline">Eliminar</button>
                     </td>
@@ -3154,6 +3180,37 @@
               </table>
             </div>
           </div>
+
+          {editingTotem && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setEditingTotem(null)}>
+              <div className="bg-vascan-surface border border-white/10 rounded-2xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold mb-1">Casinos extra — {editingTotem.nombre}</h3>
+                <p className="text-sm text-white/60 mb-1">Casino principal: <span className="text-white font-medium">{casinoNombre(editingTotem.casinoId)}</span></p>
+                <p className="text-sm text-white/60 mb-4">Seleccioná los casinos adicionales cuya data este tótem también debe sincronizar y servir:</p>
+                <div className="space-y-2 mb-5 max-h-60 overflow-y-auto">
+                  {casinos.filter(c => c.id !== editingTotem.casinoId).map(c => (
+                    <label key={c.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editExtraIds.includes(c.id)}
+                        onChange={() => toggleExtraId(c.id)}
+                        className="w-4 h-4 accent-vascan-gold"
+                      />
+                      <span className="text-sm">{c.nombre}</span>
+                      {!c.activo && <span className="text-xs text-white/40 ml-auto">inactivo</span>}
+                    </label>
+                  ))}
+                  {casinos.filter(c => c.id !== editingTotem.casinoId).length === 0 && (
+                    <p className="text-sm text-white/40 text-center py-4">No hay otros casinos registrados.</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setEditingTotem(null)} className="flex-1 px-4 py-2 bg-white/5 rounded-xl text-sm">Cancelar</button>
+                  <button onClick={saveEditCasinos} className="flex-1 px-4 py-2 bg-vascan-gold text-vascan-bg rounded-xl text-sm font-bold">Guardar</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {showCasinoSelect && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setShowCasinoSelect(false)}>

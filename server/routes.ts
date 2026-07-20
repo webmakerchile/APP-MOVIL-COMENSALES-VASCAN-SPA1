@@ -3775,11 +3775,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/totems/:id", requireAdminStrict, async (req, res) => {
     try {
       const { id } = req.params;
-      const { nombre, notas, activo } = req.body;
+      const { nombre, notas, activo, extraCasinoIds } = req.body;
       const updateData: any = {};
       if (nombre !== undefined) updateData.nombre = nombre;
       if (notas !== undefined) updateData.notas = notas;
       if (activo !== undefined) updateData.activo = activo;
+      if (extraCasinoIds !== undefined) {
+        // Aceptar array de strings o JSON string; almacenar siempre como JSON string.
+        if (Array.isArray(extraCasinoIds)) {
+          updateData.extraCasinoIds = JSON.stringify(extraCasinoIds.filter((x: any) => typeof x === "string"));
+        } else if (typeof extraCasinoIds === "string") {
+          try { JSON.parse(extraCasinoIds); updateData.extraCasinoIds = extraCasinoIds; } catch { /* ignorar */ }
+        }
+        // Limpiar el scopeHash para que el próximo pull detecte el cambio de scope
+        // y dispare un backfill completo (since=0) hacia el tótem.
+        updateData.scopeHash = "";
+      }
       const [updated] = await db.update(totemsTable).set(updateData).where(eqOp(totemsTable.id, id)).returning();
       if (!updated) return res.status(404).json({ message: "No encontrado" });
       res.json({ ...updated, secretHash: undefined });

@@ -157,20 +157,51 @@ export function registerSyncRoutes(app: Express) {
       const since = new Date(parseInt((req.query.since as string) || "0", 10));
       const limit = Math.min(parseInt((req.query.limit as string) || "5000", 10), 10000);
 
-      // Scope: the totem's own casino + global tables (familias).
-      const casinoFilter = (col: any) => eq(col, t.casinoId);
+      // Scope: casino principal + casinos secundarios configurados (extraCasinoIds).
+      // extraCasinoIds se almacena como JSON array de strings en la BD.
+      let extraIds: string[] = [];
+      try {
+        const parsed = JSON.parse(t.extraCasinoIds || "[]");
+        if (Array.isArray(parsed)) extraIds = parsed.filter((x: any) => typeof x === "string");
+      } catch { /* ignorar JSON inválido */ }
+      const targetCasinoIds = [t.casinoId, ...extraIds];
 
-      // Subquery: ids de minutas del casino del tótem (para scope de pedidos).
-      const minutaIdsForCasino = db.select({ id: minutas.id }).from(minutas).where(eq(minutas.casinoId, t.casinoId));
+      // ── Backfill automático al cambiar scope ────────────────────────────
+      // Si el scope (conjunto de casinoIds) cambió desde el último pull,
+      // ignoramos el cursor del cliente y forzamos since=0 para que el tótem
+      // reciba TODOS los datos del nuevo alcance (backfill completo).
+      // El hash es el JSON canónico (sorted) del scope actual.
+      const currentScopeHash = JSON.stringify([...targetCasinoIds].sort());
+      const scopeChanged = (t.scopeHash || "") !== currentScopeHash;
+      const effectiveSince = scopeChanged ? new Date(0) : since;
+
+      if (scopeChanged) {
+        // Persistir el nuevo hash inmediatamente para que el próximo pull
+        // ya no dispare otro backfill innecesario.
+        await db.update(totems).set({ scopeHash: currentScopeHash }).where(eq(totems.id, t.id));
+      }
+      // ───────────────────────────────────────────────────────────────────
+
+      const casinoFilter = (col: any) =>
+        targetCasinoIds.length === 1
+          ? eq(col, targetCasinoIds[0])
+          : inArray(col, targetCasinoIds);
+
+      // Subquery: ids de minutas de todos los casinos del tótem (para scope de pedidos).
+      const minutaIdsForCasino = db.select({ id: minutas.id }).from(minutas).where(
+        targetCasinoIds.length === 1
+          ? eq(minutas.casinoId, targetCasinoIds[0])
+          : inArray(minutas.casinoId, targetCasinoIds)
+      );
 
       const [casinosRows, familiasRows, usersRows, minutasRows, periodosRows, pedidosRows] = await Promise.all([
-        db.select().from(casinos).where(and(gt(casinos.updatedAt, since), eq(casinos.id, t.casinoId))).limit(limit),
-        db.select().from(familias).where(gt(familias.updatedAt, since)).limit(limit),
-        db.select().from(users).where(and(gt(users.updatedAt, since), casinoFilter(users.casinoId))).limit(limit),
-        db.select().from(minutas).where(and(gt(minutas.updatedAt, since), casinoFilter(minutas.casinoId))).limit(limit),
-        db.select().from(periodos).where(and(gt(periodos.updatedAt, since), casinoFilter(periodos.casinoId))).limit(limit),
-        // Pedidos del casino (incluye tombstones para que el tótem mirror anulaciones desde el dashboard).
-        db.select().from(pedidos).where(and(gt(pedidos.updatedAt, since), inArray(pedidos.minutaId, minutaIdsForCasino))).limit(limit),
+        db.select().from(casinos).where(and(gt(casinos.updatedAt, effectiveSince), casinoFilter(casinos.id))).limit(limit),
+        db.select().from(familias).where(gt(familias.updatedAt, effectiveSince)).limit(limit),
+        db.select().from(users).where(and(gt(users.updatedAt, effectiveSince), casinoFilter(users.casinoId))).limit(limit),
+        db.select().from(minutas).where(and(gt(minutas.updatedAt, effectiveSince), casinoFilter(minutas.casinoId))).limit(limit),
+        db.select().from(periodos).where(and(gt(periodos.updatedAt, effectiveSince), casinoFilter(periodos.casinoId))).limit(limit),
+        // Pedidos de todos los casinos del tótem (incluye tombstones para mirror de anulaciones).
+        db.select().from(pedidos).where(and(gt(pedidos.updatedAt, effectiveSince), inArray(pedidos.minutaId, minutaIdsForCasino))).limit(limit),
       ]);
 
       // Update last sync marker
