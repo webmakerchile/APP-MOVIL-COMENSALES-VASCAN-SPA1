@@ -15,7 +15,11 @@ import type { Express, Request, Response, NextFunction } from "express";
 import * as fs from "fs";
 import * as path from "path";
 import { spawnSync } from "child_process";
-import archiver from "archiver";
+import type archiverType from "archiver";
+import { createRequire as _cr } from "module";
+// archiver es un paquete CJS sin export default en ESM;
+// se carga vía createRequire para que funcione con --format=esm --packages=external.
+const archiver = _cr(import.meta.url)("archiver") as typeof archiverType;
 import bcrypt from "bcryptjs";
 import { db, sqlite } from "./db";
 import { totems, totemReleases, users, casinos, minutas, familias, periodos, pedidos, type Totem } from "@shared/schema";

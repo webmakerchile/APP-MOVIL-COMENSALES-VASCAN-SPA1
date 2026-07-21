@@ -404,7 +404,7 @@ import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import * as path3 from "path";
 import * as fs3 from "fs";
-import archiver2 from "archiver";
+import { createRequire as _cr2 } from "module";
 import { spawnSync as spawnSync2 } from "child_process";
 
 // server/storage.ts
@@ -862,10 +862,11 @@ function startCronJobs() {
 import * as fs2 from "fs";
 import * as path2 from "path";
 import { spawnSync } from "child_process";
-import archiver from "archiver";
+import { createRequire as _cr } from "module";
 import bcrypt from "bcryptjs";
 init_schema();
 import { eq as eq3, and as and3, gt, sql as sql2, inArray } from "drizzle-orm";
+var archiver = _cr(import.meta.url)("archiver");
 async function requireTotem(req, res, next) {
   const id = req.header("x-totem-id");
   const secret = req.header("x-totem-secret");
@@ -1095,6 +1096,25 @@ function registerSyncRoutes(app2) {
       return res.status(500).json({ message: "Error al sincronizar push" });
     }
   });
+  app2.get("/api/totem/sync-status", (req, res) => {
+    if (process.env.DB_MODE !== "totem" || !sqlite) return res.status(404).end();
+    try {
+      const getState = (key) => {
+        const row = sqlite.prepare("SELECT value FROM sync_state WHERE key = ?").get(key);
+        return row?.value ?? null;
+      };
+      const lastPullSuccessRaw = getState("last_pull_success_at");
+      const lastPushSuccessRaw = getState("last_push_success_at");
+      const lastPullAt = lastPullSuccessRaw ? parseInt(lastPullSuccessRaw, 10) : null;
+      const lastPushAt = lastPushSuccessRaw ? parseInt(lastPushSuccessRaw, 10) : null;
+      const online = !!(lastPullAt && Date.now() - lastPullAt < 3 * 6e4);
+      const { c: pendingOutbox } = sqlite.prepare("SELECT COUNT(*) as c FROM sync_outbox WHERE acked = 0").get();
+      return res.json({ online, lastPullAt, lastPushAt, pendingOutbox: pendingOutbox ?? 0 });
+    } catch (err) {
+      console.error("[sync-status] error:", err);
+      return res.status(500).json({ message: "Error consultando estado de sync" });
+    }
+  });
   app2.get("/api/totem/version/latest", requireTotem, async (_req, res) => {
     try {
       const [r] = await db.select().from(totemReleases).where(eq3(totemReleases.publicada, true)).orderBy(sql2`created_at DESC`).limit(1);
@@ -1183,6 +1203,7 @@ function generateSecret(len = 48) {
 
 // server/routes.ts
 import { eq as eqOp, sql as sqlOp } from "drizzle-orm";
+var archiver2 = _cr2(import.meta.url)("archiver");
 var PgSession = connectPgSimple(session);
 var upload = multer({ dest: "/tmp/uploads/" });
 var SUPER_ADMIN_RUT = "21212011-1";

@@ -8,7 +8,11 @@ import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import * as path from "path";
 import * as fs from "fs";
-import archiver from "archiver";
+import type archiverType from "archiver";
+import { createRequire as _cr } from "module";
+// archiver es un paquete CJS sin export default en ESM;
+// se carga vía createRequire para que funcione con --format=esm --packages=external.
+const archiver = _cr(import.meta.url)("archiver") as typeof archiverType;
 import { spawnSync } from "child_process";
 import { storage } from "./storage";
 import { pool, db } from "./db";
