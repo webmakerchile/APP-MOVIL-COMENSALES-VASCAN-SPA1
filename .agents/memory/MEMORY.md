@@ -11,3 +11,4 @@
 - [db:push borra session](db-push-session-drop.md) — drizzle-kit quiere DROP de la tabla session (no está en schema.ts); nunca confirmar; agregar columnas con ALTER TABLE directo.
 - [Dominio de producción del tótem](totem-installer-domain.md) — app.buenamezcla.cl es el dominio real; vascan.replit.app en scripts viejos es un remanente sin actualizar, no una alternativa válida.
 - [Casinos nunca se hard-delete](casino-hard-delete-fk.md) — múltiples tablas (minutas, periodos, users, totems) tienen FK sin cascade a casinos.id; borrado de casino siempre debe ser soft-delete.
+- [import.meta.url en código compartido cloud/tótem](import-meta-url-cjs.md) — NUNCA usar import.meta.url a nivel de módulo en archivos que se bundlean en CJS; el tótem compila en CJS y lo deja undefined, rompiendo el boot con ERR_INVALID_ARG_VALUE.

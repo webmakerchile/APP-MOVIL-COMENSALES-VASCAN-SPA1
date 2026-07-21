@@ -10,9 +10,18 @@ import * as path from "path";
 import * as fs from "fs";
 import type archiverType from "archiver";
 import { createRequire as _cr } from "module";
-// archiver es un paquete CJS sin export default en ESM;
-// se carga vía createRequire para que funcione con --format=esm --packages=external.
-const archiver = _cr(import.meta.url)("archiver") as typeof archiverType;
+// Carga perezosa de archiver, compatible con bundle ESM (cloud) y CJS (tótem).
+// A nivel de módulo NO se debe tocar import.meta.url: en el bundle CJS del
+// tótem es undefined y createRequire(undefined) revienta el boot.
+// Solo se llama dentro de los endpoints de update, que en modo tótem
+// devuelven 404 antes de llegar acá.
+function loadArchiver(): typeof archiverType {
+  const base =
+    (typeof import.meta !== "undefined" && import.meta.url) ||
+    (typeof __filename !== "undefined" ? __filename : null) ||
+    path.resolve(process.cwd(), "package.json");
+  return _cr(base as string)("archiver");
+}
 import { spawnSync } from "child_process";
 import { storage } from "./storage";
 import { pool, db } from "./db";
@@ -4019,6 +4028,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="totem-update-${Date.now()}.zip"`);
 
+    const archiver = loadArchiver();
     const archive = archiver("zip", { zlib: { level: 6 } });
     archive.on("error", (err) => { console.error("[update-package] archiver error:", err); res.end(); });
     archive.pipe(res);

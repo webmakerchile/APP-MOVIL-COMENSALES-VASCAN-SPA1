@@ -1,0 +1,44 @@
+Bug crítico: el runtime.js del tótem (bundle CJS) crashea al arrancar con
+ERR_INVALID_ARG_VALUE porque server/sync-cloud.ts y server/routes.ts hacen
+`createRequire(import.meta.url)("archiver")` a nivel de módulo, y en formato
+CJS import.meta.url es undefined. Además el tótem ni siquiera usa archiver
+(sus endpoints de update devuelven 404 en modo tótem).
+
+Arréglalo así en AMBOS archivos (server/sync-cloud.ts y server/routes.ts):
+
+1. Elimina la línea:
+   const archiver = _cr(import.meta.url)("archiver") as typeof archiverType;
+
+2. En su lugar agrega esta función (una por archivo):
+
+// Carga perezosa de archiver, compatible con bundle ESM (cloud) y CJS (tótem).
+// A nivel de módulo NO se debe tocar import.meta.url: en el bundle CJS del
+// tótem es undefined y createRequire(undefined) revienta el boot.
+// Solo se llama dentro de los endpoints de update, que en modo tótem
+// devuelven 404 antes de llegar acá.
+function loadArchiver(): typeof archiverType {
+  const base =
+    (typeof import.meta !== "undefined" && import.meta.url) ||
+    (typeof __filename !== "undefined" ? __filename : null) ||
+    path.resolve(process.cwd(), "package.json");
+  return _cr(base as string)("archiver");
+}
+
+3. En server/routes.ts, dentro del handler de GET /api/totem/update-package,
+   justo antes de `const archive = archiver("zip", { zlib: { level: 6 } });`
+   agrega `const archiver = loadArchiver();`
+
+4. En server/sync-cloud.ts, dentro del handler de GET /api/totem/pull-update,
+   justo antes de su `const archive = archiver("zip", ...)` agrega
+   `const archiver = loadArchiver();`
+
+5. Verifica que el server arranca en el workspace Y que este comando compila
+   sin errores y el archivo resultante arranca sin crashear de inmediato:
+   npx esbuild totem/runtime.ts --platform=node --bundle --format=cjs
+     --external:better-sqlite3 --external:fsevents --outfile=/tmp/runtime-test.js
+
+6. Agrega una nota en .agents/memory/ documentando que el código compartido
+   cloud/tótem NUNCA debe usar import.meta.url a nivel de módulo, porque el
+   bundle CJS del tótem lo deja undefined y mata el boot.
+
+No toques nada más. No cambies dependencias.
