@@ -17,7 +17,7 @@ import * as path from "path";
 import { spawnSync } from "child_process";
 import archiver from "archiver";
 import bcrypt from "bcryptjs";
-import { db } from "./db";
+import { db, sqlite } from "./db";
 import { totems, totemReleases, users, casinos, minutas, familias, periodos, pedidos, type Totem } from "@shared/schema";
 import { storage } from "./storage";
 import { eq, and, gt, sql, inArray } from "drizzle-orm";
@@ -308,6 +308,38 @@ export function registerSyncRoutes(app: Express) {
     } catch (err) {
       console.error("push error", err);
       return res.status(500).json({ message: "Error al sincronizar push" });
+    }
+  });
+
+  // ── Sync status (local totem PWA only) ────────────────────────────────────
+  // GET /api/totem/sync-status
+  // No requiere autenticación de tótem — es una llamada local del kiosco PWA
+  // al servidor Node que corre en la misma máquina (origen relativo).
+  // Solo funciona en DB_MODE=totem; devuelve 404 en el cloud.
+  //
+  // Respuesta: { online, lastPullAt, lastPushAt, pendingOutbox }
+  //   online        → true si el pull fue exitoso hace < 3 min
+  //   lastPullAt    → epoch ms del último pull exitoso (o null)
+  //   lastPushAt    → epoch ms del último push exitoso (o null)
+  //   pendingOutbox → pedidos en la cola aún no subidos a la nube
+  app.get("/api/totem/sync-status", (req: Request, res: Response) => {
+    if (process.env.DB_MODE !== "totem" || !sqlite) return res.status(404).end();
+    try {
+      const getState = (key: string): string | null => {
+        const row = sqlite!.prepare("SELECT value FROM sync_state WHERE key = ?").get(key) as any;
+        return row?.value ?? null;
+      };
+      const lastPullSuccessRaw = getState("last_pull_success_at");
+      const lastPushSuccessRaw = getState("last_push_success_at");
+      const lastPullAt = lastPullSuccessRaw ? parseInt(lastPullSuccessRaw, 10) : null;
+      const lastPushAt = lastPushSuccessRaw ? parseInt(lastPushSuccessRaw, 10) : null;
+      // "online" = pull exitoso en los últimos 3 minutos
+      const online = !!(lastPullAt && Date.now() - lastPullAt < 3 * 60_000);
+      const { c: pendingOutbox } = sqlite!.prepare("SELECT COUNT(*) as c FROM sync_outbox WHERE acked = 0").get() as any;
+      return res.json({ online, lastPullAt, lastPushAt, pendingOutbox: pendingOutbox ?? 0 });
+    } catch (err) {
+      console.error("[sync-status] error:", err);
+      return res.status(500).json({ message: "Error consultando estado de sync" });
     }
   });
 

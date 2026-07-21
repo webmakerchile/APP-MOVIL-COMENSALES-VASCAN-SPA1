@@ -248,6 +248,27 @@ export default function Kiosk() {
   const [accessibleCasinos, setAccessibleCasinos] = useState<KioskCasino[]>([]);
   const [selectedCasinoId, setSelectedCasinoId] = useState<string | null>(null);
 
+  // ── Estado de sync offline ────────────────────────────────────────────────
+  // Consulta /api/totem/sync-status cada 60 s para saber si hay conexión con
+  // la nube. El endpoint solo existe en DB_MODE=totem; en dev devuelve 404 y
+  // syncStatus queda null (banner oculto).
+  const [syncStatus, setSyncStatus] = useState<{ online: boolean; pendingOutbox: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function checkSync() {
+      try {
+        const res = await fetch("/api/totem/sync-status");
+        if (!res.ok) return; // 404 en dev → no mostrar banner
+        const data = await res.json();
+        if (!cancelled) setSyncStatus({ online: !!data.online, pendingOutbox: data.pendingOutbox ?? 0 });
+      } catch { /* red local caída — ignorar */ }
+    }
+    checkSync();
+    const iv = window.setInterval(checkSync, 60_000);
+    return () => { cancelled = true; window.clearInterval(iv); };
+  }, []);
+
   // ── Reset to initial state ──
   const reset = useCallback(() => {
     setStep("login_rut");
@@ -902,6 +923,21 @@ export default function Kiosk() {
   // ── Render por paso ──
   return (
     <div className="fixed inset-0 bg-vascan-bg text-white flex flex-col overflow-hidden">
+      {/* Banner offline — solo visible cuando no hay conexión con la nube */}
+      {syncStatus && !syncStatus.online && (
+        <div className="flex-shrink-0 bg-yellow-500/15 border-b border-yellow-500/30 px-6 py-2 flex items-center gap-3 text-yellow-300 text-sm">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <span>
+            Sin conexión con la nube — los pedidos se guardan localmente y se subirán al reconectar.
+            {syncStatus.pendingOutbox > 0 && (
+              <span className="ml-1 font-semibold">({syncStatus.pendingOutbox} en cola)</span>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex-shrink-0 px-8 pt-6 pb-4 flex items-center justify-between border-b border-white/5">
         <div className="flex items-center gap-3">

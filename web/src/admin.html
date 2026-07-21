@@ -3010,6 +3010,20 @@
       function fmtDate(d) { if (!d) return '—'; const dt = new Date(d); return dt.toLocaleString('es-CL'); }
       function ageMin(d) { if (!d) return '∞'; return Math.floor((Date.now() - new Date(d).getTime()) / 60000); }
 
+      // Devuelve JSX con el lag coloreado según gravedad.
+      function syncLagBadge(ultimaConexion) {
+        if (!ultimaConexion) return <span className="text-white/30 text-xs">nunca</span>;
+        const mins = Math.floor((Date.now() - new Date(ultimaConexion).getTime()) / 60000);
+        if (mins < 30) {
+          return <div className="text-xs text-white/40">hace {mins} min</div>;
+        }
+        if (mins < 120) {
+          return <div className="text-xs text-yellow-400 font-medium">⚠ hace {mins} min</div>;
+        }
+        const h = Math.round(mins / 60);
+        return <div className="text-xs text-red-400 font-medium">✗ sin sync hace {h}h</div>;
+      }
+
       function badgeFor(estado) {
         const map = {
           online: 'bg-green-500/20 text-green-400',
@@ -3129,7 +3143,7 @@
                     <td className="px-4 py-3">{badgeFor(t.estado)}</td>
                     <td className="px-4 py-3 text-white/60">
                       {fmtDate(t.ultimaConexion)}
-                      <div className="text-xs text-white/40">hace {ageMin(t.ultimaConexion)} min</div>
+                      {syncLagBadge(t.ultimaConexion)}
                     </td>
                     <td className="px-4 py-3">
                       <span className={t.pedidosPendientes > 0 ? 'text-yellow-400 font-bold' : 'text-white/40'}>{t.pedidosPendientes ?? 0}</span>

@@ -52,6 +52,22 @@ async function cloudFetch(pathRel: string, init: any = {}) {
   return fetch(url, { ...init, headers });
 }
 
+// ── Backoff state ──────────────────────────────────────────────────────────
+// Contadores de fallos consecutivos para pull y push por separado.
+// Tras cada fallo el intervalo de reintento crece (backoff exponencial) hasta
+// un máximo de 5 min. Se resetea a 0 en el primer éxito.
+let pullFailures = 0;
+let pushFailures = 0;
+const PULL_BASE_MS = 30_000;      // 30 s — intervalo normal de pull
+const PUSH_BASE_MS = 15_000;      // 15 s — intervalo normal de push
+const MAX_BACKOFF_MS = 5 * 60_000; // 5 min — espera máxima en modo offline
+
+function backoffMs(failures: number, baseMs: number): number {
+  if (failures === 0) return baseMs;
+  // Cada fallo duplica el intervalo; cap en MAX_BACKOFF_MS.
+  return Math.min(baseMs * Math.pow(2, failures), MAX_BACKOFF_MS);
+}
+
 // ── PULL ───────────────────────────────────────────────────────────────────
 const TABLES = ["casinos", "familias", "users", "minutas", "periodos", "pedidos"] as const;
 const COLUMN_MAPS: Record<string, Record<string, string>> = {
@@ -92,14 +108,17 @@ function upsertRow(tbl: string, row: any) {
   sqlite.prepare(sql).run(...values);
 }
 
-async function runPull() {
-  if (!getCfg("totem_id")) return;
+// Devuelve true si el pull fue exitoso (para el contador de backoff).
+async function runPull(): Promise<boolean> {
+  if (!getCfg("totem_id")) return true; // no registrado aún, no contar como fallo
   try {
     const since = parseInt(getState("last_pull_ms") || "0", 10);
     const res = await cloudFetch(`/api/totem/pull?since=${since}`);
     if (!res.ok) {
       console.warn("[sync] pull failed:", res.status);
-      return;
+      pullFailures++;
+      if (pullFailures === 1) setState("sync_online", "0");
+      return false;
     }
     const json: any = await res.json();
     const data = json.data || {};
@@ -116,24 +135,33 @@ async function runPull() {
     const cursor = json.nextCursor ?? json.since ?? 0;
     setState("last_pull_ms", String(cursor));
     setState("last_pull_at", new Date().toISOString());
+    setState("last_pull_success_at", String(Date.now()));
+    setState("sync_online", "1");
+    pullFailures = 0;
     const total = TABLES.reduce((s, t) => s + ((data[t] || []).length), 0);
     if (total > 0) console.log(`[sync] pull ok — ${total} filas actualizadas`);
+    return true;
   } catch (err: any) {
-    console.warn("[sync] pull network error:", err?.message);
+    pullFailures++;
+    if (pullFailures === 1) setState("sync_online", "0");
+    const delay = backoffMs(pullFailures, PULL_BASE_MS);
+    console.warn(`[sync] pull network error (fallo #${pullFailures}, próximo en ${Math.round(delay / 1000)}s):`, err?.message);
+    return false;
   }
 }
 
 // ── PUSH ───────────────────────────────────────────────────────────────────
-async function runPush() {
-  if (!getCfg("totem_id")) return;
+// Devuelve true si el push fue exitoso o si no había nada que enviar.
+async function runPush(): Promise<boolean> {
+  if (!getCfg("totem_id")) return true;
   const batch = sqlite.prepare(
     "SELECT id, table_name, record_id, op, payload, attempts FROM sync_outbox WHERE acked = 0 ORDER BY id ASC LIMIT 100"
   ).all() as any[];
-  if (batch.length === 0) return;
+  if (batch.length === 0) return true; // sin pendientes, no es un fallo
 
   // We currently only push pedidos. Other tables are read-only on the totem.
   const pedidoEntries = batch.filter(b => b.table_name === "pedidos");
-  if (pedidoEntries.length === 0) return;
+  if (pedidoEntries.length === 0) return true;
 
   const pedidosPayload = pedidoEntries.map(b => JSON.parse(b.payload));
   try {
@@ -162,9 +190,15 @@ async function runPush() {
       sqlite.prepare("DELETE FROM sync_outbox WHERE acked = 1 AND created_at < ?").run(Date.now() - 7 * 86400 * 1000);
     });
     tx();
+    setState("last_push_success_at", String(Date.now()));
+    pushFailures = 0;
     console.log(`[sync] push ok — ${acceptedSet.size}/${pedidoEntries.length} aceptados`);
+    return true;
   } catch (err: any) {
-    console.warn("[sync] push network error:", err?.message);
+    pushFailures++;
+    const delay = backoffMs(pushFailures, PUSH_BASE_MS);
+    console.warn(`[sync] push network error (fallo #${pushFailures}, próximo en ${Math.round(delay / 1000)}s):`, err?.message);
+    return false;
   }
 }
 
@@ -324,19 +358,32 @@ async function checkUpdate() {
   } catch {/* swallow */}
 }
 
+// ── Schedulers con backoff ──────────────────────────────────────────────────
+// Reemplazamos setInterval por setTimeout recursivo para poder ajustar el
+// intervalo dinámicamente según el conteo de fallos consecutivos.
+async function schedulePull(): Promise<void> {
+  await runPull();
+  setTimeout(schedulePull, backoffMs(pullFailures, PULL_BASE_MS));
+}
+
+async function schedulePush(): Promise<void> {
+  await runPush();
+  setTimeout(schedulePush, backoffMs(pushFailures, PUSH_BASE_MS));
+}
+
 function startWorker() {
   console.log("[sync] worker iniciado");
-  setInterval(runPull, 30 * 1000);
-  setInterval(runPush, 15 * 1000);
+  // Heartbeat y actualización siguen con setInterval (no necesitan backoff).
   setInterval(runHeartbeat, 60 * 1000);
   setInterval(checkUpdate, 30 * 60 * 1000);
-  setInterval(tryApplyPendingUpdate, 10 * 60 * 1000); // Check pending update every 10 min
-  // Initial kicks (delayed so the HTTP server is up first)
+  setInterval(tryApplyPendingUpdate, 10 * 60 * 1000);
+  // Initial kicks (delayed so the HTTP server is up first).
+  // Pull y push usan schedulers con backoff a partir del primer disparo.
   setTimeout(runHeartbeat, 5_000);
-  setTimeout(runPull, 7_000);
-  setTimeout(runPush, 10_000);
+  setTimeout(() => { void schedulePull(); }, 7_000);
+  setTimeout(() => { void schedulePush(); }, 10_000);
   setTimeout(checkUpdate, 60_000);
-  setTimeout(tryApplyPendingUpdate, 30_000); // Check at startup (30s delay for network)
+  setTimeout(tryApplyPendingUpdate, 30_000);
 }
 
 export { runPull, runPush, runHeartbeat, checkUpdate, tryApplyPendingUpdate };
