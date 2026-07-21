@@ -144,6 +144,57 @@ async function ensureSuperAdmin() {
   }
 }
 
+// ── Guard de esquema cloud ──────────────────────────────────────────────────
+// El deploy puede "sincronizar" el esquema de producción con el del workspace,
+// eliminando tablas/columnas que solo existen en prod (pasó con
+// totems.extra_casino_ids y totems.scope_hash → /api/totems devolvía 500 y el
+// panel Tótems quedaba en blanco). Este guard re-crea de forma idempotente lo
+// que el código necesita, en cada arranque. NUNCA borra nada.
+async function ensureCloudSchema() {
+  if (!pool) return; // solo en modo cloud (Postgres)
+  const stmts = [
+    `CREATE TABLE IF NOT EXISTS totems (
+      id                 varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      nombre             text NOT NULL,
+      casino_id          varchar NOT NULL REFERENCES casinos(id),
+      extra_casino_ids   text NOT NULL DEFAULT '[]',
+      scope_hash         text NOT NULL DEFAULT '',
+      secret_hash        text NOT NULL,
+      version            text,
+      ip_publica         text,
+      ip_local           text,
+      hostname           text,
+      ultima_conexion    timestamp,
+      ultimo_sync        timestamp,
+      pedidos_pendientes integer NOT NULL DEFAULT 0,
+      estado             text NOT NULL DEFAULT 'offline',
+      notas              text,
+      activo             boolean NOT NULL DEFAULT true,
+      created_at         timestamp DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS totem_releases (
+      id          varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      version     text NOT NULL UNIQUE,
+      url         text NOT NULL,
+      sha256      text NOT NULL,
+      notas       text,
+      obligatoria boolean NOT NULL DEFAULT false,
+      publicada   boolean NOT NULL DEFAULT false,
+      created_at  timestamp DEFAULT now()
+    )`,
+    `ALTER TABLE totems ADD COLUMN IF NOT EXISTS extra_casino_ids text NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE totems ADD COLUMN IF NOT EXISTS scope_hash text NOT NULL DEFAULT ''`,
+  ];
+  for (const s of stmts) {
+    try {
+      await pool.query(s);
+    } catch (err: any) {
+      console.error("[schema-guard] error:", err?.message);
+    }
+  }
+  console.log("[schema-guard] esquema cloud verificado (totems / totem_releases)");
+}
+
 function requireAdmin(req: Request, res: Response, next: Function) {
   const userId = (req.session as any).userId;
   if (!userId) {
@@ -462,6 +513,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Seed/super-admin solo en cloud. Un tótem nunca debe crear datos sintéticos
   // ni un super-admin global; sus datos llegan exclusivamente vía sync-pull.
   if (process.env.DB_MODE !== "totem") {
+    await ensureCloudSchema();
     await autoSeed();
     await ensureSuperAdmin();
     await seedDevTestData();
