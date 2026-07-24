@@ -10,11 +10,11 @@ import * as path from "path";
 import * as fs from "fs";
 import type archiverType from "archiver";
 import { createRequire as _cr } from "module";
-// Carga perezosa de archiver, compatible con bundle ESM (cloud) y CJS (tÃ³tem).
-// A nivel de mÃ³dulo NO se debe tocar import.meta.url: en el bundle CJS del
-// tÃ³tem es undefined y createRequire(undefined) revienta el boot.
-// Solo se llama dentro de los endpoints de update, que en modo tÃ³tem
-// devuelven 404 antes de llegar acÃ¡.
+// Carga perezosa de archiver, compatible con bundle ESM (cloud) y CJS (tótem).
+// A nivel de módulo NO se debe tocar import.meta.url: en el bundle CJS del
+// tótem es undefined y createRequire(undefined) revienta el boot.
+// Solo se llama dentro de los endpoints de update, que en modo tótem
+// devuelven 404 antes de llegar acá.
 function loadArchiver(): typeof archiverType {
   const base =
     (typeof import.meta !== "undefined" && import.meta.url) ||
@@ -37,8 +37,8 @@ const SUPER_ADMIN_RUT = "21212011-1";
 
 // Fecha "hoy" en horario de Chile (America/Santiago), formato YYYY-MM-DD.
 // Usar esto en vez de new Date().toISOString().split("T")[0] para cualquier
-// nociÃ³n de "hoy": toISOString() devuelve UTC y desfasa el dÃ­a despuÃ©s de las
-// ~20:00 de Chile, rompiendo el resumen del dÃ­a y el menÃº del tÃ³tem en la noche.
+// noción de "hoy": toISOString() devuelve UTC y desfasa el día después de las
+// ~20:00 de Chile, rompiendo el resumen del día y el menú del tótem en la noche.
 // formatToParts arma YYYY-MM-DD de forma determinista (sin depender del locale).
 function todayChile(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -153,12 +153,12 @@ async function ensureSuperAdmin() {
   }
 }
 
-// ââ Guard de esquema cloud ââââââââââââââââââââââââââââââââââââââââââââââââââ
-// El deploy puede "sincronizar" el esquema de producciÃ³n con el del workspace,
-// eliminando tablas/columnas que solo existen en prod (pasÃ³ con
-// totems.extra_casino_ids y totems.scope_hash â /api/totems devolvÃ­a 500 y el
-// panel TÃ³tems quedaba en blanco). Este guard re-crea de forma idempotente lo
-// que el cÃ³digo necesita, en cada arranque. NUNCA borra nada.
+// ── Guard de esquema cloud ──────────────────────────────────────────────────
+// El deploy puede "sincronizar" el esquema de producción con el del workspace,
+// eliminando tablas/columnas que solo existen en prod (pasó con
+// totems.extra_casino_ids y totems.scope_hash → /api/totems devolvía 500 y el
+// panel Tótems quedaba en blanco). Este guard re-crea de forma idempotente lo
+// que el código necesita, en cada arranque. NUNCA borra nada.
 async function ensureCloudSchema() {
   if (!pool) return; // solo en modo cloud (Postgres)
   const stmts = [
@@ -219,7 +219,7 @@ function requireAdmin(req: Request, res: Response, next: Function) {
     (req as any).currentUser = user;
     next();
   }).catch(() => {
-    return res.status(500).json({ message: "Error de autenticaciÃ³n" });
+    return res.status(500).json({ message: "Error de autenticación" });
   });
 }
 
@@ -232,11 +232,11 @@ function requireAdminOnly(req: Request, res: Response, next: Function) {
     if (user.role !== "admin") return res.status(403).json({ message: "Solo administradores" });
     (req as any).currentUser = user;
     next();
-  }).catch(() => res.status(500).json({ message: "Error de autenticaciÃ³n" }));
+  }).catch(() => res.status(500).json({ message: "Error de autenticación" }));
 }
 
 // Resuelve los casinos accesibles por el usuario actual.
-// admin â null (= todos). interlocutor/encargado â uniÃ³n(casinoId base, usuario_casinos).
+// admin → null (= todos). interlocutor/encargado → unión(casinoId base, usuario_casinos).
 async function getAccessibleCasinoIds(user: any): Promise<string[] | null> {
   if (!user) return [];
   if (user.role === "admin") return null;
@@ -247,8 +247,8 @@ async function getAccessibleCasinoIds(user: any): Promise<string[] | null> {
 }
 
 // Verifica que el usuario actual pueda consultar el casino solicitado.
-// `casinoId` puede ser "all": adminâpermitido, otrosâ403.
-// Devuelve true si estÃ¡ OK; si retorna false ya enviÃ³ la respuesta 403.
+// `casinoId` puede ser "all": admin→permitido, otros→403.
+// Devuelve true si está OK; si retorna false ya envió la respuesta 403.
 async function assertCasinoAccess(req: Request, res: Response, casinoId: string | undefined | null): Promise<boolean> {
   const me = (req as any).currentUser;
   const accessible = await getAccessibleCasinoIds(me);
@@ -264,11 +264,11 @@ async function assertCasinoAccess(req: Request, res: Response, casinoId: string 
   return true;
 }
 
-// Auto-crea un pedido "seleccion" (opciÃ³n 1 por defecto) para el staff
-// (interlocutor/encargado_casino) activo y asignado al casino que aÃºn no
-// tenga una inscripciÃ³n para la fecha dada, para que aparezcan en la
-// gestiÃ³n diaria / resumen del dÃ­a igual que los comensales. Idempotente:
-// si el usuario ya tiene un pedido en alguna de las minutas del dÃ­a, no
+// Auto-crea un pedido "seleccion" (opción 1 por defecto) para el staff
+// (interlocutor/encargado_casino) activo y asignado al casino que aún no
+// tenga una inscripción para la fecha dada, para que aparezcan en la
+// gestión diaria / resumen del día igual que los comensales. Idempotente:
+// si el usuario ya tiene un pedido en alguna de las minutas del día, no
 // crea uno nuevo.
 async function ensureStaffPedidosForDate(casinoId: string, fecha: string, dayMinutas: any[]): Promise<void> {
   if (!casinoId || dayMinutas.length === 0) return;
@@ -334,13 +334,13 @@ async function autoSeed() {
     }
 
     const menus1 = [
-      { o1: "Pollo al horno con arroz y ensalada", o2: "Pescado frito con purÃ© de papas", o3: "Pasta boloÃ±esa con parmesano", o4: "Ensalada CÃ©sar con pollo grillado" },
-      { o1: "Lomo saltado con arroz", o2: "Cazuela de vacuno", o3: "Tortilla espaÃ±ola con ensalada", o4: "Wrap de pollo teriyaki" },
-      { o1: "Chuleta de cerdo con arroz", o2: "Merluza al horno con verduras", o3: "LasaÃ±a de carne", o4: "Bowl de quinoa con pollo" },
-      { o1: "Estofado de res con papas", o2: "SalmÃ³n grillado con espÃ¡rragos", o3: "Risotto de champiÃ±ones", o4: null },
-      { o1: "Pollo a la plancha con ensalada", o2: "AlbÃ³ndigas en salsa con arroz", o3: "Tacos de carne", o4: "Sopa de verduras con pan" },
-      { o1: "Milanesa de pollo con purÃ©", o2: "Pescado al vapor con arroz", o3: "Empanadas de pino", o4: null },
-      { o1: "Asado alemÃ¡n con purÃ©", o2: "Carbonada", o3: "Pastel de choclo", o4: "Ensalada mediterrÃ¡nea" },
+      { o1: "Pollo al horno con arroz y ensalada", o2: "Pescado frito con puré de papas", o3: "Pasta boloñesa con parmesano", o4: "Ensalada César con pollo grillado" },
+      { o1: "Lomo saltado con arroz", o2: "Cazuela de vacuno", o3: "Tortilla española con ensalada", o4: "Wrap de pollo teriyaki" },
+      { o1: "Chuleta de cerdo con arroz", o2: "Merluza al horno con verduras", o3: "Lasaña de carne", o4: "Bowl de quinoa con pollo" },
+      { o1: "Estofado de res con papas", o2: "Salmón grillado con espárragos", o3: "Risotto de champiñones", o4: null },
+      { o1: "Pollo a la plancha con ensalada", o2: "Albóndigas en salsa con arroz", o3: "Tacos de carne", o4: "Sopa de verduras con pan" },
+      { o1: "Milanesa de pollo con puré", o2: "Pescado al vapor con arroz", o3: "Empanadas de pino", o4: null },
+      { o1: "Asado alemán con puré", o2: "Carbonada", o3: "Pastel de choclo", o4: "Ensalada mediterránea" },
     ];
 
     for (let i = 0; i < dates.length; i++) {
@@ -359,7 +359,7 @@ async function autoSeed() {
         fecha: dates[i],
         opcion1: "Cazuela de vacuno con verduras",
         opcion2: "Lomo saltado con arroz",
-        opcion3: "Tortilla espaÃ±ola con ensalada",
+        opcion3: "Tortilla española con ensalada",
       });
     }
 
@@ -368,7 +368,7 @@ async function autoSeed() {
       rut: "12345678-9",
       password: hashedPassword,
       nombre: "Juan",
-      apellido: "PÃ©rez",
+      apellido: "Pérez",
       role: "comensal",
       casinoId: casino.id,
     });
@@ -385,8 +385,8 @@ async function autoSeed() {
     await storage.createUser({
       rut: "22222222-2",
       password: hashedPassword,
-      nombre: "MarÃ­a",
-      apellido: "GonzÃ¡lez",
+      nombre: "María",
+      apellido: "González",
       role: "interlocutor",
       casinoId: casino.id,
     });
@@ -399,7 +399,7 @@ async function autoSeed() {
 
 // One-shot migration: backfill ALL users so their password = first 4 digits
 // of their RUT, and clear the legacy `passwordChangeRequired` flag. Idempotent
-// â only touches users that still have the flag set, so after running once it
+// — only touches users that still have the flag set, so after running once it
 // becomes a no-op on subsequent startups. Skips the super admin (custom pwd).
 async function backfillRutPasswords() {
   try {
@@ -421,8 +421,8 @@ async function backfillRutPasswords() {
   }
 }
 
-// Datos mÃ­nimos de prueba para el entorno de desarrollo local.
-// Solo se ejecuta fuera de producciÃ³n y fuera de modo tÃ³tem.
+// Datos mínimos de prueba para el entorno de desarrollo local.
+// Solo se ejecuta fuera de producción y fuera de modo tótem.
 // Idempotente: verifica existencia antes de crear cada entidad.
 async function seedDevTestData() {
   if (process.env.NODE_ENV === "production") return;
@@ -431,7 +431,7 @@ async function seedDevTestData() {
     const allCasinos = await storage.getAllCasinos();
     let uqCasino = allCasinos.find((c: any) => c.nombre === "CASINO UNION QUIMICA");
     if (!uqCasino) {
-      uqCasino = await storage.createCasino({ nombre: "CASINO UNION QUIMICA", direccion: "UniÃ³n QuÃ­mica, Chile" });
+      uqCasino = await storage.createCasino({ nombre: "CASINO UNION QUIMICA", direccion: "Unión Química, Chile" });
       console.log("[dev-seed] Casino UNION QUIMICA creado.");
     }
 
@@ -444,7 +444,7 @@ async function seedDevTestData() {
         rut: testRut,
         password: hashed,
         nombre: "Usuario",
-        apellido: "Prueba TÃ³tem",
+        apellido: "Prueba Tótem",
         role: "comensal",
         casinoId: uqCasino.id,
         passwordChangeRequired: false,
@@ -452,7 +452,7 @@ async function seedDevTestData() {
       console.log("[dev-seed] Usuario 21870734-K creado.");
     }
 
-    // 3. Asegurar minutas para los prÃ³ximos 7 dÃ­as (Chile timezone)
+    // 3. Asegurar minutas para los próximos 7 días (Chile timezone)
     const todayStr = todayChile();
     const dates: string[] = [];
     const base = new Date(todayStr + "T12:00:00-04:00");
@@ -468,13 +468,13 @@ async function seedDevTestData() {
     let minutasCreated = 0;
     for (const fecha of dates) {
       if (!existingDates.has(fecha)) {
-        await storage.createMinuta({ casinoId: uqCasino.id, fecha, familia: "COLACION GENERAL", opcion1: "Cazuela de vacuno con verduras", opcion2: "Lomo saltado con arroz", opcion3: "Tortilla espaÃ±ola con ensalada" });
+        await storage.createMinuta({ casinoId: uqCasino.id, fecha, familia: "COLACION GENERAL", opcion1: "Cazuela de vacuno con verduras", opcion2: "Lomo saltado con arroz", opcion3: "Tortilla española con ensalada" });
         minutasCreated++;
       }
     }
     if (minutasCreated > 0) console.log(`[dev-seed] ${minutasCreated} minutas creadas para CASINO UNION QUIMICA.`);
 
-    // 4. Asegurar perÃ­odo activo
+    // 4. Asegurar período activo
     const periodosList = await storage.getPeriodosByCasino(uqCasino.id);
     const activePeriodo = (periodosList as any[]).find((p: any) => p.activo);
     if (!activePeriodo) {
@@ -485,13 +485,13 @@ async function seedDevTestData() {
       fin.setHours(23, 59, 59, 0);
       await storage.createPeriodo({
         casinoId: uqCasino.id,
-        nombre: "PerÃ­odo prueba dev",
+        nombre: "Período prueba dev",
         fechaInicio: inicio,
         fechaFin: fin,
         fechaServicioInicio: dates[0],
         fechaServicioFin: dates[dates.length - 1],
       });
-      console.log("[dev-seed] PerÃ­odo activo creado para CASINO UNION QUIMICA.");
+      console.log("[dev-seed] Período activo creado para CASINO UNION QUIMICA.");
     }
   } catch (err) {
     console.error("[dev-seed] Error:", err);
@@ -519,23 +519,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }),
   );
 
-  // Seed/super-admin solo en cloud. Un tÃ³tem nunca debe crear datos sintÃ©ticos
-  // ni un super-admin global; sus datos llegan exclusivamente vÃ­a sync-pull.
+  // Seed/super-admin solo en cloud. Un tótem nunca debe crear datos sintéticos
+  // ni un super-admin global; sus datos llegan exclusivamente vía sync-pull.
   if (process.env.DB_MODE !== "totem") {
     await ensureCloudSchema();
     await autoSeed();
     await ensureSuperAdmin();
     await seedDevTestData();
     // backfillRutPasswords() queda DESACTIVADO a partir de Marcha Blanca: el
-    // cliente reactivÃ³ el cambio de clave forzado en el primer ingreso, por lo
+    // cliente reactivó el cambio de clave forzado en el primer ingreso, por lo
     // que ya NO debemos limpiar `passwordChangeRequired` ni resetear claves al
-    // arrancar (eso anularÃ­a el flujo de cambio obligatorio de los usuarios
-    // nuevos). La funciÃ³n se conserva por si se requiere una corrida puntual.
+    // arrancar (eso anularía el flujo de cambio obligatorio de los usuarios
+    // nuevos). La función se conserva por si se requiere una corrida puntual.
   }
 
-  // ââ Admin Panel ââ
-  // En modo tÃ³tem el panel admin no se expone: el tÃ³tem es un kiosko, la
-  // administraciÃ³n solo ocurre en la nube y baja por sync.
+  // ── Admin Panel ──
+  // En modo tótem el panel admin no se expone: el tótem es un kiosko, la
+  // administración solo ocurre en la nube y baja por sync.
   if (process.env.DB_MODE !== "totem") {
     app.get("/admin", (_req: Request, res: Response) => {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -546,15 +546,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   } else {
     app.get("/admin", (_req: Request, res: Response) => {
-      res.status(403).send("Panel administrativo no disponible en tÃ³tem. Use el panel cloud.");
+      res.status(403).send("Panel administrativo no disponible en tótem. Use el panel cloud.");
     });
   }
 
-  // Bloqueo central: en modo tÃ³tem, todas las mutaciones administrativas
-  // (POST/PUT/DELETE sobre catÃ¡logos) se rechazan. El tÃ³tem es read-only para
-  // catÃ¡logos; solo puede crear pedidos. Esto garantiza el "casino lock":
+  // Bloqueo central: en modo tótem, todas las mutaciones administrativas
+  // (POST/PUT/DELETE sobre catálogos) se rechazan. El tótem es read-only para
+  // catálogos; solo puede crear pedidos. Esto garantiza el "casino lock":
   // no se pueden crear/editar usuarios, casinos, minutas, periodos ni familias
-  // localmente â siempre vienen del cloud filtrados por su casinoId asignado.
+  // localmente — siempre vienen del cloud filtrados por su casinoId asignado.
   if (process.env.DB_MODE === "totem") {
     const TOTEM_READONLY_PREFIXES = [
       "/api/usuarios",
@@ -570,35 +570,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ];
     app.use((req: Request, res: Response, next) => {
       if (req.method === "GET") return next();
-      // Permitir explÃ­citamente: pedidos (incluido visita/semanal), auth, sync, seed, login.
+      // Permitir explícitamente: pedidos (incluido visita/semanal), auth, sync, seed, login.
       if (req.path.startsWith("/api/pedidos")) return next();
       if (req.path.startsWith("/api/auth")) return next();
       if (req.path.startsWith("/api/totem/")) return next(); // sync endpoints
       if (TOTEM_READONLY_PREFIXES.some(p => req.path.startsWith(p))) {
-        return res.status(403).json({ message: "OperaciÃ³n no permitida en tÃ³tem (use panel cloud)" });
+        return res.status(403).json({ message: "Operación no permitida en tótem (use panel cloud)" });
       }
       next();
     });
   }
 
-  // ââ Auth Routes ââ
+  // ── Auth Routes ──
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
       const parsed = loginSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ message: "RUT y contraseÃ±a son requeridos" });
+        return res.status(400).json({ message: "RUT y contraseña son requeridos" });
       }
 
       const { rut, password } = parsed.data;
       const user = await storage.getUserByRut(rut);
 
       if (!user) {
-        return res.status(401).json({ message: "Credenciales invÃ¡lidas" });
+        return res.status(401).json({ message: "Credenciales inválidas" });
       }
 
       const isValid = await bcrypt.compare(password, user.password);
       if (!isValid) {
-        return res.status(401).json({ message: "Credenciales invÃ¡lidas" });
+        return res.status(401).json({ message: "Credenciales inválidas" });
       }
 
       if (!user.activo) {
@@ -609,9 +609,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { password: _, ...userWithoutPassword } = user;
       // Incluir casinoIds en la respuesta del login (mismos que /api/auth/me).
-      // El tÃ³tem usa esto para resolver multi-casino sin tener que hacer un
-      // round-trip extra a /me â antes faltaba y el staff con varios casinos
-      // siempre caÃ­a al casino base.
+      // El tótem usa esto para resolver multi-casino sin tener que hacer un
+      // round-trip extra a /me — antes faltaba y el staff con varios casinos
+      // siempre caía al casino base.
       const casinoIds = await getAccessibleCasinoIds(user);
       return res.json({ user: { ...userWithoutPassword, casinoIds: casinoIds || [] } });
     } catch (error) {
@@ -623,9 +623,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/logout", (req: Request, res: Response) => {
     req.session.destroy((err) => {
       if (err) {
-        return res.status(500).json({ message: "Error al cerrar sesiÃ³n" });
+        return res.status(500).json({ message: "Error al cerrar sesión" });
       }
-      return res.json({ message: "SesiÃ³n cerrada" });
+      return res.json({ message: "Sesión cerrada" });
     });
   });
 
@@ -645,7 +645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json({ user: { ...userWithoutPassword, casinoIds: casinoIds || [] } });
   });
 
-  // Cambio de clave (auto-servicio o forzado en primer login en tÃ³tem).
+  // Cambio de clave (auto-servicio o forzado en primer login en tótem).
   app.post("/api/auth/change-password", async (req: Request, res: Response) => {
     try {
       const userId = (req.session as any).userId;
@@ -672,11 +672,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Reset de clave por RUT desde el tÃ³tem (staff). Cliente pidiÃ³ que el
-  // botÃ³n "Cambio de clave" en el menÃº staff permita modificar la clave de
-  // CUALQUIER comensal accesible al staff (flujo: ingresa RUT â nueva clave
-  // â repetir). No exige clave actual: el staff actÃºa como administrador del
-  // casino. Scope: solo usuarios cuyo casino estÃ© dentro del scope del actor.
+  // Reset de clave por RUT desde el tótem (staff). Cliente pidió que el
+  // botón "Cambio de clave" en el menú staff permita modificar la clave de
+  // CUALQUIER comensal accesible al staff (flujo: ingresa RUT → nueva clave
+  // → repetir). No exige clave actual: el staff actúa como administrador del
+  // casino. Scope: solo usuarios cuyo casino esté dentro del scope del actor.
   app.post("/api/auth/reset-password-by-rut", async (req: Request, res: Response) => {
     try {
       const sessionUserId = (req.session as any).userId;
@@ -688,19 +688,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { rut, newPassword } = req.body || {};
       if (!rut || !newPassword || String(newPassword).length < 4) {
-        return res.status(400).json({ message: "RUT y nueva clave (â¥4 dÃ­gitos) son requeridos" });
+        return res.status(400).json({ message: "RUT y nueva clave (≥4 dígitos) son requeridos" });
       }
 
       const target = await storage.getUserByRut(rut);
-      if (!target) return res.status(404).json({ message: "No se encontrÃ³ un usuario con ese RUT" });
+      if (!target) return res.status(404).json({ message: "No se encontró un usuario con ese RUT" });
 
-      // Bloquear reset del super admin desde el tÃ³tem.
+      // Bloquear reset del super admin desde el tótem.
       if (target.rut === SUPER_ADMIN_RUT) {
-        return res.status(403).json({ message: "Este usuario no puede modificarse desde el tÃ³tem" });
+        return res.status(403).json({ message: "Este usuario no puede modificarse desde el tótem" });
       }
 
       // Scope: el target debe pertenecer al scope de casinos del actor.
-      // Admin global pasa. Para interlocutor/encargado, validar intersecciÃ³n
+      // Admin global pasa. Para interlocutor/encargado, validar intersección
       // entre casinos accesibles del actor y casinos del target.
       const actorAccessible = await getAccessibleCasinoIds(actor);
       if (actorAccessible !== null) {
@@ -712,10 +712,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const hashed = await bcrypt.hash(String(newPassword), 10);
       // Tras un reset por staff la clave queda como TEMPORAL: el usuario debe
-      // cambiarla obligatoriamente en su prÃ³ximo ingreso, de modo que ni el
-      // staff que la reseteÃ³ conozca la clave definitiva del comensal.
+      // cambiarla obligatoriamente en su próximo ingreso, de modo que ni el
+      // staff que la reseteó conozca la clave definitiva del comensal.
       await storage.updateUser(target.id, { password: hashed, passwordChangeRequired: true } as any);
-      console.log(`[audit] reset-password-by-rut: actor=${actor.rut} (${actor.role}) â target=${target.rut}`);
+      console.log(`[audit] reset-password-by-rut: actor=${actor.rut} (${actor.role}) → target=${target.rut}`);
       return res.json({ message: "Clave actualizada", user: { rut: target.rut, nombre: target.nombre, apellido: target.apellido } });
     } catch (error) {
       console.error("Reset password by rut error:", error);
@@ -724,10 +724,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Preparar Marcha Blanca: normaliza las claves de TODOS los comensales de un
-  // casino a los 4 primeros dÃ­gitos de su RUT y los marca con cambio de clave
-  // obligatorio en su prÃ³ximo ingreso (passwordChangeRequired=true). Deja a
-  // todo el casino en un estado consistente: entran con los 4 dÃ­gitos la primera
-  // vez y deben cambiar la clave. AcciÃ³n explÃ­cita del admin (REEMPLAZA claves
+  // casino a los 4 primeros dígitos de su RUT y los marca con cambio de clave
+  // obligatorio en su próximo ingreso (passwordChangeRequired=true). Deja a
+  // todo el casino en un estado consistente: entran con los 4 dígitos la primera
+  // vez y deben cambiar la clave. Acción explícita del admin (REEMPLAZA claves
   // personalizadas existentes de los comensales del casino). Idempotente.
   app.post("/api/casinos/:id/reset-claves-comensales", requireAdminOnly, async (req: Request, res: Response) => {
     try {
@@ -748,7 +748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.updateUser(u.id, { password: hashed, passwordChangeRequired: true } as any);
           reset++;
         } catch (e) {
-          // Idempotente: la acciÃ³n se puede re-ejecutar. No abortamos el lote por
+          // Idempotente: la acción se puede re-ejecutar. No abortamos el lote por
           // un comensal; reportamos los fallidos para que el admin reintente.
           fallidos++;
           console.error(`[audit] reset-claves-comensales: fallo en comensal rut=${u.rut}`, e);
@@ -767,12 +767,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsed = insertUserSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ message: "Datos invÃ¡lidos", errors: parsed.error.errors });
+        return res.status(400).json({ message: "Datos inválidos", errors: parsed.error.errors });
       }
 
       const existing = await storage.getUserByRut(parsed.data.rut);
       if (existing) {
-        return res.status(409).json({ message: "El RUT ya estÃ¡ registrado" });
+        return res.status(409).json({ message: "El RUT ya está registrado" });
       }
 
       const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
@@ -789,7 +789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Usuarios CRUD ââ
+  // ── Usuarios CRUD ──
   // GET: cualquier rol staff. Filtrado por casinos accesibles cuando NO es admin.
   // POST/PUT/DELETE: solo admin (interlocutor/encargado son read-only).
   app.get("/api/usuarios", requireAdmin, async (req: Request, res: Response) => {
@@ -798,7 +798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const accessible = await getAccessibleCasinoIds(me);
       const allUsers = await storage.getAllUsers();
 
-      // Map userId â set of casinos asignados (incluye casinoId base)
+      // Map userId → set of casinos asignados (incluye casinoId base)
       const allUserCasinos = await Promise.all(
         allUsers.map(async u => ({ id: u.id, ids: await storage.getUserCasinoIds(u.id) }))
       );
@@ -813,7 +813,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return extra.some(cid => set.has(cid));
         });
       }
-      // Permite filtrar explÃ­citamente por ?casinoId=
+      // Permite filtrar explícitamente por ?casinoId=
       const reqCasino = (req.query.casinoId as string | undefined)?.trim();
       if (reqCasino && reqCasino !== "all") {
         filtered = filtered.filter(u => {
@@ -841,12 +841,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (looksLikeRut(rut) && !validarRutChileno(rut)) {
-        return res.status(400).json({ message: "El RUT ingresado no es vÃ¡lido. Verifique el dÃ­gito verificador." });
+        return res.status(400).json({ message: "El RUT ingresado no es válido. Verifique el dígito verificador." });
       }
 
       const existing = await storage.getUserByRut(rut);
       if (existing) {
-        return res.status(409).json({ message: "El RUT ya estÃ¡ registrado en el sistema" });
+        return res.status(409).json({ message: "El RUT ya está registrado en el sistema" });
       }
 
       const defaultPwd = pwd || rut.replace(/[^0-9]/g, "").slice(0, 4) || "1234";
@@ -860,9 +860,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: role || "comensal",
         casinoId: casinoId || null,
         fechaNacimiento: fechaNacimiento || null,
-        // Si el admin NO definiÃ³ una clave explÃ­cita, el usuario arranca con la
-        // clave por defecto (4 dÃ­gitos del RUT) y debe cambiarla en su primer
-        // ingreso. Si el admin sÃ­ definiÃ³ una clave, se respeta tal cual.
+        // Si el admin NO definió una clave explícita, el usuario arranca con la
+        // clave por defecto (4 dígitos del RUT) y debe cambiarla en su primer
+        // ingreso. Si el admin sí definió una clave, se respeta tal cual.
         passwordChangeRequired: !pwd,
       } as any);
 
@@ -893,8 +893,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (activo !== undefined) updateData.activo = activo;
       if (newPwd) {
         updateData.password = await bcrypt.hash(newPwd, 10);
-        // Cliente decidiÃ³: la clave es siempre los 4 primeros dÃ­gitos del RUT,
-        // no se fuerza cambio en prÃ³ximo login.
+        // Cliente decidió: la clave es siempre los 4 primeros dígitos del RUT,
+        // no se fuerza cambio en próximo login.
         updateData.passwordChangeRequired = passwordChangeRequired === undefined ? false : !!passwordChangeRequired;
       } else if (passwordChangeRequired !== undefined) {
         updateData.passwordChangeRequired = !!passwordChangeRequired;
@@ -945,7 +945,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Casinos CRUD ââ
+  // ── Casinos CRUD ──
   app.get("/api/casinos", async (_req: Request, res: Response) => {
     try {
       const casinosList = await storage.getCasinos();
@@ -970,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsed = insertCasinoSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ message: "Datos invÃ¡lidos" });
+        return res.status(400).json({ message: "Datos inválidos" });
       }
       const casino = await storage.createCasino(parsed.data);
       return res.status(201).json(casino);
@@ -1028,9 +1028,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Nota: los casinos SIEMPRE se desactivan (soft-delete / tombstone), nunca
-  // se borran fÃ­sicamente. Hay mÃºltiples tablas (minutas, periodos, totems,
-  // users) con FK a casinos.id SIN onDelete:cascade, asÃ­ que un hard-delete
-  // real fallarÃ­a (o peor, dejarÃ­a huÃ©rfanos) apenas el casino tuviera
+  // se borran físicamente. Hay múltiples tablas (minutas, periodos, totems,
+  // users) con FK a casinos.id SIN onDelete:cascade, así que un hard-delete
+  // real fallaría (o peor, dejaría huérfanos) apenas el casino tuviera
   // cualquier historial asociado. El tombstone es seguro siempre.
   app.delete("/api/casinos/:id", requireAdminOnly, async (req: Request, res: Response) => {
     try {
@@ -1044,7 +1044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Dashboard Stats ââ
+  // ── Dashboard Stats ──
   app.get("/api/dashboard/stats", requireAdmin, async (req: Request, res: Response) => {
     try {
       const me = (req as any).currentUser;
@@ -1062,7 +1062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const totalComensales = casinoUsers.length;
         const esperados = casino.comensalesDiarios || totalComensales;
 
-        // Periodo activo del casino define la ventana de servicio para los cÃ¡lculos.
+        // Periodo activo del casino define la ventana de servicio para los cálculos.
         const periodos = await storage.getPeriodosByCasino(casino.id);
         const activo = periodos.find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
         const winStart = activo?.fechaServicioInicio || activo?.fechaInicio?.toString().split("T")[0] || today;
@@ -1124,17 +1124,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Dashboard stats error:", error);
-      return res.status(500).json({ message: "Error al obtener estadÃ­sticas" });
+      return res.status(500).json({ message: "Error al obtener estadísticas" });
     }
   });
 
-  // ââ Minutas CRUD ââ
+  // ── Minutas CRUD ──
   app.get("/api/minutas", requireAdmin, async (req: Request, res: Response) => {
     try {
       const me = (req as any).currentUser;
       const accessible = await getAccessibleCasinoIds(me);
       const minutasList = await storage.getAllMinutas();
-      // Interlocutor / encargado: filtrar a sÃ³lo casinos accesibles (multi-casino).
+      // Interlocutor / encargado: filtrar a sólo casinos accesibles (multi-casino).
       // Admin (accessible === null) ve todas.
       const filtered = accessible === null
         ? minutasList
@@ -1194,7 +1194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const data = { ...rest, casinoId: cid };
         const parsed = insertMinutaSchema.safeParse(data);
         if (!parsed.success) {
-          return res.status(400).json({ message: "Datos invÃ¡lidos", errors: parsed.error.errors });
+          return res.status(400).json({ message: "Datos inválidos", errors: parsed.error.errors });
         }
         const minuta = await storage.createMinuta(parsed.data);
         created.push(minuta);
@@ -1309,7 +1309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Familias CRUD ââ
+  // ── Familias CRUD ──
   app.get("/api/familias", async (req: Request, res: Response) => {
     try {
       const allFamilias = await storage.getAllFamilias();
@@ -1362,7 +1362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Periodos (time windows for minuta availability) ââ
+  // ── Periodos (time windows for minuta availability) ──
   app.get("/api/periodos", requireAdmin, async (req: Request, res: Response) => {
     try {
       const allPeriodos = await storage.getAllPeriodos();
@@ -1397,11 +1397,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (fechaServicioFin < fechaServicioInicio) {
           return res.status(400).json({ message: "La fecha de fin de servicio debe ser posterior a la de inicio" });
         }
-        // La ventana de servicio debe ser posterior o igual a la de inscripciÃ³n
+        // La ventana de servicio debe ser posterior o igual a la de inscripción
         const insStart = new Date(fechaInicio).toISOString().split("T")[0];
         const insEnd = new Date(fechaFin).toISOString().split("T")[0];
         if (fechaServicioInicio < insStart || fechaServicioFin < insEnd) {
-          return res.status(400).json({ message: "La ventana de servicio debe ser posterior o igual a la ventana de inscripciÃ³n" });
+          return res.status(400).json({ message: "La ventana de servicio debe ser posterior o igual a la ventana de inscripción" });
         }
       }
       const periodo = await storage.createPeriodo({
@@ -1433,7 +1433,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (updateData.fechaInicio && updateData.fechaFin && new Date(updateData.fechaFin) <= new Date(updateData.fechaInicio)) {
         return res.status(400).json({ message: "La fecha/hora de fin debe ser posterior a la de inicio" });
       }
-      // Validar coherencia ventana de servicio respecto a inscripciÃ³n (cuando ambas presentes en payload)
+      // Validar coherencia ventana de servicio respecto a inscripción (cuando ambas presentes en payload)
       if (updateData.fechaServicioInicio && updateData.fechaServicioFin) {
         if (updateData.fechaServicioFin < updateData.fechaServicioInicio) {
           return res.status(400).json({ message: "La fecha de fin de servicio debe ser posterior a la de inicio" });
@@ -1444,7 +1444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const insStart = new Date(fi).toISOString().split("T")[0];
           const insEnd = new Date(ff).toISOString().split("T")[0];
           if (updateData.fechaServicioInicio < insStart || updateData.fechaServicioFin < insEnd) {
-            return res.status(400).json({ message: "La ventana de servicio debe ser posterior o igual a la ventana de inscripciÃ³n" });
+            return res.status(400).json({ message: "La ventana de servicio debe ser posterior o igual a la ventana de inscripción" });
           }
         }
       }
@@ -1469,12 +1469,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Pedidos (with Interlocutor logic) ââ
-  // ââ Vales (pedidos impresos) â listado enriquecido para admin panel ââ
-  // Devuelve sÃ³lo pedidos con impresoEn != null, enriquecidos con datos de
+  // ── Pedidos (with Interlocutor logic) ──
+  // ── Vales (pedidos impresos) — listado enriquecido para admin panel ──
+  // Devuelve sólo pedidos con impresoEn != null, enriquecidos con datos de
   // usuario, minuta y casino. Filtros: fechaDesde/fechaHasta (sobre fecha de
   // minuta, formato YYYY-MM-DD), casinoId. Scope: admin = todos; interlocutor/
-  // encargado_casino = sÃ³lo sus casinos accesibles.
+  // encargado_casino = sólo sus casinos accesibles.
   app.get("/api/vales", requireAdmin, async (req: Request, res: Response) => {
     try {
       const me = (req as any).currentUser;
@@ -1557,20 +1557,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Marca un pedido como impreso. Lo invoca el tÃ³tem inmediatamente despuÃ©s
+  // Marca un pedido como impreso. Lo invoca el tótem inmediatamente después
   // de window.print() para bloquear re-impresiones cuando el comensal vuelve
-  // a loguearse en el mismo dÃ­a. Idempotente: si ya tiene timestamp lo
-  // sobreescribe (no daÃ±a nada). No requiere auth admin: el dueÃ±o del pedido
-  // o cualquier sesiÃ³n activa del tÃ³tem puede marcarlo.
+  // a loguearse en el mismo día. Idempotente: si ya tiene timestamp lo
+  // sobreescribe (no daña nada). No requiere auth admin: el dueño del pedido
+  // o cualquier sesión activa del tótem puede marcarlo.
   app.post("/api/pedidos/:id/marcar-impreso", async (req: Request, res: Response) => {
-    const __t0 = Date.now(); // [TIMING] diagnÃ³stico lentitud impresiÃ³n
+    const __t0 = Date.now(); // [TIMING] diagnóstico lentitud impresión
     try {
       const userId = (req.session as any).userId;
       if (!userId) return res.status(401).json({ message: "No autenticado" });
       const { id } = req.params;
       const pedido = await storage.getPedidoById(id);
       if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
-      // AutorizaciÃ³n: el dueÃ±o del pedido, o staff (admin/interlocutor/encargado_casino)
+      // Autorización: el dueño del pedido, o staff (admin/interlocutor/encargado_casino)
       // del mismo casino. Esto bloquea ataques donde un usuario A marca como
       // impreso el pedido de otro usuario B.
       const requester = await storage.getUser(userId);
@@ -1578,7 +1578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isOwner = pedido.userId === requester.id;
       const isStaff = ["admin", "interlocutor", "encargado_casino"].includes(requester.role);
       if (!isOwner && !isStaff) return res.status(403).json({ message: "Sin permisos" });
-      // Staff (no-owner) sÃ³lo puede marcar pedidos de casinos en su scope â
+      // Staff (no-owner) sólo puede marcar pedidos de casinos en su scope —
       // evita que un interlocutor de Casino A marque vales de Casino B.
       if (!isOwner && isStaff) {
         const accessible = await getAccessibleCasinoIds(requester);
@@ -1600,7 +1600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DELETE pedido â admin/interlocutor pueden anular un vale para que el comensal vuelva a inscribirse
+  // DELETE pedido — admin/interlocutor pueden anular un vale para que el comensal vuelva a inscribirse
   app.delete("/api/pedidos/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -1608,7 +1608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
       if ((pedido as any).deletedAt) return res.status(410).json({ message: "Pedido ya estaba anulado" });
 
-      // Scope check: interlocutor sÃ³lo puede borrar pedidos de su casino
+      // Scope check: interlocutor sólo puede borrar pedidos de su casino
       const me = (req as any).currentUser;
       if (me?.role === "interlocutor") {
         const minuta = await storage.getMinuta(pedido.minutaId);
@@ -1620,7 +1620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ok = await storage.deletePedido(id);
       if (!ok) return res.status(500).json({ message: "No se pudo anular el pedido" });
 
-      console.log(`[audit] Pedido ${id} anulado por ${me?.rut || "?"} (${me?.role}) â comensal=${pedido.userId} minuta=${pedido.minutaId} tipo=${pedido.tipo}`);
+      console.log(`[audit] Pedido ${id} anulado por ${me?.rut || "?"} (${me?.role}) — comensal=${pedido.userId} minuta=${pedido.minutaId} tipo=${pedido.tipo}`);
       return res.json({ ok: true, message: "Pedido anulado. El comensal puede inscribirse nuevamente." });
     } catch (error) {
       console.error("Delete pedido error:", error);
@@ -1628,14 +1628,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Historial enriquecido ââ
+  // ── Historial enriquecido ──
   app.get("/api/historial/:userId", async (req: Request, res: Response) => {
     try {
       const { userId } = req.params;
       const sessionUserId = (req.session as any).userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
 
-      // AutorizaciÃ³n: un comensal sÃ³lo ve su propio historial. El staff
+      // Autorización: un comensal sólo ve su propio historial. El staff
       // (admin/interlocutor/encargado) puede ver el de otros, pero limitado a
       // usuarios dentro de su scope de casinos. Evita IDOR entre comensales.
       if (sessionUserId !== userId) {
@@ -1688,17 +1688,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ GestiÃ³n diaria (mÃ³dulo admin) ââââââââââââââââââââââââââââââââââââââââââ
+  // ── Gestión diaria (módulo admin) ──────────────────────────────────────────
   // Reemplaza la planilla Excel manual: lista los comensales INSCRITOS para un
-  // casino+fecha y muestra cuÃ¡les YA pasaron por el tÃ³tem (impresoEn) y cuÃ¡les
-  // siguen pendientes. Sobre los pendientes el admin aplica una acciÃ³n
-  // ("delivery" o "baja"). El "corte de hora" es una decisiÃ³n visual del panel;
-  // el backend sÃ³lo expone el estado real (pasÃ³ tÃ³tem / pendiente / gestiÃ³n).
+  // casino+fecha y muestra cuáles YA pasaron por el tótem (impresoEn) y cuáles
+  // siguen pendientes. Sobre los pendientes el admin aplica una acción
+  // ("delivery" o "baja"). El "corte de hora" es una decisión visual del panel;
+  // el backend sólo expone el estado real (pasó tótem / pendiente / gestión).
   app.get("/api/gestion-diaria", requireAdmin, async (req: Request, res: Response) => {
     try {
       const fecha = (req.query.fecha as string) || todayChile();
       const { allowedIds } = await getScopedCasinoFilter(req, req.query.casinoId as string | undefined);
-      // allowedIds === null â admin global sin filtro â todos los casinos.
+      // allowedIds === null → admin global sin filtro → todos los casinos.
       if (allowedIds !== null && allowedIds.size === 0) {
         return res.json({ fecha, items: [] });
       }
@@ -1712,8 +1712,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (m) => m.fecha === fecha && m.activo && (allowedIds === null || allowedIds.has(m.casinoId)),
       );
 
-      // Auto-inscribir staff (interlocutor/encargado_casino) sin pedido aÃºn,
-      // agrupando las minutas del dÃ­a por casino.
+      // Auto-inscribir staff (interlocutor/encargado_casino) sin pedido aún,
+      // agrupando las minutas del día por casino.
       const minutasByCasino = new Map<string, typeof minutasDia>();
       for (const m of minutasDia) {
         if (!minutasByCasino.has(m.casinoId)) minutasByCasino.set(m.casinoId, []);
@@ -1729,7 +1729,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const opts = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
         const pedidosMinuta = await storage.getPedidosByMinuta(minuta.id);
         for (const p of pedidosMinuta) {
-          // SÃ³lo inscripciones reales de comensales (no_asiste y visita se excluyen).
+          // Sólo inscripciones reales de comensales (no_asiste y visita se excluyen).
           if (p.tipo !== "seleccion" || (p.opcionSeleccionada ?? 0) <= 0) continue;
           let u = userCache.get(p.userId);
           if (u === undefined) {
@@ -1745,7 +1745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             apellido: u.apellido,
             role: u.role,
             casinoId: minuta.casinoId,
-            casinoNombre: casinoNombre[minuta.casinoId] ?? "â",
+            casinoNombre: casinoNombre[minuta.casinoId] ?? "—",
             fecha: minuta.fecha,
             familia: minuta.familia ?? null,
             opcionSeleccionada: p.opcionSeleccionada,
@@ -1757,7 +1757,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Pendientes (no pasaron por tÃ³tem y sin gestiÃ³n) primero; luego por nombre.
+      // Pendientes (no pasaron por tótem y sin gestión) primero; luego por nombre.
       items.sort((a, b) => {
         const ap = a.pasoTotem || a.gestionEstado ? 1 : 0;
         const bp = b.pasoTotem || b.gestionEstado ? 1 : 0;
@@ -1776,11 +1776,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ fecha, resumen, items });
     } catch (error) {
       console.error("Gestion diaria error:", error);
-      return res.status(500).json({ message: "Error al cargar la gestiÃ³n diaria" });
+      return res.status(500).json({ message: "Error al cargar la gestión diaria" });
     }
   });
 
-  // Aplica/limpia una acciÃ³n de gestiÃ³n sobre un pedido inscrito.
+  // Aplica/limpia una acción de gestión sobre un pedido inscrito.
   // body: { estado: "delivery" | "baja" | null }
   app.post("/api/gestion-diaria/:pedidoId/accion", requireAdmin, async (req: Request, res: Response) => {
     try {
@@ -1788,7 +1788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const estadoRaw = req.body?.estado;
       const estado = estadoRaw === null || estadoRaw === "" ? null : String(estadoRaw);
       if (estado !== null && estado !== "delivery" && estado !== "baja") {
-        return res.status(400).json({ message: "AcciÃ³n invÃ¡lida. Use 'delivery', 'baja' o vacÃ­o para limpiar." });
+        return res.status(400).json({ message: "Acción inválida. Use 'delivery', 'baja' o vacío para limpiar." });
       }
 
       const pedido = await storage.getPedidoById(pedidoId);
@@ -1807,7 +1807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ ok: true, gestionEstado: (updated as any).gestionEstado ?? null });
     } catch (error) {
       console.error("Gestion diaria accion error:", error);
-      return res.status(500).json({ message: "Error al aplicar la acciÃ³n" });
+      return res.status(500).json({ message: "Error al aplicar la acción" });
     }
   });
 
@@ -1815,7 +1815,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsed = insertPedidoSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ message: "Datos invÃ¡lidos" });
+        return res.status(400).json({ message: "Datos inválidos" });
       }
 
       const user = await storage.getUser(parsed.data.userId);
@@ -1829,22 +1829,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Staff (admin/interlocutor/encargado_casino) puede emitir pedidos en
-      // cualquier momento â el cierre del periodo de inscripciÃ³n no debe
+      // cualquier momento — el cierre del periodo de inscripción no debe
       // bloquearlos (escenario: emitir vale propio durante el servicio).
-      // CRÃTICO: el rol se evalÃºa con el ACTOR DE SESIÃN, no con el `userId`
-      // del body. Sino un comensal podrÃ­a mandar el id de un staff para
-      // saltarse la validaciÃ³n de periodo.
+      // CRÍTICO: el rol se evalúa con el ACTOR DE SESIÓN, no con el `userId`
+      // del body. Sino un comensal podría mandar el id de un staff para
+      // saltarse la validación de periodo.
       const sessionUserId = (req.session as any).userId;
       const actor = sessionUserId ? await storage.getUser(sessionUserId) : null;
       const isStaff = !!actor && (actor.role === "admin" || actor.role === "interlocutor" || actor.role === "encargado_casino");
       // El actor con clave por defecto pendiente de cambio NO puede inscribirse
       // hasta cambiarla (el super admin queda exento). Defensa server-side del
-      // requisito "cambiar clave antes de inscribirse" â el guard del frontend
-      // (mÃ³vil/tÃ³tem) es solo UX.
+      // requisito "cambiar clave antes de inscribirse" — el guard del frontend
+      // (móvil/tótem) es solo UX.
       if (actor && actor.passwordChangeRequired && actor.rut !== SUPER_ADMIN_RUT) {
         return res.status(403).json({ message: "Debes cambiar tu clave antes de inscribirte." });
       }
-      // Comensal solo puede crear pedidos para sÃ­ mismo.
+      // Comensal solo puede crear pedidos para sí mismo.
       if (!isStaff && (!actor || actor.id !== parsed.data.userId)) {
         return res.status(403).json({ message: "Solo puedes registrar tu propio pedido" });
       }
@@ -1853,7 +1853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const now = new Date();
         const activePeriodos = casinoPeriodos.filter(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
         if (casinoPeriodos.filter(p => p.activo).length > 0 && activePeriodos.length === 0) {
-          return res.status(403).json({ message: "La inscripciÃ³n no estÃ¡ disponible en este momento. Fuera del horario de inscripciÃ³n." });
+          return res.status(403).json({ message: "La inscripción no está disponible en este momento. Fuera del horario de inscripción." });
         }
       }
 
@@ -1872,9 +1872,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Bloqueo de duplicados para CUALQUIER rol cuando no es vale visita.
-      // Visita legÃ­timamente puede tener mÃºltiples pedidos por minuta (cada
-      // visitante distinto). SelecciÃ³n/no_asiste solo 1 por (user, minuta).
-      // El Ã­ndice Ãºnico parcial en BD es la defensa final, este check da el
+      // Visita legítimamente puede tener múltiples pedidos por minuta (cada
+      // visitante distinto). Selección/no_asiste solo 1 por (user, minuta).
+      // El índice único parcial en BD es la defensa final, este check da el
       // mensaje amigable antes de que postgres lance el error de constraint.
       if (tipo !== "visita") {
         const existing = await storage.getPedidoByUserAndMinuta(parsed.data.userId, parsed.data.minutaId);
@@ -1900,12 +1900,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Auto-creaciÃ³n de pedido en el TÃTEM (mÃ³dulo consumo).
-  // Cliente pidiÃ³: si un comensal llega al tÃ³tem sin inscripciÃ³n previa, se le
-  // asigna automÃ¡ticamente la OpciÃ³n 1. Esta ruta NO valida periodo activo
+  // Auto-creación de pedido en el TÓTEM (módulo consumo).
+  // Cliente pidió: si un comensal llega al tótem sin inscripción previa, se le
+  // asigna automáticamente la Opción 1. Esta ruta NO valida periodo activo
   // (a diferencia de POST /api/pedidos) porque el flujo de consumo ocurre
-  // durante el servicio â el cierre del periodo de inscripciÃ³n no debe
-  // bloquear que un trabajador almuerce. Solo crea el pedido si todavÃ­a no
+  // durante el servicio — el cierre del periodo de inscripción no debe
+  // bloquear que un trabajador almuerce. Solo crea el pedido si todavía no
   // existe; si existe, retorna el existente.
   app.post("/api/pedidos/auto-totem", async (req: Request, res: Response) => {
     try {
@@ -1913,7 +1913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
       const { userId, minutaId, fecha: clientFecha } = req.body || {};
       if (!userId || !minutaId) return res.status(400).json({ message: "userId y minutaId requeridos" });
-      // El comensal solo puede auto-asignarse a sÃ­ mismo desde el tÃ³tem.
+      // El comensal solo puede auto-asignarse a sí mismo desde el tótem.
       if (userId !== sessionUserId) return res.status(403).json({ message: "Solo puedes emitir tu propio vale" });
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
@@ -1921,9 +1921,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!minuta) return res.status(404).json({ message: "Minuta no encontrada" });
 
       // Seguridad para comensales: la minuta debe pertenecer a su casino.
-      // Para staff (interlocutor/encargado/admin) la restricciÃ³n se relaja:
-      // el `userId === sessionUserId` ya garantiza que sÃ³lo emiten su propio
-      // vale; el casino fue elegido en el menÃº del tÃ³tem (validado al login).
+      // Para staff (interlocutor/encargado/admin) la restricción se relaja:
+      // el `userId === sessionUserId` ya garantiza que sólo emiten su propio
+      // vale; el casino fue elegido en el menú del tótem (validado al login).
       const staffRoles = ["admin", "interlocutor", "encargado_casino"];
       if (!staffRoles.includes(user.role)) {
         const accessible = await getAccessibleCasinoIds(user);
@@ -1931,36 +1931,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "Esta minuta no pertenece a tu casino" });
         }
       }
-      // Solo permite auto-asignaciÃ³n para el menÃº del DÃA (consumo en vivo).
-      // Usar fecha enviada por el cliente (timezone local Chile) â si no viene,
-      // fallback a UTC. Esto evita el desfase UTC-3/4 despuÃ©s de las ~9pm Chile.
+      // Solo permite auto-asignación para el menú del DÍA (consumo en vivo).
+      // Usar fecha enviada por el cliente (timezone local Chile) — si no viene,
+      // fallback a UTC. Esto evita el desfase UTC-3/4 después de las ~9pm Chile.
       const checkFecha = (clientFecha as string) || todayChile();
       if (minuta.fecha !== checkFecha) {
-        return res.status(403).json({ message: "Solo se puede emitir vale para el menÃº de hoy" });
+        return res.status(403).json({ message: "Solo se puede emitir vale para el menú de hoy" });
       }
       const existing = await storage.getPedidoByUserAndMinuta(userId, minutaId);
-      // Pedido VÃLIDO ya existente: imprimir SIEMPRE, aunque la minuta se haya
-      // apagado despuÃ©s de que el comensal se inscribiÃ³. La inscripciÃ³n ya
-      // ocurriÃ³; imprimir el ticket no debe depender del estado del menÃº.
+      // Pedido VÁLIDO ya existente: imprimir SIEMPRE, aunque la minuta se haya
+      // apagado después de que el comensal se inscribió. La inscripción ya
+      // ocurrió; imprimir el ticket no debe depender del estado del menú.
       if (existing && existing.opcionSeleccionada > 0) {
-        // Si ya estaba impreso ANTES de esta llamada â cliente debe mostrar
+        // Si ya estaba impreso ANTES de esta llamada → cliente debe mostrar
         // "ya_impreso" (no re-imprimir). Si no estaba impreso, lo marcamos
         // AHORA mismo y respondemos "marked" para que el cliente imprima.
-        // Esto evita la heurÃ­stica temporal (5s) en el frontend.
+        // Esto evita la heurística temporal (5s) en el frontend.
         if (!existing.impresoEn) {
           const marked = await storage.markPedidoImpreso(existing.id);
           return res.json({ ...(marked || existing), action: "marked_existing" });
         }
         return res.json({ ...existing, action: "already_printed" });
       }
-      // De aquÃ­ en adelante se CREA o convierte un pedido (no_asiste â opciÃ³n 1,
-      // o auto-asignaciÃ³n nueva). El tÃ³tem es flujo de CONSUMO: si el trabajador
-      // estÃ¡ en la fila, debe recibir su comida aunque el menÃº estÃ© "cerrado".
+      // De aquí en adelante se CREA o convierte un pedido (no_asiste → opción 1,
+      // o auto-asignación nueva). El tótem es flujo de CONSUMO: si el trabajador
+      // está en la fila, debe recibir su comida aunque el menú esté "cerrado".
       // No validamos minuta.activo (mismo criterio que no validar periodo activo).
       if (existing && existing.opcionSeleccionada === 0) {
-        // TenÃ­a "no_asiste" â cliente pidiÃ³ que el tÃ³tem SIEMPRE pueda emitir
-        // vale (opciÃ³n 1) aunque el usuario haya declarado no asistir. Lo
-        // convertimos a selecciÃ³n normal y marcamos impreso.
+        // Tenía "no_asiste" — cliente pidió que el tótem SIEMPRE pueda emitir
+        // vale (opción 1) aunque el usuario haya declarado no asistir. Lo
+        // convertimos a selección normal y marcamos impreso.
         const codigoQr = `VASCAN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const updated = await storage.updatePedido(existing.id, {
           opcionSeleccionada: 1,
@@ -2004,7 +2004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Minutas elegibles para inscribirse: dentro de la ventana de servicio del periodo
-  // activo del casino. Si no hay periodo activo, devuelve arreglo vacÃ­o.
+  // activo del casino. Si no hay periodo activo, devuelve arreglo vacío.
   app.get("/api/minutas-disponibles/:casinoId", async (req: Request, res: Response) => {
     try {
       const { casinoId } = req.params;
@@ -2019,7 +2019,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (activo.fechaServicioInicio && activo.fechaServicioFin) {
         filtered = all.filter(m => m.fecha >= activo.fechaServicioInicio! && m.fecha <= activo.fechaServicioFin!);
       } else {
-        // Periodo activo sin ventana de servicio definida: usar la ventana de inscripciÃ³n.
+        // Periodo activo sin ventana de servicio definida: usar la ventana de inscripción.
         const fi = activo.fechaInicio.toString().split("T")[0];
         const ff = activo.fechaFin.toString().split("T")[0];
         filtered = all.filter(m => m.fecha >= fi && m.fecha <= ff);
@@ -2034,7 +2034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Buscar pedidos del dÃ­a por RUT â usado por el tÃ³tem (ReimpresiÃ³n).
+  // Buscar pedidos del día por RUT — usado por el tótem (Reimpresión).
   app.get("/api/pedidos/buscar/por-rut", requireAdmin, async (req: Request, res: Response) => {
     try {
       const rut = (req.query.rut as string || "").replace(/[^0-9kK]/g, "").toUpperCase();
@@ -2045,9 +2045,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const target = allUsers.find(u => norm(u.rut) === rut);
       if (!target) return res.json({ user: null, pedidos: [], minutas: [] });
 
-      // No restringimos por casino del comensal â el staff puede buscar a
+      // No restringimos por casino del comensal — el staff puede buscar a
       // cualquier usuario del sistema. La seguridad es que solo ven los
-      // pedidos de sus casinos accesibles (filtro por minuta mÃ¡s abajo).
+      // pedidos de sus casinos accesibles (filtro por minuta más abajo).
 
       const pedidos = await storage.getPedidosByUser(target.id);
       const allMinutas = await storage.getAllMinutas();
@@ -2065,10 +2065,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Resumen del dÃ­a para encargado_casino / admin: totales por opciÃ³n + no_asiste + visitas.
+  // Resumen del día para encargado_casino / admin: totales por opción + no_asiste + visitas.
   app.get("/api/reportes/resumen-dia/:casinoId", async (req: Request, res: Response) => {
     // Auth flexible: cualquier usuario autenticado puede consultar el resumen
-    // del dÃ­a. Los comensales lo necesitan en el tÃ³tem para que el ticket
+    // del día. Los comensales lo necesitan en el tótem para que el ticket
     // impreso incluya el desglose de lo pedido hoy en el casino. La data es
     // agregada (no PII) y limitada al casino al que pertenecen.
     const sessionUserId = (req.session as any).userId;
@@ -2079,9 +2079,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { casinoId } = req.params;
       const fecha = (req.query.fecha as string) || todayChile();
       const minutas = await storage.getAllMinutasByCasino(casinoId);
-      // Agregar TODAS las minutas activas del dÃ­a (almuerzo + colaciÃ³n + VIP +
-      // desayuno, etc). Antes solo tomaba una y dejaba el resumen vacÃ­o cuando
-      // habÃ­a varias familias el mismo dÃ­a.
+      // Agregar TODAS las minutas activas del día (almuerzo + colación + VIP +
+      // desayuno, etc). Antes solo tomaba una y dejaba el resumen vacío cuando
+      // había varias familias el mismo día.
       const dayMinutas = minutas.filter(m => m.fecha === fecha && m.activo);
       // Periodo activo para Desde/Hasta en el ticket imprimible.
       const casinoPeriodos = await storage.getPeriodosByCasino(casinoId);
@@ -2095,22 +2095,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (dayMinutas.length === 0) {
         return res.json({ fecha, casinoId, periodo: periodoOut, minuta: null, opciones: [], totalSeleccion: 0, totalNoAsiste: 0, totalVisitas: 0 });
       }
-      // Auto-inscribir staff (interlocutor/encargado_casino) sin pedido aÃºn para
-      // este casino/fecha. Esto es una escritura, asÃ­ que sÃ³lo se ejecuta si
-      // quien consulta tiene acceso real a este casino (admin o asignado a Ã©l);
-      // un comensal consultando su propio casino para el tÃ³tem NO dispara esto.
+      // Auto-inscribir staff (interlocutor/encargado_casino) sin pedido aún para
+      // este casino/fecha. Esto es una escritura, así que sólo se ejecuta si
+      // quien consulta tiene acceso real a este casino (admin o asignado a él);
+      // un comensal consultando su propio casino para el tótem NO dispara esto.
       const requesterAccessible = await getAccessibleCasinoIds(sessionUser);
       if (requesterAccessible === null || requesterAccessible.includes(casinoId)) {
         await ensureStaffPedidosForDate(casinoId, fecha, dayMinutas);
       }
-      // Acumular pedidos de todas las minutas del dÃ­a.
+      // Acumular pedidos de todas las minutas del día.
       const pedidosByMinuta = await Promise.all(dayMinutas.map(m => storage.getPedidosByMinuta(m.id)));
       const allPedidos = pedidosByMinuta.flat();
       const sel = allPedidos.filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
       const noAsiste = allPedidos.filter(p => p.tipo === "no_asiste").length;
       const visitas = allPedidos.filter(p => p.tipo === "visita").length;
-      // Opciones agregadas: agrupar por (familia + nÃºmero + descripciÃ³n) para
-      // diferenciar "OpciÃ³n 1 - Almuerzo" de "OpciÃ³n 1 - ColaciÃ³n".
+      // Opciones agregadas: agrupar por (familia + número + descripción) para
+      // diferenciar "Opción 1 - Almuerzo" de "Opción 1 - Colación".
       const opcionesMap = new Map<string, { familia: string | null; numero: number; descripcion: string; cantidad: number; pasoTotem: number }>();
       for (let mi = 0; mi < dayMinutas.length; mi++) {
         const m = dayMinutas[mi];
@@ -2120,7 +2120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const d = opts[i];
           if (!d) continue;
           const numero = i + 1;
-          const key = `${m.familia || "â"}|${numero}|${d}`;
+          const key = `${m.familia || "—"}|${numero}|${d}`;
           const prev = opcionesMap.get(key);
           const pedidosOpcion = pedidosOfM.filter(p => p.opcionSeleccionada === numero);
           const cantidad = pedidosOpcion.length;
@@ -2140,8 +2140,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return a.numero - b.numero;
       });
 
-      // Datos de gestiÃ³n del dÃ­a para encargado_casino / interlocutor / admin.
-      // Incluye inscritos, no-asiste manuales, pendientes, pasaron tÃ³tem, delivery y bajas con nombres.
+      // Datos de gestión del día para encargado_casino / interlocutor / admin.
+      // Incluye inscritos, no-asiste manuales, pendientes, pasaron tótem, delivery y bajas con nombres.
       const isStaff = ["admin", "encargado_casino", "interlocutor"].includes(sessionUser.role);
       let gestion: any = null;
       if (isStaff) {
@@ -2202,7 +2202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/pedidos/semanal", async (req: Request, res: Response) => {
-    const __t0 = Date.now(); // [TIMING] diagnÃ³stico lentitud guardado
+    const __t0 = Date.now(); // [TIMING] diagnóstico lentitud guardado
     try {
       const sessionUserId = (req.session as any).userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
@@ -2218,7 +2218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { selecciones } = req.body;
       let { userId } = req.body;
-      // Solo admin/interlocutor/encargado pueden inscribir a otros; comensal solo a sÃ­ mismo.
+      // Solo admin/interlocutor/encargado pueden inscribir a otros; comensal solo a sí mismo.
       if (!userId || userId === sessionUserId) {
         userId = sessionUserId;
       } else if (sessionUser.role === "comensal") {
@@ -2235,9 +2235,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userAccessible = await getAccessibleCasinoIds(user);
       const userCasinos = userAccessible === null ? null : new Set(userAccessible);
 
-      // Si quien llama no es el mismo usuario destino, ademÃ¡s debe tener acceso (como staff)
+      // Si quien llama no es el mismo usuario destino, además debe tener acceso (como staff)
       // al casino de cada minuta. Esto evita que un encargado/interlocutor inscriba a usuarios
-      // de casinos fuera de su scope vÃ­a userId ajeno.
+      // de casinos fuera de su scope vía userId ajeno.
       const actorAccessible = userId === sessionUserId ? null : await getAccessibleCasinoIds(sessionUser);
       const actorCasinos = actorAccessible === null ? null : new Set(actorAccessible);
 
@@ -2259,7 +2259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           skipped.push({ minutaId, reason: "usuario sin acceso a este casino" });
           continue;
         }
-        // Verificar que el actor (sessionUser) tambiÃ©n tenga acceso al casino de la minuta
+        // Verificar que el actor (sessionUser) también tenga acceso al casino de la minuta
         if (actorCasinos !== null && !actorCasinos.has(minuta.casinoId)) {
           skipped.push({ minutaId, reason: "sin permiso para inscribir en este casino" });
           continue;
@@ -2272,9 +2272,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           periodosCache.set(minuta.casinoId, periodos);
         }
         const periodoActivo = (periodos as any[]).find(p => p.activo && new Date(p.fechaInicio) <= now && new Date(p.fechaFin) >= now);
-        if (!periodoActivo) { skipped.push({ minutaId, reason: "fuera de horario de inscripciÃ³n" }); continue; }
+        if (!periodoActivo) { skipped.push({ minutaId, reason: "fuera de horario de inscripción" }); continue; }
         // Mismo fallback que /api/minutas-disponibles: si no hay ventana de servicio
-        // explÃ­cita, usar la ventana de inscripciÃ³n como rango de servicio.
+        // explícita, usar la ventana de inscripción como rango de servicio.
         const svcStart = periodoActivo.fechaServicioInicio
           || new Date(periodoActivo.fechaInicio).toISOString().split("T")[0];
         const svcEnd = periodoActivo.fechaServicioFin
@@ -2322,7 +2322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/pedidos/visita", async (req: Request, res: Response) => {
     try {
-      // El actor se deriva siempre de la sesiÃ³n; nunca del body.
+      // El actor se deriva siempre de la sesión; nunca del body.
       const sessionUserId = (req.session as any).userId;
       if (!sessionUserId) return res.status(401).json({ message: "No autenticado" });
       const actor = await storage.getUser(sessionUserId);
@@ -2333,8 +2333,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { minutaId } = req.body;
-      // nombreVisita es opcional â cliente pidiÃ³ emitir vale sin pedir nombre
-      // en el tÃ³tem (flujo "Vale visita" = un click, sin teclado tÃ¡ctil).
+      // nombreVisita es opcional — cliente pidió emitir vale sin pedir nombre
+      // en el tótem (flujo "Vale visita" = un click, sin teclado táctil).
       const nombreVisita = (req.body?.nombreVisita && String(req.body.nombreVisita).trim()) || "Visita";
       if (!minutaId) {
         return res.status(400).json({ message: "minutaId requerido" });
@@ -2366,7 +2366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Reporte Diario Manual ââ
+  // ── Reporte Diario Manual ──
   app.post("/api/reportes/diario", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const fecha = (req.body?.fecha as string) || todayChile();
@@ -2379,7 +2379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Dashboard Stats (admin pleno solamente; el panel scoped vive en /api/dashboard/stats) ââ
+  // ── Dashboard Stats (admin pleno solamente; el panel scoped vive en /api/dashboard/stats) ──
   app.get("/api/reportes/dashboard", requireAdminOnly, async (req: Request, res: Response) => {
     try {
       const allPedidos = await db.select().from(pedidosTable);
@@ -2389,11 +2389,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ totalInscripciones, totalNoAsiste, totalVisitas });
     } catch (error) {
       console.error("Dashboard stats error:", error);
-      return res.status(500).json({ message: "Error al obtener estadÃ­sticas" });
+      return res.status(500).json({ message: "Error al obtener estadísticas" });
     }
   });
 
-  // ââ ConsolidaciÃ³n / Reportes ââ
+  // ── Consolidación / Reportes ──
   app.get("/api/reportes/consolidacion", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { casinoId, fecha, fechaHasta } = req.query;
@@ -2493,7 +2493,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ ConsolidaciÃ³n Semanal JSON ââ
+  // ── Consolidación Semanal JSON ──
   app.get("/api/reportes/consolidacion-semanal", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { casinoId, fecha } = req.query;
@@ -2527,7 +2527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const weekMinutaIds = weekMinutas.filter(Boolean).map(m => m!.id);
       const weekPedidos = allPedidos.filter(p => weekMinutaIds.includes(p.minutaId));
 
-      const dayNames = ["Lun", "Mar", "MiÃ©", "Jue", "Vie"];
+      const dayNames = ["Lun", "Mar", "Mié", "Jue", "Vie"];
 
       const dias = weekDates.map((fecha, i) => {
         const minuta = weekMinutas[i];
@@ -2562,7 +2562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ ProgramaciÃ³n Semanal Excel ââ
+  // ── Programación Semanal Excel ──
   app.get("/api/reportes/programacion-semanal", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { casinoId, fecha } = req.query;
@@ -2623,7 +2623,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const goldFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFFFF2CC" } };
       const borderThin = { top: { style: "thin" as const }, left: { style: "thin" as const }, bottom: { style: "thin" as const }, right: { style: "thin" as const } };
 
-      // âââ Hoja "Datos" (like Hoja2 in the reference) âââ
+      // ─── Hoja "Datos" (like Hoja2 in the reference) ───
       const wsDatos = wb.addWorksheet("Datos", { properties: { tabColor: { argb: "FFD4A843" } } });
 
       const datosHeaders = ["ID", "RUT", "Nombre completo"];
@@ -2679,10 +2679,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // âââ Hoja "Resumen" âââ
+      // ─── Hoja "Resumen" ───
       const wsResumen = wb.addWorksheet("Resumen", { properties: { tabColor: { argb: "FF4472C4" } } });
 
-      const resHeaders = ["OpciÃ³n"];
+      const resHeaders = ["Opción"];
       weekDates.forEach((fecha, i) => {
         const dd = new Date(fecha + "T12:00:00");
         resHeaders.push(`${dayNames[i]} ${dd.getDate()}/${dd.getMonth() + 1}`);
@@ -2719,7 +2719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Counts per option per day
       for (let optIdx = 0; optIdx < maxOpts; optIdx++) {
-        const countRow: any = { col0: `OpciÃ³n ${optIdx + 1}` };
+        const countRow: any = { col0: `Opción ${optIdx + 1}` };
         weekMinutas.forEach((minuta, dayI) => {
           if (!minuta) { countRow[`col${dayI + 1}`] = 0; return; }
           const pedidos = weekPedidos.filter(p => p.minutaId === minuta.id && p.tipo !== "no_asiste" && p.tipo !== "visita" && p.opcionSeleccionada === optIdx + 1);
@@ -2786,11 +2786,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Carga Masiva de Usuarios ââ
+  // ── Carga Masiva de Usuarios ──
   app.post("/api/usuarios/upload", requireAdminOnly, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: "No se recibiÃ³ archivo" });
+        return res.status(400).json({ message: "No se recibió archivo" });
       }
 
       const workbook = XLSX.readFile(req.file.path);
@@ -2813,18 +2813,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const rut = String(row["RUT"] || "").trim();
           const nombre = String(row["NOMBRE"] || "").trim();
           const apellido = String(row["APELLIDO"] || "").trim();
-          const telefonoRaw = String(row["TELEFONO"] || row["CELULAR"] || row["TELÃFONO"] || "").trim();
+          const telefonoRaw = String(row["TELEFONO"] || row["CELULAR"] || row["TELÉFONO"] || "").trim();
           const rolRaw = String(row["ROL"] || "comensal").trim().toLowerCase();
           const casinoRaw = String(row["CASINO_ID"] || row["CASINOID"] || row["CASINO"] || "").trim();
 
           if (!rut || !nombre) {
-            errorDetails.push({ row: rowNum, error: "RUT o Nombre vacÃ­o" });
+            errorDetails.push({ row: rowNum, error: "RUT o Nombre vacío" });
             errors++;
             continue;
           }
 
           if (looksLikeRut(rut) && !validarRutChileno(rut)) {
-            errorDetails.push({ row: rowNum, error: `RUT ${rut} invÃ¡lido â dÃ­gito verificador incorrecto` });
+            errorDetails.push({ row: rowNum, error: `RUT ${rut} inválido — dígito verificador incorrecto` });
             errors++;
             continue;
           }
@@ -2864,7 +2864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ ExcelJS Style Presets ââ
+  // ── ExcelJS Style Presets ──
   const EX = {
     darkFill: { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FF1A1A2E" } },
     navyFill: { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FF16213E" } },
@@ -2907,7 +2907,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     right: { horizontal: "right" as const, vertical: "middle" as const },
   };
 
-  // ââ Plantillas Descargables ââ
+  // ── Plantillas Descargables ──
   app.get("/api/plantillas/usuarios", async (_req: Request, res: Response) => {
     try {
       const casinosList = await storage.getCasinos();
@@ -2925,7 +2925,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       wsInst.getRow(1).height = 36;
 
       wsInst.mergeCells("A2:B2");
-      wsInst.getCell("A2").value = "VASCAN SPA â Sistema de InscripciÃ³n de Comensales";
+      wsInst.getCell("A2").value = "VASCAN SPA — Sistema de Inscripción de Comensales";
       wsInst.getCell("A2").font = EX.fontSubGold;
       wsInst.getCell("A2").fill = EX.navyFill as any;
       wsInst.getCell("A2").alignment = EX.center;
@@ -2939,11 +2939,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const instructions = [
         "Complete los datos en la hoja 'Usuarios' respetando el formato indicado.",
-        "El campo RUT debe incluir guiÃ³n y dÃ­gito verificador (ej: 12345678-9).",
-        "El campo ROL tiene un menÃº desplegable: comensal, interlocutor, admin.",
-        "El campo CASINO tiene un menÃº desplegable con los casinos disponibles.",
-        "La contraseÃ±a por defecto serÃ¡n los primeros 4 dÃ­gitos del RUT.",
-        "Los usuarios con RUT duplicado serÃ¡n omitidos automÃ¡ticamente.",
+        "El campo RUT debe incluir guión y dígito verificador (ej: 12345678-9).",
+        "El campo ROL tiene un menú desplegable: comensal, interlocutor, admin.",
+        "El campo CASINO tiene un menú desplegable con los casinos disponibles.",
+        "La contraseña por defecto serán los primeros 4 dígitos del RUT.",
+        "Los usuarios con RUT duplicado serán omitidos automáticamente.",
       ];
       instructions.forEach((text, i) => {
         const row = 6 + i;
@@ -2997,9 +2997,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       casinosList.forEach(c => { casinoMap[c.nombre] = c.id; });
 
       const examples = [
-        { rut: "12345678-9", nombre: "Juan", apellido: "PÃ©rez", telefono: "+56912345678", rol: "comensal", casino: casinoNames[0] || "" },
-        { rut: "98765432-1", nombre: "MarÃ­a", apellido: "GonzÃ¡lez", telefono: "+56987654321", rol: "interlocutor", casino: casinoNames[0] || "" },
-        { rut: "11223344-5", nombre: "Carlos", apellido: "MuÃ±oz", telefono: "", rol: "comensal", casino: "" },
+        { rut: "12345678-9", nombre: "Juan", apellido: "Pérez", telefono: "+56912345678", rol: "comensal", casino: casinoNames[0] || "" },
+        { rut: "98765432-1", nombre: "María", apellido: "González", telefono: "+56987654321", rol: "interlocutor", casino: casinoNames[0] || "" },
+        { rut: "11223344-5", nombre: "Carlos", apellido: "Muñoz", telefono: "", rol: "comensal", casino: "" },
       ];
       examples.forEach(ex => wsUsers.addRow(ex));
 
@@ -3022,7 +3022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           allowBlank: true,
           formulae: ['"comensal,interlocutor,admin"'],
           showErrorMessage: true,
-          errorTitle: "Rol invÃ¡lido",
+          errorTitle: "Rol inválido",
           error: "Seleccione: comensal, interlocutor o admin",
           promptTitle: "Seleccionar Rol",
           prompt: "Elija el rol del usuario",
@@ -3035,7 +3035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             allowBlank: true,
             formulae: [`"${casinoNames.join(",")}"`],
             showErrorMessage: true,
-            errorTitle: "Casino invÃ¡lido",
+            errorTitle: "Casino inválido",
             error: "Seleccione un casino de la lista",
             promptTitle: "Seleccionar Casino",
             prompt: "Elija el casino asignado",
@@ -3047,7 +3047,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const wsCasinos = wb.addWorksheet("Casinos (Referencia)", { properties: { tabColor: { argb: "FF0F3460" } } });
       wsCasinos.columns = [
         { header: "NOMBRE", key: "nombre", width: 35 },
-        { header: "DIRECCIÃN", key: "direccion", width: 40 },
+        { header: "DIRECCIÓN", key: "direccion", width: 40 },
         { header: "ID (UUID)", key: "id", width: 42 },
         { header: "ESTADO", key: "estado", width: 12 },
       ];
@@ -3060,7 +3060,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cell.border = EX.borderGold;
       });
       casinosList.forEach(c => {
-        const row = wsCasinos.addRow({ nombre: c.nombre, direccion: c.direccion || "â", id: c.id, estado: c.activo ? "Activo" : "Inactivo" });
+        const row = wsCasinos.addRow({ nombre: c.nombre, direccion: c.direccion || "—", id: c.id, estado: c.activo ? "Activo" : "Inactivo" });
         row.eachCell(cell => {
           cell.font = EX.fontNormal;
           cell.border = EX.borderThin;
@@ -3089,13 +3089,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const wsInst = wb.addWorksheet("Instrucciones", { properties: { tabColor: { argb: "FF1A1A2E" } } });
       wsInst.columns = [{ width: 22 }, { width: 72 }];
       wsInst.mergeCells("A1:B1");
-      wsInst.getCell("A1").value = "PLANTILLA DE PLANIFICACIÃN DE MINUTAS";
+      wsInst.getCell("A1").value = "PLANTILLA DE PLANIFICACIÓN DE MINUTAS";
       wsInst.getCell("A1").font = EX.fontTitle;
       wsInst.getCell("A1").fill = EX.darkFill as any;
       wsInst.getCell("A1").alignment = EX.center;
       wsInst.getRow(1).height = 36;
       wsInst.mergeCells("A2:B2");
-      wsInst.getCell("A2").value = "VASCAN SPA â Sistema de InscripciÃ³n de Comensales";
+      wsInst.getCell("A2").value = "VASCAN SPA — Sistema de Inscripción de Comensales";
       wsInst.getCell("A2").font = EX.fontSubGold;
       wsInst.getCell("A2").fill = EX.navyFill as any;
       wsInst.getCell("A2").alignment = EX.center;
@@ -3108,11 +3108,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const minInstructions = [
         "Complete las minutas en la hoja correspondiente a cada casino.",
-        "Cada semana tiene 5 columnas (Lunes a Viernes) y hasta 5 opciones de menÃº por dÃ­a.",
+        "Cada semana tiene 5 columnas (Lunes a Viernes) y hasta 5 opciones de menú por día.",
         "La fila FECHA contiene las fechas en formato AAAA-MM-DD. No modificar el formato.",
         "Las opciones 4 y 5 son opcionales (dejar en blanco si no aplica).",
-        "Para importar, suba este archivo en el panel de administraciÃ³n > Carga Masiva.",
-        "La secciÃ³n CONSOLIDACIÃN se llena automÃ¡ticamente con los datos de inscripciÃ³n.",
+        "Para importar, suba este archivo en el panel de administración > Carga Masiva.",
+        "La sección CONSOLIDACIÓN se llena automáticamente con los datos de inscripción.",
       ];
       minInstructions.forEach((text, i) => {
         const row = 6 + i;
@@ -3134,7 +3134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const today = new Date();
       const monday = new Date(today);
       monday.setDate(today.getDate() - today.getDay() + 1);
-      const DIAS = ["Lunes", "Martes", "MiÃ©rcoles", "Jueves", "Viernes"];
+      const DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 
       for (const casino of casinosList) {
         const safeSheetName = casino.nombre.substring(0, 28).replace(/[\\\/\?\*\[\]]/g, "");
@@ -3144,7 +3144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ];
 
         ws.mergeCells("A1:G1");
-        ws.getCell("A1").value = "PLANIFICACIÃN SEMANAL DE MINUTAS";
+        ws.getCell("A1").value = "PLANIFICACIÓN SEMANAL DE MINUTAS";
         ws.getCell("A1").font = EX.fontTitle;
         ws.getCell("A1").fill = EX.darkFill as any;
         ws.getCell("A1").alignment = EX.center;
@@ -3154,9 +3154,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ws.getCell("A2").font = EX.fontGold;
         ws.getCell("B2").value = casino.nombre;
         ws.getCell("B2").font = EX.fontBoldDark;
-        ws.getCell("A3").value = "DirecciÃ³n:";
+        ws.getCell("A3").value = "Dirección:";
         ws.getCell("A3").font = EX.fontSmall;
-        ws.getCell("B3").value = casino.direccion || "â";
+        ws.getCell("B3").value = casino.direccion || "—";
         ws.getCell("B3").font = EX.fontSmall;
         ws.getCell("A4").value = "ID Casino:";
         ws.getCell("A4").font = { ...EX.fontSmall, size: 8 };
@@ -3202,7 +3202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           for (let opt = 0; opt < 5; opt++) {
             const optRow = ws.getRow(currentRow);
-            optRow.values = [opt === 0 ? "" : "", `OPCIÃN ${opt + 1}`, "", "", "", "", ""];
+            optRow.values = [opt === 0 ? "" : "", `OPCIÓN ${opt + 1}`, "", "", "", "", ""];
             optRow.height = 24;
             const optFill = EX.optFills[opt];
             optRow.getCell(1).font = EX.fontSmall;
@@ -3225,7 +3225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           currentRow++;
 
           const consHeaderRow = ws.getRow(currentRow);
-          consHeaderRow.values = ["", "CONSOLIDACIÃN", ...dateLabels];
+          consHeaderRow.values = ["", "CONSOLIDACIÓN", ...dateLabels];
           consHeaderRow.eachCell({ includeEmpty: true }, (cell) => {
             cell.font = { ...EX.fontHeader, color: { argb: "FFB8902E" } };
             cell.fill = EX.goldLightFill as any;
@@ -3250,7 +3250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             currentRow++;
           }
 
-          const extraLabels = ["Sin inscripciÃ³n", "Visitas"];
+          const extraLabels = ["Sin inscripción", "Visitas"];
           for (const label of extraLabels) {
             const row = ws.getRow(currentRow);
             row.values = ["", label, "", "", "", "", ""];
@@ -3290,11 +3290,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Importar Minutas desde Excel ââ
+  // ── Importar Minutas desde Excel ──
   app.post("/api/minutas/upload", requireAdminOnly, upload.single("file"), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: "No se recibiÃ³ archivo" });
+        return res.status(400).json({ message: "No se recibió archivo" });
       }
 
       const workbook = XLSX.readFile(req.file.path, { cellDates: true });
@@ -3345,7 +3345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         if (!casinoId) {
-          errorDetails.push({ sheet: sheetName, row: 0, error: `No se encontrÃ³ "ID Casino:" en la hoja. Use la plantilla descargada.` });
+          errorDetails.push({ sheet: sheetName, row: 0, error: `No se encontró "ID Casino:" en la hoja. Use la plantilla descargada.` });
           errors++;
           continue;
         }
@@ -3412,8 +3412,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Reportes Detallados (3 nuevos, descarga Excel) ââ
-  // Helper comÃºn
+  // ── Reportes Detallados (3 nuevos, descarga Excel) ──
+  // Helper común
   function buildHeader(ws: any, title: string) {
     ws.mergeCells("A1:F1");
     ws.getCell("A1").value = title;
@@ -3422,13 +3422,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.getCell("A1").alignment = EX.center;
     ws.getRow(1).height = 30;
     ws.mergeCells("A2:F2");
-    ws.getCell("A2").value = "BUENAMEZCLA â Sistema de Comensales";
+    ws.getCell("A2").value = "BUENAMEZCLA — Sistema de Comensales";
     ws.getCell("A2").font = EX.fontSubGold;
     ws.getCell("A2").fill = EX.navyFill as any;
     ws.getCell("A2").alignment = EX.center;
   }
 
-  // 1) Reporte de InscripciÃ³n x rango: dÃ­a inscripciÃ³n / comensal / casino / opciÃ³n / dÃ­a servicio
+  // 1) Reporte de Inscripción x rango: día inscripción / comensal / casino / opción / día servicio
   // Helper: enforce interlocutor casino scope (returns effective casinoId or null for "all admins-only")
   function scopedCasinoId(req: Request, requested: string | undefined): string | undefined | null {
     // currentUser is injected by requireAdmin/requireAuth middlewares (session stores only userId)
@@ -3440,15 +3440,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return requested;
   }
 
-  // VersiÃ³n multi-casino del scope: el interlocutor (y encargado_casino) puede
-  // estar asignado a MÃS DE UN casino. Esta funciÃ³n retorna el set de casinos
+  // Versión multi-casino del scope: el interlocutor (y encargado_casino) puede
+  // estar asignado a MÁS DE UN casino. Esta función retorna el set de casinos
   // permitidos para los reportes:
-  //  - admin â { allowedIds: null (= todos) , singleId: requested || null }
+  //  - admin → { allowedIds: null (= todos) , singleId: requested || null }
   //  - interlocutor/encargado_casino:
-  //      Â· requested vacÃ­o / "all" â allowedIds = todos los casinos accesibles,
+  //      · requested vacío / "all" → allowedIds = todos los casinos accesibles,
   //        singleId = null (significa "agregar todos los accesibles")
-  //      Â· requested especÃ­fico â validar que estÃ© en accesibles; si sÃ­,
-  //        allowedIds = Set([requested]); si no, allowedIds = Set() (vacÃ­o,
+  //      · requested específico → validar que esté en accesibles; si sí,
+  //        allowedIds = Set([requested]); si no, allowedIds = Set() (vacío,
   //        bloquea respuesta).
   async function getScopedCasinoFilter(
     req: Request,
@@ -3458,15 +3458,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const accessible = await getAccessibleCasinoIds(sUser);
     const specific = requested && requested !== "all" ? requested : null;
     if (accessible === null) {
-      // admin global â si pide casino especÃ­fico, filtrar por ese; si no, todos.
+      // admin global → si pide casino específico, filtrar por ese; si no, todos.
       return { allowedIds: specific ? new Set([specific]) : null };
     }
     if (!specific) {
-      // staff multi-casino sin filtrar â ver todos los suyos.
+      // staff multi-casino sin filtrar → ver todos los suyos.
       return { allowedIds: new Set(accessible) };
     }
     if (!accessible.includes(specific)) {
-      // pidiÃ³ un casino fuera de su scope â bloquear con set vacÃ­o.
+      // pidió un casino fuera de su scope → bloquear con set vacío.
       return { allowedIds: new Set() };
     }
     return { allowedIds: new Set([specific]) };
@@ -3478,7 +3478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { fechaDesde, fechaHasta } = req.query as any;
       // Scope multi-casino: el interlocutor puede tener varios casinos
       // asignados (Quimica + Quimica Ejecutivo). Si no especifica
-      // casinoId, ve agregada la informaciÃ³n de TODOS sus casinos.
+      // casinoId, ve agregada la información de TODOS sus casinos.
       const scope = await getScopedCasinoFilter(req, req.query.casinoId as string);
       if (scope.allowedIds && scope.allowedIds.size === 0) {
         return res.status(403).json({ message: "Sin acceso al casino solicitado" });
@@ -3520,7 +3520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
           const opcionTexto = p.tipo === "no_asiste"
             ? "(no asiste)"
-            : (opciones[p.opcionSeleccionada - 1] || `OpciÃ³n ${p.opcionSeleccionada}`);
+            : (opciones[p.opcionSeleccionada - 1] || `Opción ${p.opcionSeleccionada}`);
           const famName = m ? String((m as any).familia || "").toLowerCase() : "";
           const fam: any = famName ? familiaByName.get(famName) : null;
           return {
@@ -3530,14 +3530,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             rut: p.tipo === "visita" ? "" : (u?.rut || ""),
             comensal: p.tipo === "visita"
               ? (p.nombreVisita || "VISITA")
-              : (u ? `${u.nombre} ${u.apellido}` : "â"),
+              : (u ? `${u.nombre} ${u.apellido}` : "—"),
             casinoId: m?.casinoId || "",
-            casino: c?.nombre || "â",
-            familia: fam?.nombre || (m as any)?.familia || "â",
+            casino: c?.nombre || "—",
+            familia: fam?.nombre || (m as any)?.familia || "—",
             familiaColor: fam?.color || null,
             opcionNumero: p.opcionSeleccionada,
             opcionTexto,
-            fechaServicio: m?.fecha || "â",
+            fechaServicio: m?.fecha || "—",
             codigoQr: p.codigoQr || null,
             origenTotemId: (p as any).origenTotemId || null,
           };
@@ -3586,16 +3586,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       wb.creator = "BuenaMezcla";
       const ws = wb.addWorksheet("Inscripciones", { properties: { tabColor: { argb: "FFD4A843" } } });
       ws.columns = [
-        { header: "DÃ­a InscripciÃ³n", key: "fechaInsc", width: 22 },
+        { header: "Día Inscripción", key: "fechaInsc", width: 22 },
         { header: "Comensal (RUT - Nombre)", key: "comensal", width: 38 },
         { header: "Casino", key: "casino", width: 26 },
         { header: "Tipo", key: "tipo", width: 14 },
-        { header: "OpciÃ³n", key: "opcion", width: 36 },
-        { header: "DÃ­a Servicio", key: "fechaServ", width: 16 },
+        { header: "Opción", key: "opcion", width: 36 },
+        { header: "Día Servicio", key: "fechaServ", width: 16 },
       ];
       buildHeader(ws, "INSCRIPCIONES POR RANGO DE FECHAS");
       const headerRow = ws.getRow(4);
-      headerRow.values = ["DÃ­a InscripciÃ³n", "Comensal", "Casino", "Tipo", "OpciÃ³n", "DÃ­a Servicio"];
+      headerRow.values = ["Día Inscripción", "Comensal", "Casino", "Tipo", "Opción", "Día Servicio"];
       headerRow.height = 26;
       headerRow.eachCell(c => { c.font = EX.fontHeader; c.fill = EX.headerBlueFill as any; c.alignment = EX.center; c.border = EX.borderGold; });
 
@@ -3605,19 +3605,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const u = userById.get(p.userId);
         const c = m ? casinoById.get(m.casinoId) : null;
         const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
-        const opcionTexto = p.tipo === "no_asiste" ? "(no asiste)" : (opciones[p.opcionSeleccionada - 1] || `OpciÃ³n ${p.opcionSeleccionada}`);
-        const tipoLabel = p.tipo === "visita" ? `Visita: ${p.nombreVisita || ""}` : (p.tipo === "no_asiste" ? "No asiste" : "SelecciÃ³n");
+        const opcionTexto = p.tipo === "no_asiste" ? "(no asiste)" : (opciones[p.opcionSeleccionada - 1] || `Opción ${p.opcionSeleccionada}`);
+        const tipoLabel = p.tipo === "visita" ? `Visita: ${p.nombreVisita || ""}` : (p.tipo === "no_asiste" ? "No asiste" : "Selección");
         const created = p.createdAt ? new Date(p.createdAt) : null;
         const fechaInscStr = created
           ? `${created.toLocaleDateString("es-CL")} ${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`
-          : "â";
+          : "—";
         const r = ws.addRow({
           fechaInsc: fechaInscStr,
-          comensal: u ? `${u.rut} â ${u.nombre} ${u.apellido}` : "â",
-          casino: c?.nombre || "â",
+          comensal: u ? `${u.rut} — ${u.nombre} ${u.apellido}` : "—",
+          casino: c?.nombre || "—",
           tipo: tipoLabel,
           opcion: opcionTexto,
-          fechaServ: m?.fecha || "â",
+          fechaServ: m?.fecha || "—",
         });
         const isEven = idx % 2 === 0;
         r.eachCell(cell => { cell.font = EX.fontNormal; cell.fill = (isEven ? EX.whiteFill : EX.grayFill) as any; cell.border = EX.borderThin; cell.alignment = EX.left; });
@@ -3633,7 +3633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // 2) Reporte de Consumo x rango (proxy: createdAt del pedido = impresiÃ³n vale)
+  // 2) Reporte de Consumo x rango (proxy: createdAt del pedido = impresión vale)
   app.get("/api/reportes/consumo-detalle", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { fechaDesde, fechaHasta } = req.query as any;
@@ -3654,9 +3654,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const start = new Date(fechaDesde + "T00:00:00");
       const end = new Date(fechaHasta + "T23:59:59");
 
-      // Consumo = "ya pasÃ³ a comer". Filtramos por impresoEn (proxy real de
-      // consumo) y excluimos no_asiste. Si impresoEn estÃ¡ vacÃ­o significa que
-      // el comensal se inscribiÃ³ pero NO pasÃ³ por el tÃ³tem, no debe contar.
+      // Consumo = "ya pasó a comer". Filtramos por impresoEn (proxy real de
+      // consumo) y excluimos no_asiste. Si impresoEn está vacío significa que
+      // el comensal se inscribió pero NO pasó por el tótem, no debe contar.
       const filtered = allPedidos.filter(p => {
         if (p.tipo === "no_asiste") return false;
         if (!p.impresoEn) return false;
@@ -3675,13 +3675,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { header: "Fecha y hora vale", key: "fechaConsumo", width: 22 },
         { header: "Comensal", key: "comensal", width: 38 },
         { header: "Casino", key: "casino", width: 26 },
-        { header: "OpciÃ³n", key: "opcion", width: 36 },
-        { header: "DÃ­a Servicio", key: "fechaServ", width: 16 },
-        { header: "CÃ³digo QR", key: "qr", width: 28 },
+        { header: "Opción", key: "opcion", width: 36 },
+        { header: "Día Servicio", key: "fechaServ", width: 16 },
+        { header: "Código QR", key: "qr", width: 28 },
       ];
       buildHeader(ws, "CONSUMO POR RANGO DE FECHAS");
       const headerRow = ws.getRow(4);
-      headerRow.values = ["Fecha y hora vale", "Comensal", "Casino", "OpciÃ³n", "DÃ­a Servicio", "CÃ³digo QR"];
+      headerRow.values = ["Fecha y hora vale", "Comensal", "Casino", "Opción", "Día Servicio", "Código QR"];
       headerRow.height = 26;
       headerRow.eachCell(c => { c.font = EX.fontHeader; c.fill = EX.headerBlueFill as any; c.alignment = EX.center; c.border = EX.borderGold; });
 
@@ -3695,22 +3695,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const u = userById.get(p.userId);
         const c = m ? casinoById.get(m.casinoId) : null;
         const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
-        const opcionTexto = opciones[p.opcionSeleccionada - 1] || `OpciÃ³n ${p.opcionSeleccionada}`;
-        // Hora del vale = impresoEn (cuando se imprimiÃ³ en el tÃ³tem), no createdAt.
+        const opcionTexto = opciones[p.opcionSeleccionada - 1] || `Opción ${p.opcionSeleccionada}`;
+        // Hora del vale = impresoEn (cuando se imprimió en el tótem), no createdAt.
         const stamp = p.impresoEn ? new Date(p.impresoEn) : (p.createdAt ? new Date(p.createdAt) : null);
         const fechaConsumoStr = stamp
           ? `${stamp.toLocaleDateString("es-CL")} ${String(stamp.getHours()).padStart(2, "0")}:${String(stamp.getMinutes()).padStart(2, "0")}`
-          : "â";
+          : "—";
         const comensalLabel = p.tipo === "visita"
-          ? `VISITA â ${p.nombreVisita || ""}`
-          : (u ? `${u.rut} â ${u.nombre} ${u.apellido}` : "â");
+          ? `VISITA — ${p.nombreVisita || ""}`
+          : (u ? `${u.rut} — ${u.nombre} ${u.apellido}` : "—");
         const r = ws.addRow({
           fechaConsumo: fechaConsumoStr,
           comensal: comensalLabel,
-          casino: c?.nombre || "â",
+          casino: c?.nombre || "—",
           opcion: opcionTexto,
-          fechaServ: m?.fecha || "â",
-          qr: p.codigoQr || "â",
+          fechaServ: m?.fecha || "—",
+          qr: p.codigoQr || "—",
         });
         const isEven = idx % 2 === 0;
         r.eachCell(cell => { cell.font = EX.fontNormal; cell.fill = (isEven ? EX.whiteFill : EX.grayFill) as any; cell.border = EX.borderThin; cell.alignment = EX.left; });
@@ -3750,15 +3750,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       wb.creator = "BuenaMezcla";
       const ws = wb.addWorksheet("Minutas del mes", { properties: { tabColor: { argb: "FFD4A843" } } });
       ws.columns = [
-        { header: "DÃ­a Servicio", key: "fecha", width: 14 },
+        { header: "Día Servicio", key: "fecha", width: 14 },
         { header: "Casino", key: "casino", width: 26 },
         { header: "Familia", key: "familia", width: 16 },
-        { header: "OpciÃ³n NÂ°", key: "num", width: 12 },
-        { header: "PreparaciÃ³n", key: "prep", width: 60 },
+        { header: "Opción N°", key: "num", width: 12 },
+        { header: "Preparación", key: "prep", width: 60 },
       ];
-      buildHeader(ws, `MINUTAS DETALLE DEL MES â ${mes}`);
+      buildHeader(ws, `MINUTAS DETALLE DEL MES — ${mes}`);
       const headerRow = ws.getRow(4);
-      headerRow.values = ["DÃ­a Servicio", "Casino", "Familia", "OpciÃ³n NÂ°", "PreparaciÃ³n"];
+      headerRow.values = ["Día Servicio", "Casino", "Familia", "Opción N°", "Preparación"];
       headerRow.height = 26;
       headerRow.eachCell(c => { c.font = EX.fontHeader; c.fill = EX.headerBlueFill as any; c.alignment = EX.center; c.border = EX.borderGold; });
 
@@ -3770,8 +3770,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!op) return;
           const r = ws.addRow({
             fecha: m.fecha,
-            casino: c?.nombre || "â",
-            familia: m.familia || "â",
+            casino: c?.nombre || "—",
+            familia: m.familia || "—",
             num: i + 1,
             prep: op,
           });
@@ -3796,7 +3796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Seed Data (manual) ââ
+  // ── Seed Data (manual) ──
   app.get("/api/seed", async (_req: Request, res: Response) => {
     try {
       await autoSeed();
@@ -3807,7 +3807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ââ Sync API for tÃ³tems âââââââââââââââââââââââââââââââââââââââââââââââ
+  // ── Sync API for tótems ───────────────────────────────────────────────
   registerSyncRoutes(app);
 
   // Strict admin gate: fleet management is dangerous (mints bootstrap tokens,
@@ -3819,10 +3819,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!u || u.role !== "admin") return res.status(403).json({ message: "Solo administradores" });
       (req as any).currentUser = u;
       next();
-    }).catch(() => res.status(500).json({ message: "Error de autenticaciÃ³n" }));
+    }).catch(() => res.status(500).json({ message: "Error de autenticación" }));
   }
 
-  // ââ Fleet management (admin only) âââââââââââââââââââââââââââââââââââââ
+  // ── Fleet management (admin only) ─────────────────────────────────────
   app.get("/api/totems", requireAdminStrict, async (_req, res) => {
     try {
       const list = await db.select().from(totemsTable);
@@ -3838,7 +3838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(enriched);
     } catch (err) {
       console.error("list totems error", err);
-      res.status(500).json({ message: "Error al listar tÃ³tems" });
+      res.status(500).json({ message: "Error al listar tótems" });
     }
   });
 
@@ -3857,15 +3857,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (typeof extraCasinoIds === "string") {
           try { JSON.parse(extraCasinoIds); updateData.extraCasinoIds = extraCasinoIds; } catch { /* ignorar */ }
         }
-        // Limpiar el scopeHash para que el prÃ³ximo pull detecte el cambio de scope
-        // y dispare un backfill completo (since=0) hacia el tÃ³tem.
+        // Limpiar el scopeHash para que el próximo pull detecte el cambio de scope
+        // y dispare un backfill completo (since=0) hacia el tótem.
         updateData.scopeHash = "";
       }
       const [updated] = await db.update(totemsTable).set(updateData).where(eqOp(totemsTable.id, id)).returning();
       if (!updated) return res.status(404).json({ message: "No encontrado" });
       res.json({ ...updated, secretHash: undefined });
     } catch (err) {
-      res.status(500).json({ message: "Error al actualizar tÃ³tem" });
+      res.status(500).json({ message: "Error al actualizar tótem" });
     }
   });
 
@@ -3873,9 +3873,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       await db.delete(totemsTable).where(eqOp(totemsTable.id, id));
-      res.json({ message: "TÃ³tem eliminado" });
+      res.json({ message: "Tótem eliminado" });
     } catch (err) {
-      res.status(500).json({ message: "Error al eliminar tÃ³tem" });
+      res.status(500).json({ message: "Error al eliminar tótem" });
     }
   });
 
@@ -3892,7 +3892,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         token,
         casino: { id: casino.id, nombre: casino.nombre },
-        expiresInfo: "VÃ¡lido por 1 hora. Se invalida al usarse (single-use).",
+        expiresInfo: "Válido por 1 hora. Se invalida al usarse (single-use).",
       });
     } catch (err) {
       res.status(500).json({ message: "Error al generar token" });
@@ -3921,8 +3921,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).returning();
       res.status(201).json(r);
     } catch (err: any) {
-      if (err?.code === "23505") return res.status(409).json({ message: "VersiÃ³n duplicada" });
-      res.status(500).json({ message: "Error al crear versiÃ³n" });
+      if (err?.code === "23505") return res.status(409).json({ message: "Versión duplicada" });
+      res.status(500).json({ message: "Error al crear versión" });
     }
   });
 
@@ -3940,22 +3940,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!r) return res.status(404).json({ message: "No encontrado" });
       res.json(r);
     } catch (err) {
-      res.status(500).json({ message: "Error al actualizar versiÃ³n" });
+      res.status(500).json({ message: "Error al actualizar versión" });
     }
   });
 
-  // ââ Endpoint de actualizaciÃ³n del tÃ³tem âââââââââââââââââââââââââââââââââââââ
+  // ── Endpoint de actualización del tótem ─────────────────────────────────────
   // GET /api/totem/update-package?key=SECRET
   // Descarga un ZIP con pwa/dist + server_dist listos para reemplazar en el
-  // PC Windows del tÃ³tem. No requiere sesiÃ³n; usa clave TOTEM_UPDATE_KEY
-  // (o SESSION_SECRET si no estÃ¡ definida). Solo disponible fuera de modo tÃ³tem.
+  // PC Windows del tótem. No requiere sesión; usa clave TOTEM_UPDATE_KEY
+  // (o SESSION_SECRET si no está definida). Solo disponible fuera de modo tótem.
   app.get("/api/totem/update-package", async (req: Request, res: Response) => {
     if (process.env.DB_MODE === "totem") return res.status(404).end();
 
     const expectedKey = process.env.TOTEM_UPDATE_KEY || process.env.SESSION_SECRET || "";
     const providedKey = (req.query.key as string) || "";
     if (!expectedKey || providedKey !== expectedKey) {
-      return res.status(401).json({ message: "Clave invÃ¡lida" });
+      return res.status(401).json({ message: "Clave inválida" });
     }
 
     const cwd        = process.cwd();
@@ -3967,7 +3967,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: "pwa/dist no encontrado. Ejecuta el build primero." });
     }
 
-    // Compilar los archivos TS del tÃ³tem con esbuild (bundle autocontenido)
+    // Compilar los archivos TS del tótem con esbuild (bundle autocontenido)
     const totemFiles = ["runtime.ts", "register.ts", "sync-worker.ts"];
     const compiled: string[] = [];
     const errors: string[] = [];
@@ -4041,7 +4041,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Siempre incluir el frontend
     archive.directory(pwaDistDir, "pwa/dist");
 
-    // Incluir archivos del tÃ³tem compilados (si se pudieron compilar)
+    // Incluir archivos del tótem compilados (si se pudieron compilar)
     if (compiled.length > 0) {
       for (const jsFile of compiled) {
         const jsPath = path.join(totemTmpDir, jsFile);
@@ -4076,7 +4076,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
     }
-    // Dependencias de better-sqlite3 â resueltas automÃ¡ticamente desde package.json
+    // Dependencias de better-sqlite3 — resueltas automáticamente desde package.json
     function collectDeps(pkgName: string, nmRoot: string, seen: Set<string>): void {
       if (seen.has(pkgName)) return;
       seen.add(pkgName);
@@ -4112,11 +4112,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try { fs.rmSync(totemTmpDir, { recursive: true, force: true }); } catch {}
   });
 
-  // ââ Descarga del script de actualizaciÃ³n ââââââââââââââââââââââââââââââââââââ
+  // ── Descarga del script de actualización ────────────────────────────────────
   // GET /api/totem/update-script
-  // Devuelve update-totem.ps1 como descarga. Acepta autenticaciÃ³n por clave
-  // (igual que update-package) O por sesiÃ³n de administrador, para que el
-  // botÃ³n del panel admin pueda descargarlo sin exponer la clave al cliente.
+  // Devuelve update-totem.ps1 como descarga. Acepta autenticación por clave
+  // (igual que update-package) O por sesión de administrador, para que el
+  // botón del panel admin pueda descargarlo sin exponer la clave al cliente.
   app.get("/api/totem/update-script", async (req: Request, res: Response) => {
     if (process.env.DB_MODE === "totem") return res.status(404).end();
 
