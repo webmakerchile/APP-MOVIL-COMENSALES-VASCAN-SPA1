@@ -1492,7 +1492,7 @@
             const myIds = new Set([user.casinoId, ...(user.casinoIds || [])].filter(Boolean));
             const mine = data.filter(c => myIds.has(c.id));
             setCasinos(mine);
-            setSelectedCasino('all');
+            setSelectedCasino(mine[0]?.id ?? '');
           } else {
             setCasinos(data);
             setSelectedCasino('all');
