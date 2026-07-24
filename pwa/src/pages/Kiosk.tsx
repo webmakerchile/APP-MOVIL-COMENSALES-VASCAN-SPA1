@@ -311,10 +311,12 @@ export default function Kiosk() {
   // sin diálogo. El layout imprimible vive en el div `.print-vale` al final
   // del render y usa CSS `@media print` (pwa/src/index.css) para 80mm.
   const printedRef = useRef<string | null>(null);
+  const skipMarkImpresoRef = useRef<boolean>(false);
   useEffect(() => {
     if (step !== "qr" || !qrCode || !qrMeta) return;
     if (printedRef.current === qrCode) return;
     printedRef.current = qrCode;
+    const skipMarkImpreso = skipMarkImpresoRef.current;
     // Pedido del cliente (27/05/2026): cada vez que un comensal imprime su
     // vale, también debe salir el resumen acumulado del día. El resumen se
     // pre-cargó vía preloadResumenForPrint() en cada handler ANTES del logout
@@ -339,7 +341,7 @@ export default function Kiosk() {
         try { window.print(); } catch {}
         setTimeout(() => { if (mode) document.body.classList.remove(mode); }, 500);
         const pid = qrPedidoId;
-        if (pid) {
+        if (pid && !skipMarkImpreso) {
           apiRequest("POST", `/api/pedidos/${pid}/marcar-impreso`, {}).catch(() => {});
         }
       });
@@ -349,6 +351,7 @@ export default function Kiosk() {
   useEffect(() => {
     if (step !== "qr") {
       printedRef.current = null;
+      skipMarkImpresoRef.current = false;
       // Resetear printMode al modo por defecto (comensal = resumen) cuando
       // salimos del paso QR, para que el próximo flujo arranque correctamente.
       setPrintMode("resumen");
@@ -862,6 +865,7 @@ export default function Kiosk() {
     // Reimpresión: imprimir la COPIA DEL VALE individual, no el resumen del día.
     // (Pedido cliente 27/05/2026 tarde.)
     setPrintMode("vale");
+    skipMarkImpresoRef.current = true;
     setStep("qr");
   }
 
