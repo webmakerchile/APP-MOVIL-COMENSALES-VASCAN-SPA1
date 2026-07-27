@@ -10,7 +10,8 @@ param(
   [string] $Cloud      = "https://vascan.replit.app",
   [string] $Token      = "",
   [string] $Nombre     = "",
-  [string] $InstallDir = "C:\BuenaMezcla"
+  [string] $InstallDir = "C:\BuenaMezcla",
+  [switch] $Nueva
 )
 
 function Step($m) { Write-Host ""; Write-Host "==> $m" -ForegroundColor Cyan }
@@ -29,21 +30,40 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 
 # ── Detectar instalacion previa ──
-# Si ya existe totem.db con un totem_id registrado, esto es una ACTUALIZACION:
-# saltamos el pedido de token y el paso de registro (preservamos totem_id/secret).
+# Por defecto, si ya existe totem.db con un totem_id registrado esto es una
+# ACTUALIZACION: saltamos el pedido de token y el registro (se preservan
+# totem_id/secret y los pedidos locales).
+# Para reinstalar el equipo como un totem DISTINTO hay que forzar instalacion
+# nueva: parametro -Nueva, o $env:TOTEM_NUEVA = "1" (util con "iwr | iex",
+# donde no se pueden pasar parametros). Tambien se pregunta de forma
+# interactiva cuando se detecta una instalacion previa.
 $existingDb = "$InstallDir\totem-data\totem.db"
 $IsUpdate = $false
-if (Test-Path $existingDb) {
+$ForceNew = $Nueva.IsPresent -or ($env:TOTEM_NUEVA -eq "1")
+
+if ((Test-Path $existingDb) -and (-not $ForceNew)) {
   # Heuristica: si la DB existe y pesa > 4KB asumimos que ya fue inicializada y registrada.
   # El paso de registro lee totem_id desde totem_config; si ya esta, no necesitamos token nuevo.
   $dbSize = (Get-Item $existingDb).Length
   if ($dbSize -gt 4096) {
-    $IsUpdate = $true
     Write-Host ""
-    Write-Host "Instalacion previa detectada en $InstallDir." -ForegroundColor Green
-    Write-Host "Modo: ACTUALIZACION (se preserva totem_id, totem_secret y pedidos locales)." -ForegroundColor Green
-    Write-Host ""
+    Write-Host "Instalacion previa detectada en $InstallDir." -ForegroundColor Yellow
+    Write-Host "  [A] Actualizar        - conserva el totem_id actual y los pedidos locales."
+    Write-Host "  [N] Instalacion NUEVA - pide token nuevo y registra otro totem_id."
+    $modo = Read-Host "Que quieres hacer? (Enter = A)"
+    if ($modo -match "^[Nn]") { $ForceNew = $true } else { $IsUpdate = $true }
   }
+}
+
+if ($IsUpdate) {
+  Write-Host ""
+  Write-Host "Modo: ACTUALIZACION (se preserva totem_id, totem_secret y pedidos locales)." -ForegroundColor Green
+  Write-Host ""
+}
+if ($ForceNew) {
+  Write-Host ""
+  Write-Host "Modo: INSTALACION NUEVA (se pedira token y se registrara un totem_id nuevo)." -ForegroundColor Yellow
+  Write-Host ""
 }
 
 # ── Pedir datos (solo si es instalacion nueva) ──
@@ -72,6 +92,19 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyCon
   Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($InstallDir, [System.StringComparison]::OrdinalIgnoreCase) } |
   ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
 Start-Sleep -Seconds 2
+
+# Instalacion NUEVA sobre un equipo que ya tenia totem: la DB local conserva el
+# totem_id viejo y el sync contra la nube responde 401 "Totem no autorizado".
+# La movemos (no la borramos) para que el registro cree una identidad limpia.
+if ($ForceNew -and (Test-Path "$InstallDir\totem-data")) {
+  $bak = "$InstallDir\totem-data-old-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+  Write-Host "Respaldando datos del totem anterior en $bak ..." -ForegroundColor Yellow
+  try {
+    Move-Item -LiteralPath "$InstallDir\totem-data" -Destination $bak -Force -ErrorAction Stop
+  } catch {
+    Fail "No se pudo mover $InstallDir\totem-data (archivos en uso). Cierra Chrome del totem y reintenta. Detalle: $_"
+  }
+}
 
 New-Item -ItemType Directory -Force -Path $InstallDir              | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallDir\totem-data" | Out-Null
@@ -179,7 +212,7 @@ set "PROFILE=%LOCALAPPDATA%\BuenaMezclaTotem\ChromeProfile"
 mkdir "%PROFILE%" >nul 2>&1
 set /a tries=0
 :waitloop
-powershell -NoProfile -Command "try{(Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 'http://127.0.0.1:5000/api/auth/me').StatusCode|Out-Null;exit 0}catch{exit 1}" >nul 2>&1
+powershell -NoProfile -Command "try{`$c=New-Object Net.Sockets.TcpClient;`$c.Connect('127.0.0.1',5000);`$c.Close();exit 0}catch{exit 1}" >nul 2>&1
 if %ERRORLEVEL%==0 goto launch
 set /a tries+=1
 if %tries% GEQ 30 goto launch
@@ -238,11 +271,18 @@ Write-Host "Esperando que el servidor arranque..."
 Start-Sleep -Seconds 12
 
 $ok = $false
-for ($i=0; $i -lt 10; $i++) {
+for ($i=0; $i -lt 15; $i++) {
   try {
-    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:5000/api/auth/me" -ErrorAction Stop
+    Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:5000/api/auth/me" -ErrorAction Stop | Out-Null
     $ok = $true; break
-  } catch { Start-Sleep -Seconds 2 }
+  } catch {
+    # OJO: /api/auth/me devuelve 401 "No autenticado" cuando no hay sesion, e
+    # Invoke-WebRequest lanza excepcion ante cualquier 4xx/5xx. Si llego una
+    # respuesta HTTP el servidor YA esta arriba; solo un error de red (sin
+    # .Response) significa que todavia no responde.
+    if ($_.Exception.Response) { $ok = $true; break }
+    Start-Sleep -Seconds 2
+  }
 }
 
 if ($ok) {
