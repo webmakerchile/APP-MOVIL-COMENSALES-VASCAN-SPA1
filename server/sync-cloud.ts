@@ -33,7 +33,7 @@ import bcrypt from "bcryptjs";
 import { db, sqlite } from "./db";
 import { totems, totemReleases, users, casinos, minutas, familias, periodos, pedidos, type Totem } from "@shared/schema";
 import { storage } from "./storage";
-import { eq, and, gt, sql, inArray } from "drizzle-orm";
+import { eq, and, gt, sql, inArray, isNull } from "drizzle-orm";
 
 interface AuthedTotemRequest extends Request {
   totem?: Totem;
@@ -305,7 +305,50 @@ export function registerSyncRoutes(app: Express) {
           });
           accepted.push(p.id);
         } catch (e: any) {
-          rejected.push({ id: p.id ?? "?", reason: e?.message || "error" });
+          // Idempotencia frente al indice unico `uniq_pedidos_user_minuta_active`
+          // (shared/schema.ts): un comensal no puede tener dos pedidos vivos para
+          // la misma minuta. El upsert de arriba solo resuelve conflictos por `id`,
+          // asi que si el totem genero su propio id para un pedido que ya existe en
+          // la nube con otro id (p.ej. el comensal se inscribio por la web y el
+          // totem creo su fila local al imprimir), el INSERT choca con 23505 y
+          // quedaba rechazado para siempre: el outbox del totem nunca se drenaba.
+          // Ese caso NO es un error, el pedido ya esta arriba. Lo resolvemos por
+          // (userId, minutaId), le trasladamos lo unico de lo que el totem es
+          // fuente de verdad (la impresion fisica) y lo contamos como aceptado.
+          const code = e?.code ?? e?.cause?.code;
+          const msg = String(e?.message || "");
+          const esDuplicado =
+            code === "23505" ||
+            msg.includes("uniq_pedidos_user_minuta_active") ||
+            msg.includes("duplicate key");
+          if (esDuplicado && p.userId && p.minutaId) {
+            try {
+              const [existente] = await db
+                .select()
+                .from(pedidos)
+                .where(and(
+                  eq(pedidos.userId, p.userId),
+                  eq(pedidos.minutaId, p.minutaId),
+                  isNull(pedidos.deletedAt),
+                ));
+              if (existente) {
+                const cambios: any = { updatedAt: new Date(), syncVersion: Date.now() };
+                // impresoEn es monotonico: una vez marcado no vuelve a null.
+                if (p.impresoEn && !existente.impresoEn) {
+                  cambios.impresoEn = new Date(p.impresoEn);
+                  cambios.origenTotemId = t.id;
+                }
+                if (p.codigoQr && !existente.codigoQr) cambios.codigoQr = p.codigoQr;
+                await db.update(pedidos).set(cambios).where(eq(pedidos.id, existente.id));
+                accepted.push(p.id);
+                console.log(`[push] pedido ${p.id} deduplicado contra ${existente.id}`);
+                continue;
+              }
+            } catch (e2: any) {
+              console.error("[push] error resolviendo duplicado:", e2?.message || e2);
+            }
+          }
+          rejected.push({ id: p.id ?? "?", reason: msg || "error" });
         }
       }
 
