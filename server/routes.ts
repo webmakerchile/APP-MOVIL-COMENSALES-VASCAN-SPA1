@@ -51,6 +51,32 @@ function todayChile(): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+// Convierte cualquier timestamp a fecha YYYY-MM-DD en horario de Chile.
+function dateChile(value: any): string | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+// Las minutas se reutilizan: al correr la ventana semanal se reescribe el campo
+// `fecha` de la MISMA fila, y todos los pedidos historicos que apuntan a ese id
+// reaparecen en el dia nuevo arrastrando su `impresoEn` original. Por eso un
+// impresoEn solo cuenta como "paso por el totem" si cae exactamente en la fecha
+// de la minuta; si viene de un ciclo anterior se ignora, y el totem debe volver
+// a imprimir el vale en lugar de responder "already_printed".
+function impresoEnFecha(impresoEn: any, fecha: string | null | undefined): boolean {
+  if (!impresoEn || !fecha) return false;
+  return dateChile(impresoEn) === fecha;
+}
+
 function validarRutChileno(rutCompleto: string): boolean {
   const cleaned = rutCompleto.replace(/\./g, "").replace(/-/g, "").trim().toUpperCase();
   if (cleaned.length < 2) return false;
@@ -1221,6 +1247,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (opcion5 !== undefined) updateData.opcion5 = opcion5;
       if (activo !== undefined) updateData.activo = activo;
 
+      // Guardia anti-reciclaje de minutas: cambiar la `fecha` de una minuta que ya
+      // tiene pedidos arrastra todo su historial de consumo al dia nuevo, porque los
+      // pedidos apuntan al id de la minuta y no a la fecha. Eso ensucia la gestion
+      // diaria, falsea los reportes y dispara duplicados en el push del totem. Para
+      // mover un menu a otro dia hay que clonarlo (POST /api/minutas/:id/clonar).
+      if (fecha !== undefined) {
+        const actual = await storage.getMinuta(id);
+        if (actual && actual.fecha !== fecha) {
+          const pedidosPrevios = await storage.getPedidosByMinuta(id);
+          if (pedidosPrevios.length > 0) {
+            return res.status(409).json({
+              message: `No se puede cambiar la fecha: esta minuta ya tiene ${pedidosPrevios.length} pedido(s) del ${actual.fecha}. Clona la minuta para el dia nuevo en vez de reutilizarla.`,
+            });
+          }
+        }
+      }
+
       const minuta = await storage.updateMinuta(id, updateData);
       if (!minuta) {
         return res.status(404).json({ message: "Minuta no encontrada" });
@@ -1750,8 +1793,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             familia: minuta.familia ?? null,
             opcionSeleccionada: p.opcionSeleccionada,
             opcionTexto: opts[(p.opcionSeleccionada || 1) - 1] || null,
-            impresoEn: (p as any).impresoEn ?? null,
-            pasoTotem: !!(p as any).impresoEn,
+            // Un impresoEn de un ciclo anterior de esta misma minuta no es consumo de hoy.
+            impresoEn: impresoEnFecha((p as any).impresoEn, minuta.fecha) ? (p as any).impresoEn : null,
+            pasoTotem: impresoEnFecha((p as any).impresoEn, minuta.fecha),
             gestionEstado: (p as any).gestionEstado ?? null,
           });
         }
@@ -1947,7 +1991,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // "ya_impreso" (no re-imprimir). Si no estaba impreso, lo marcamos
         // AHORA mismo y respondemos "marked" para que el cliente imprima.
         // Esto evita la heurística temporal (5s) en el frontend.
-        if (!existing.impresoEn) {
+        // Solo cuenta como ya impreso si la impresion es de la fecha de esta minuta.
+        // Si arrastra un impresoEn de un ciclo anterior hay que reimprimir: el
+        // comensal no ha pasado hoy y no puede quedarse sin vale.
+        if (!impresoEnFecha(existing.impresoEn, minuta.fecha)) {
           const marked = await storage.markPedidoImpreso(existing.id);
           return res.json({ ...(marked || existing), action: "marked_existing" });
         }
@@ -2124,7 +2171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const prev = opcionesMap.get(key);
           const pedidosOpcion = pedidosOfM.filter(p => p.opcionSeleccionada === numero);
           const cantidad = pedidosOpcion.length;
-          const pasoTotemOpcion = pedidosOpcion.filter(p => !!(p as any).impresoEn).length;
+          const pasoTotemOpcion = pedidosOpcion.filter(p => impresoEnFecha((p as any).impresoEn, m.fecha)).length;
           if (prev) {
             prev.cantidad += cantidad;
             prev.pasoTotem += pasoTotemOpcion;
@@ -2155,8 +2202,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return userCache2.get(uid);
         };
         const minutaOptsById = new Map<string, string[]>();
+        const minutaFechaById = new Map<string, string>();
         for (const m of dayMinutas) {
           minutaOptsById.set(m.id, [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5]);
+          minutaFechaById.set(m.id, m.fecha);
         }
         const gItems = (
           await Promise.all(
@@ -2167,7 +2216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               return {
                 nombre: `${u.nombre} ${u.apellido}`.trim(),
                 role: u.role,
-                pasoTotem: !!(p as any).impresoEn,
+                pasoTotem: impresoEnFecha((p as any).impresoEn, minutaFechaById.get(p.minutaId)),
                 gestionEstado: (p as any).gestionEstado ?? null,
                 opcionSeleccionada: p.opcionSeleccionada,
                 opcionTexto: opts[(p.opcionSeleccionada || 1) - 1] || null,
@@ -3659,9 +3708,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // el comensal se inscribió pero NO pasó por el tótem, no debe contar.
       const filtered = allPedidos.filter(p => {
         if (p.tipo === "no_asiste") return false;
-        if (!p.impresoEn) return false;
         const m = minutaById.get(p.minutaId);
         if (!m) return false;
+        // Un impresoEn de un ciclo anterior de la misma minuta no es consumo de este
+        // dia de servicio (las minutas se reutilizan al correr la fecha).
+        if (!impresoEnFecha(p.impresoEn, m.fecha)) return false;
         const fechaServ = new Date(m.fecha + "T12:00:00");
         if (fechaServ < start || fechaServ > end) return false;
         if (scope.allowedIds && !scope.allowedIds.has(m.casinoId)) return false;
