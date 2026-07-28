@@ -221,12 +221,19 @@ goto waitloop
 :launch
 set "CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 if not exist "%CHROME%" set "CHROME=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-if exist "%CHROME%" (
-  start "" "%CHROME%" --kiosk --kiosk-printing --no-first-run --noerrdialogs --disable-translate --disable-pinch --user-data-dir="%PROFILE%" "%URL%"
-) else (
-  set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
-  if exist "%EDGE%" start "" "%EDGE%" --kiosk --kiosk-printing "%URL%" --edge-kiosk-type=fullscreen --no-first-run
-)
+if not exist "%CHROME%" set "CHROME=%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"
+if exist "%CHROME%" goto runchrome
+set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+if not exist "%EDGE%" set "EDGE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+if exist "%EDGE%" goto runedge
+echo [kiosk] No se encontro Chrome ni Edge >> "$InstallDir\logs\kiosk.log"
+exit /b 1
+:runchrome
+start "" "%CHROME%" --kiosk --kiosk-printing --no-first-run --noerrdialogs --disable-translate --disable-pinch --user-data-dir="%PROFILE%" "%URL%"
+exit /b 0
+:runedge
+start "" "%EDGE%" --kiosk --kiosk-printing --no-first-run --user-data-dir="%PROFILE%" --edge-kiosk-type=fullscreen "%URL%"
+exit /b 0
 "@ | Set-Content -Encoding ASCII $kioskCmd
 
 # ── Tareas programadas ──
