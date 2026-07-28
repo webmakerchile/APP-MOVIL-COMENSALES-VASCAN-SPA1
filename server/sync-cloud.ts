@@ -39,6 +39,24 @@ interface AuthedTotemRequest extends Request {
   totem?: Totem;
 }
 
+// Fecha YYYY-MM-DD en horario de Chile para cualquier timestamp. Las minutas se
+// reutilizan (se les reescribe la fecha para correr la semana), por lo que
+// comparar la fecha de impresion contra la fecha de la minuta es lo que
+// distingue un consumo real de hoy de uno arrastrado de un ciclo anterior.
+function fechaChile(value: any): string | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((x) => x.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 async function requireTotem(req: AuthedTotemRequest, res: Response, next: NextFunction) {
   const id = req.header("x-totem-id");
   const secret = req.header("x-totem-secret");
@@ -333,10 +351,19 @@ export function registerSyncRoutes(app: Express) {
                 ));
               if (existente) {
                 const cambios: any = { updatedAt: new Date(), syncVersion: Date.now() };
-                // impresoEn es monotonico: una vez marcado no vuelve a null.
+                // La impresion solo se traslada si cae en la fecha de la minuta. Un
+                // impresoEn de un ciclo anterior de la MISMA minuta marcaria como "ya
+                // paso por el totem" a alguien que hoy no ha pasado, y el totem le
+                // negaria el vale (routes.ts, action already_printed).
                 if (p.impresoEn && !existente.impresoEn) {
-                  cambios.impresoEn = new Date(p.impresoEn);
-                  cambios.origenTotemId = t.id;
+                  const [minutaRef] = await db
+                    .select()
+                    .from(minutas)
+                    .where(eq(minutas.id, p.minutaId));
+                  if (minutaRef && fechaChile(p.impresoEn) === minutaRef.fecha) {
+                    cambios.impresoEn = new Date(p.impresoEn);
+                    cambios.origenTotemId = t.id;
+                  }
                 }
                 if (p.codigoQr && !existente.codigoQr) cambios.codigoQr = p.codigoQr;
                 await db.update(pedidos).set(cambios).where(eq(pedidos.id, existente.id));
