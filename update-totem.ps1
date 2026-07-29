@@ -62,6 +62,21 @@ Write-Host "[3/5] Instalando archivos nuevos..." -ForegroundColor Yellow
 Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
 
+# Respaldo previo para poder revertir si el servicio no levanta (ver paso 4)
+$bakDir = "$installDir\_backup-update"
+$nmBak  = "$bakDir\node_modules"
+Remove-Item $bakDir -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
+if (Test-Path "$installDir\node_modules") {
+    Copy-Item "$installDir\node_modules" $nmBak -Recurse -Force -ErrorAction SilentlyContinue
+}
+foreach ($f in @("runtime.js", "sync-worker.js", "register.js")) {
+    if (Test-Path "$installDir\totem\$f") {
+        Copy-Item "$installDir\totem\$f" "$bakDir\$f" -Force -ErrorAction SilentlyContinue
+    }
+}
+Write-Host "   Respaldo previo en $bakDir" -ForegroundColor DarkGray
+
 # pwa\dist — interfaz del tótem
 if (Test-Path "$extractDir\pwa\dist") {
     Remove-Item "$installDir\pwa\dist" -Recurse -Force -ErrorAction SilentlyContinue
@@ -85,20 +100,43 @@ if (Test-Path "$extractDir\totem\register.js") {
     Write-Host "   totem\register.js actualizado" -ForegroundColor Green
 }
 
-# better-sqlite3 paquete completo + binario Windows (Node 20)
-if (Test-Path "$extractDir\node_modules\better-sqlite3") {
-    Remove-Item "$installDir\node_modules\better-sqlite3" -Recurse -Force -ErrorAction SilentlyContinue
+# better-sqlite3 + TODAS sus dependencias transitivas.
+# El ZIP del servidor ya trae el arbol completo (collectDeps en routes.ts).
+# Copiar solo better-sqlite3/bindings/prebuild-install dejaba fuera
+# file-uri-to-path, que bindings requiere en su linea 7, y el runtime moria
+# con MODULE_NOT_FOUND dejando el totem sin conexion.
+$nmSrc = "$extractDir\node_modules"
+if (Test-Path $nmSrc) {
     New-Item -ItemType Directory -Force -Path "$installDir\node_modules" | Out-Null
-    Copy-Item "$extractDir\node_modules\better-sqlite3" "$installDir\node_modules\better-sqlite3" -Recurse -Force
-    Write-Host "   better-sqlite3 paquete + binario Windows actualizado" -ForegroundColor Green
-}
-if (Test-Path "$extractDir\node_modules\bindings") {
-    Copy-Item "$extractDir\node_modules\bindings" "$installDir\node_modules\bindings" -Recurse -Force
-    Write-Host "   bindings actualizado" -ForegroundColor Green
-}
-if (Test-Path "$extractDir\node_modules\prebuild-install") {
-    Copy-Item "$extractDir\node_modules\prebuild-install" "$installDir\node_modules\prebuild-install" -Recurse -Force
-    Write-Host "   prebuild-install actualizado" -ForegroundColor Green
+    $paquetes = Get-ChildItem $nmSrc -Directory
+    foreach ($pkg in $paquetes) {
+        $destino = Join-Path "$installDir\node_modules" $pkg.Name
+        Remove-Item $destino -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item $pkg.FullName $destino -Recurse -Force
+    }
+    Write-Host "   node_modules: $($paquetes.Count) paquetes actualizados" -ForegroundColor Green
+    Write-Host "   ($($paquetes.Name -join ', '))" -ForegroundColor DarkGray
+
+    # El binario nativo debe ser PE de Windows (empieza con 'MZ'). Si el
+    # servidor no logro bajar el prebuild win32-x64, el ZIP trae el .node de
+    # Linux y el runtime no arranca; en ese caso se repone desde la nube.
+    $bs3Node = "$installDir\node_modules\better-sqlite3\build\Release\better_sqlite3.node"
+    if (Test-Path $bs3Node) {
+        $firma = -join [char[]][System.IO.File]::ReadAllBytes($bs3Node)[0..1]
+        if ($firma -ne "MZ") {
+            Write-Host "   Binario SQLite NO es de Windows (firma: $firma). Reponiendo..." -ForegroundColor Yellow
+            try {
+                Invoke-WebRequest -Uri "$serverUrl/totem/bs3-win.node" -OutFile $bs3Node -UseBasicParsing
+                Write-Host "   Binario Windows repuesto desde la nube" -ForegroundColor Green
+            } catch {
+                Write-Host "   No se pudo reponer el binario: $_" -ForegroundColor Red
+            }
+        } else {
+            Write-Host "   Binario SQLite verificado (Windows PE)" -ForegroundColor Green
+        }
+    }
+} else {
+    Write-Host "   Advertencia: el paquete no trae node_modules" -ForegroundColor Yellow
 }
 
 # 4. Reiniciar servicio Node
@@ -125,7 +163,28 @@ while ($tries -lt 20 -and -not $ok) {
 if ($ok) {
     Write-Host "   Servidor OK (listo en $($tries * 2)s)" -ForegroundColor Green
 } else {
-    Write-Host "   Advertencia: servidor tardando, abriendo tótem igual..." -ForegroundColor Yellow
+    Write-Host "   El servidor NO respondio en 40s." -ForegroundColor Red
+    $errLog = "$installDir\logs\service.err.log"
+    if (Test-Path $errLog) {
+        Write-Host "   Ultimas lineas de service.err.log:" -ForegroundColor Yellow
+        Get-Content $errLog -Tail 15 | ForEach-Object { Write-Host "     $_" -ForegroundColor DarkGray }
+    }
+    if (Test-Path $nmBak) {
+        Write-Host "   Revirtiendo al respaldo previo..." -ForegroundColor Yellow
+        schtasks /End /TN "BuenaMezclaTotem" 2>$null | Out-Null
+        Start-Sleep -Seconds 3
+        Remove-Item "$installDir\node_modules" -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item $nmBak "$installDir\node_modules" -Recurse -Force
+        foreach ($f in @("runtime.js", "sync-worker.js", "register.js")) {
+            if (Test-Path "$bakDir\$f") { Copy-Item "$bakDir\$f" "$installDir\totem\$f" -Force }
+        }
+        schtasks /Run /TN "BuenaMezclaTotem" | Out-Null
+        Start-Sleep -Seconds 10
+        Write-Host "   Respaldo restaurado: el totem vuelve al codigo anterior." -ForegroundColor Yellow
+        Write-Host "   Revisa el log de arriba y reintenta cuando este corregido." -ForegroundColor Yellow
+    } else {
+        Write-Host "   No hay respaldo disponible para revertir." -ForegroundColor Red
+    }
 }
 
 # Registrar/actualizar tarea watchdog (reinicio automático si el proceso cae)
