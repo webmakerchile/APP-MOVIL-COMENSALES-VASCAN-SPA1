@@ -11,7 +11,8 @@ param(
   [string] $Token      = "",
   [string] $Nombre     = "",
   [string] $InstallDir = "C:\BuenaMezcla",
-  [switch] $Nueva
+  [switch] $Nueva,
+  [string] $UpdateKey  = $env:TOTEM_UPDATE_KEY
 )
 
 function Step($m) { Write-Host ""; Write-Host "==> $m" -ForegroundColor Cyan }
@@ -137,6 +138,59 @@ Write-Host "Extrayendo..."
 tar -xzf $bundleTmp -C $InstallDir 2>&1
 if ($LASTEXITCODE -ne 0) { Fail "Error extrayendo bundle. Si el problema persiste, cierra cualquier ventana de Chrome del totem y vuelve a ejecutar el instalador." }
 Remove-Item $bundleTmp -Force
+
+# -- Codigo actual del servidor (recomendado al ACTUALIZAR) -----------------
+# totem-bundle.tar.gz es un artefacto fijo del repo y puede quedar atrasado
+# respecto al codigo desplegado en la nube. update-package compila runtime.ts,
+# register.ts y sync-worker.ts en el momento, asi que esta pasada deja el totem
+# con el codigo actual sin depender del bundle ni esperar la auto-actualizacion.
+# Requiere la clave TOTEM_UPDATE_KEY (o SESSION_SECRET) del servidor.
+# OJO: a proposito NO se copia node_modules del paquete. El modulo nativo de
+# SQLite para Windows lo instala el paso 4/8; sobreescribirlo con el binario de
+# Linux del servidor dejaria el totem sin arrancar.
+if ($IsUpdate -and -not $UpdateKey) {
+  $UpdateKey = Read-Host "Clave de actualizacion TOTEM_UPDATE_KEY (Enter para omitir)"
+}
+if ($UpdateKey) {
+  Step "2b/8 Aplicando codigo actual del servidor (update-package)"
+  $pkgTmp = "$env:TEMP\totem-update-pkg.zip"
+  $pkgDir = "$env:TEMP\totem-update-pkg"
+  try {
+    Invoke-WebRequest -Uri "$Cloud/api/totem/update-package?key=$UpdateKey" -OutFile $pkgTmp -UseBasicParsing
+    Remove-Item $pkgDir -Recurse -Force -ErrorAction SilentlyContinue
+    Expand-Archive -Path $pkgTmp -DestinationPath $pkgDir -Force
+    $aplicados = @()
+    foreach ($f in @("runtime.js", "sync-worker.js", "register.js")) {
+      $src = Join-Path $pkgDir "totem\$f"
+      if (Test-Path $src) {
+        New-Item -ItemType Directory -Force -Path "$InstallDir\totem" | Out-Null
+        Copy-Item $src "$InstallDir\totem\$f" -Force
+        $aplicados += $f
+      }
+    }
+    if (Test-Path "$pkgDir\pwa\dist") {
+      Remove-Item "$InstallDir\pwa\dist" -Recurse -Force -ErrorAction SilentlyContinue
+      New-Item -ItemType Directory -Force -Path "$InstallDir\pwa" | Out-Null
+      Copy-Item "$pkgDir\pwa\dist" "$InstallDir\pwa\dist" -Recurse -Force
+      $aplicados += "pwa\dist"
+    }
+    if ($aplicados.Count -gt 0) {
+      Write-Host ("   Codigo al dia: " + ($aplicados -join ", ")) -ForegroundColor Green
+    } else {
+      Write-Host "   ADVERTENCIA: el paquete no traia archivos utiles; se conserva el bundle base." -ForegroundColor Yellow
+    }
+  } catch {
+    Write-Host "   ADVERTENCIA: no se pudo aplicar update-package. Se conserva el bundle base." -ForegroundColor Yellow
+    Write-Host "   Detalle: $_" -ForegroundColor Yellow
+    Write-Host "   Revisa la clave o ejecuta update-totem.ps1 despues de instalar." -ForegroundColor Yellow
+  } finally {
+    Remove-Item $pkgTmp -Force -ErrorAction SilentlyContinue
+    Remove-Item $pkgDir -Recurse -Force -ErrorAction SilentlyContinue
+  }
+} elseif ($IsUpdate) {
+  Write-Host "   ADVERTENCIA: sin clave, el totem queda con el codigo del bundle base." -ForegroundColor Yellow
+  Write-Host "   Para dejarlo al dia ejecuta update-totem.ps1 con la clave." -ForegroundColor Yellow
+}
 
 # ── Node.js portable ──
 Step "3/8 Verificando Node.js"
