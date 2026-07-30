@@ -2871,7 +2871,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const workbook = XLSX.read(fs.readFileSync(req.file.path), { type: "buffer" });
-      const sheetName = workbook.SheetNames[0];
+      const sheetName = workbook.SheetNames.find((n) => n.trim().toLowerCase() === "usuarios") || workbook.SheetNames.find((n) => !/^(instrucciones|casinos)/i.test(n.trim())) || workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
 
@@ -2893,6 +2893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const telefonoRaw = String(row["TELEFONO"] || row["CELULAR"] || row["TELÉFONO"] || "").trim();
           const rolRaw = String(row["ROL"] || "comensal").trim().toLowerCase();
           const casinoRaw = String(row["CASINO_ID"] || row["CASINOID"] || row["CASINO"] || "").trim();
+          if (!rut && !nombre && !apellido && !telefonoRaw && !casinoRaw) continue; // fila vacia de relleno de la plantilla
 
           if (!rut || !nombre) {
             errorDetails.push({ row: rowNum, error: "RUT o Nombre vacío" });
