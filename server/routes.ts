@@ -2870,7 +2870,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No se recibió archivo" });
       }
 
-      const workbook = XLSX.readFile(req.file.path);
+      const workbook = XLSX.read(fs.readFileSync(req.file.path), { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
@@ -3374,7 +3374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No se recibió archivo" });
       }
 
-      const workbook = XLSX.readFile(req.file.path, { cellDates: true });
+      const workbook = XLSX.read(fs.readFileSync(req.file.path), { type: "buffer", cellDates: true });
       let created = 0;
       let skipped = 0;
       let errors = 0;
