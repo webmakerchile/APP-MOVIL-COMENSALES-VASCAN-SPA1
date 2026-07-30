@@ -7,11 +7,17 @@
 #
 # USO:
 #   .\update-totem.ps1          (se auto-eleva a Administrador si es necesario)
+#
+# CLAVE: se toma de la variable de entorno TOTEM_UPDATE_KEY. Para dejarla fija
+#   en este PC (una sola vez, como Administrador):
+#     setx TOTEM_UPDATE_KEY "valor-real" /M
+#   Alternativa: guardarla en C:\BuenaMezcla\update-key.txt
+#   Si no encuentra ninguna de las dos, el script la pide por pantalla.
 # =============================================================================
 
-# ─── CONFIGURACIÓN (edita estas 3 variables) ──────────────────────────────────
+# ─── CONFIGURACIÓN (la clave NO va aqui, ver encabezado) ─────────────────────
 $serverUrl  = "https://vascan.replit.app"   # URL de producción (sin / final)
-$updateKey  = "TU-CLAVE-SECRETA"            # Valor de TOTEM_UPDATE_KEY (o SESSION_SECRET) en Replit Secrets
+$updateKey  = $env:TOTEM_UPDATE_KEY         # NO escribir la clave aqui: se toma del PC o se pide al correr
 $installDir = "C:\BuenaMezcla"             # Carpeta de instalación del tótem
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -26,6 +32,22 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $ErrorActionPreference = "Stop"
 $zipFile    = "$env:TEMP\totem-update.zip"
 $extractDir = "$env:TEMP\totem-update-ext"
+
+# ─── Clave de actualizacion (nunca se guarda en el repositorio) ──────────────
+# Orden: variable de entorno -> archivo update-key.txt -> preguntar por pantalla.
+if ([string]::IsNullOrWhiteSpace($updateKey)) {
+    $keyFile = Join-Path $installDir "update-key.txt"
+    if (Test-Path $keyFile) { $updateKey = (Get-Content $keyFile -Raw).Trim() }
+}
+if ([string]::IsNullOrWhiteSpace($updateKey)) {
+    $updateKey = Read-Host "Clave de actualizacion (TOTEM_UPDATE_KEY)"
+}
+if ([string]::IsNullOrWhiteSpace($updateKey)) {
+    Write-Host "Sin clave de actualizacion: no se puede descargar el paquete. Abortando." -ForegroundColor Red
+    exit 1
+}
+# Escapado para la URL (por si la clave trae + & / u otros caracteres reservados)
+$updateKeyUrl = [uri]::EscapeDataString($updateKey)
 
 Write-Host ""
 Write-Host "=================================================" -ForegroundColor Cyan
@@ -46,7 +68,7 @@ Write-Host "   OK" -ForegroundColor Green
 Write-Host "[2/5] Descargando actualizacion desde $serverUrl ..." -ForegroundColor Yellow
 try {
     Invoke-WebRequest `
-        -Uri "$serverUrl/api/totem/update-package?key=$updateKey" `
+        -Uri "$serverUrl/api/totem/update-package?key=$updateKeyUrl" `
         -OutFile $zipFile `
         -UseBasicParsing
     $sizeMB = [Math]::Round((Get-Item $zipFile).Length / 1MB, 2)
