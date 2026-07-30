@@ -2476,14 +2476,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Casino no encontrado" });
       }
 
+      // Roles: distinguir comensales de interlocutores/encargados de casino.
+      // ensureStaffPedidosForDate crea pedidos para el staff, que hasta ahora
+      // quedaban sumados dentro de "Comensales" sin forma de separarlos.
+      const allUsersCons = await storage.getAllUsers();
+      const roleByUserId = new Map(allUsersCons.map((u) => [u.id, u.role]));
+      const userByIdCons = new Map(allUsersCons.map((u) => [u.id, u]));
+
       // Aggregate across casinos + dates
       const opcionMap: Record<number, { descripcion: string; cantidad: number }> = {};
       let totalPedidos = 0;
+      let totalComensales = 0;
+      let totalInterlocutores = 0;
+      let totalEncargados = 0;
       let totalNoAsiste = 0;
       let totalVisitas = 0;
       let totalAnulados = 0;
-      const visitasList: { nombreVisita: string | null; codigoQr: string | null }[] = [];
-      const dailyRows: { fecha: string; casinoNombre: string; total: number; noAsiste: number; anulados: number }[] = [];
+      const visitasList: { nombreVisita: string | null; codigoQr: string | null; emitidaPor: string | null; emitidaPorRol: string | null }[] = [];
+      const dailyRows: { fecha: string; casinoNombre: string; total: number; comensales: number; interlocutores: number; encargados: number; noAsiste: number; anulados: number }[] = [];
 
       for (const casino of casinosList) {
         const allMinutasCasino = await storage.getAllMinutasByCasino(casino.id);
@@ -2500,12 +2510,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const selPedidos = pedidosForMinuta.filter(p => p.tipo !== "no_asiste" && p.tipo !== "visita");
           const noAsPedidos = pedidosForMinuta.filter(p => p.tipo === "no_asiste");
           const visPedidos = pedidosForMinuta.filter(p => p.tipo === "visita");
-          totalPedidos += selPedidos.length;
-          totalNoAsiste += noAsPedidos.length;
-          totalVisitas += visPedidos.length;
-          totalAnulados += anuladosForMinuta.length;
-          visPedidos.forEach(v => visitasList.push({ nombreVisita: v.nombreVisita || null, codigoQr: v.codigoQr || null }));
-          dailyRows.push({ fecha: f, casinoNombre: casino.nombre, total: selPedidos.length, noAsiste: noAsPedidos.length, anulados: anuladosForMinuta.length });
+        const nInterloc = selPedidos.filter(p => roleByUserId.get(p.userId) === "interlocutor").length;
+        const nEncargado = selPedidos.filter(p => roleByUserId.get(p.userId) === "encargado_casino").length;
+        const nComensal = selPedidos.length - nInterloc - nEncargado;
+        totalPedidos += selPedidos.length;
+        totalComensales += nComensal;
+        totalInterlocutores += nInterloc;
+        totalEncargados += nEncargado;
+        totalNoAsiste += noAsPedidos.length;
+        totalVisitas += visPedidos.length;
+        totalAnulados += anuladosForMinuta.length;
+        visPedidos.forEach(v => {
+          const emisor: any = userByIdCons.get(v.userId);
+          visitasList.push({
+            nombreVisita: v.nombreVisita || null,
+            codigoQr: v.codigoQr || null,
+            emitidaPor: emisor ? `${emisor.nombre} ${emisor.apellido}` : null,
+            emitidaPorRol: emisor?.role || null,
+          });
+        });
+        dailyRows.push({ fecha: f, casinoNombre: casino.nombre, total: selPedidos.length, comensales: nComensal, interlocutores: nInterloc, encargados: nEncargado, noAsiste: noAsPedidos.length, anulados: anuladosForMinuta.length });
           const allOptions: (string | null)[] = [minuta.opcion1, minuta.opcion2, minuta.opcion3, minuta.opcion4, minuta.opcion5];
           for (let i = 0; i < allOptions.length; i++) {
             if (!allOptions[i]) continue;
@@ -2530,6 +2554,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         minuta: opciones.length > 0 ? { resumen: true } : null,
         opciones,
         totalPedidos,
+        totalComensales,
+        totalInterlocutores,
+        totalEncargados,
+        totalStaff: totalInterlocutores + totalEncargados,
         totalNoAsiste,
         totalVisitas,
         totalAnulados,
@@ -3463,14 +3491,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Reportes Detallados (3 nuevos, descarga Excel) ──
   // Helper común
-  function buildHeader(ws: any, title: string) {
-    ws.mergeCells("A1:F1");
+  function buildHeader(ws: any, title: string, lastCol: string = "F") {
+    ws.mergeCells(`A1:${lastCol}1`);
     ws.getCell("A1").value = title;
     ws.getCell("A1").font = EX.fontTitle;
     ws.getCell("A1").fill = EX.darkFill as any;
     ws.getCell("A1").alignment = EX.center;
     ws.getRow(1).height = 30;
-    ws.mergeCells("A2:F2");
+    ws.mergeCells(`A2:${lastCol}2`);
     ws.getCell("A2").value = "BUENAMEZCLA — Sistema de Comensales";
     ws.getCell("A2").font = EX.fontSubGold;
     ws.getCell("A2").fill = EX.navyFill as any;
@@ -3580,6 +3608,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             comensal: p.tipo === "visita"
               ? (p.nombreVisita || "VISITA")
               : (u ? `${u.nombre} ${u.apellido}` : "—"),
+            rol: (u as any)?.role || "comensal",
+            emitidaPor: p.tipo === "visita" ? (u ? `${u.nombre} ${u.apellido}` : "—") : null,
+            emitidaPorRut: p.tipo === "visita" ? ((u as any)?.rut || "") : null,
             casinoId: m?.casinoId || "",
             casino: c?.nombre || "—",
             familia: fam?.nombre || (m as any)?.familia || "—",
@@ -3637,14 +3668,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ws.columns = [
         { header: "Día Inscripción", key: "fechaInsc", width: 22 },
         { header: "Comensal (RUT - Nombre)", key: "comensal", width: 38 },
+        { header: "Rol", key: "rol", width: 18 },
         { header: "Casino", key: "casino", width: 26 },
         { header: "Tipo", key: "tipo", width: 14 },
         { header: "Opción", key: "opcion", width: 36 },
         { header: "Día Servicio", key: "fechaServ", width: 16 },
       ];
-      buildHeader(ws, "INSCRIPCIONES POR RANGO DE FECHAS");
+      buildHeader(ws, "INSCRIPCIONES POR RANGO DE FECHAS", "G");
       const headerRow = ws.getRow(4);
-      headerRow.values = ["Día Inscripción", "Comensal", "Casino", "Tipo", "Opción", "Día Servicio"];
+      headerRow.values = ["Día Inscripción", "Comensal", "Rol", "Casino", "Tipo", "Opción", "Día Servicio"];
       headerRow.height = 26;
       headerRow.eachCell(c => { c.font = EX.fontHeader; c.fill = EX.headerBlueFill as any; c.alignment = EX.center; c.border = EX.borderGold; });
 
@@ -3660,9 +3692,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const fechaInscStr = created
           ? `${created.toLocaleDateString("es-CL")} ${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`
           : "—";
+        const rolTexto = (u as any)?.role === "interlocutor" ? "Interlocutor"
+          : (u as any)?.role === "encargado_casino" ? "Encargado casino"
+          : (u as any)?.role === "admin" ? "Admin" : "Comensal";
         const r = ws.addRow({
           fechaInsc: fechaInscStr,
           comensal: u ? `${u.rut} — ${u.nombre} ${u.apellido}` : "—",
+          rol: rolTexto,
           casino: c?.nombre || "—",
           tipo: tipoLabel,
           opcion: opcionTexto,
@@ -3678,6 +3714,209 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.send(Buffer.from(buf as ArrayBuffer));
     } catch (error) {
       console.error("Inscripcion detalle error:", error);
+      return res.status(500).json({ message: "Error al generar reporte" });
+    }
+  });
+
+  // 1.b) Reporte detallado de INTERLOCUTORES / ENCARGADOS DE CASINO.
+  //      Intencionalmente distinto al de comensales: además del consumo propio
+  //      del staff incluye las VISITAS que cada interlocutor emitió (en BD
+  //      quedan guardadas bajo su propio userId) y un resumen por persona.
+  app.get("/api/reportes/interlocutores-detalle", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { fechaDesde, fechaHasta } = req.query as any;
+      const scope = await getScopedCasinoFilter(req, req.query.casinoId as string);
+      if (scope.allowedIds && scope.allowedIds.size === 0) {
+        return res.status(403).json({ message: "Sin acceso al casino solicitado" });
+      }
+      if (!fechaDesde || !fechaHasta) return res.status(400).json({ message: "fechaDesde y fechaHasta requeridos" });
+
+      const allPedidos = await storage.getAllPedidos();
+      const allMinutas = await storage.getAllMinutas();
+      const allUsers = await storage.getAllUsers();
+      const allCasinos = await storage.getCasinos();
+      const minutaById = new Map(allMinutas.map(m => [m.id, m]));
+      const userById = new Map(allUsers.map(u => [u.id, u]));
+      const casinoById = new Map(allCasinos.map(c => [c.id, c]));
+
+      const start = new Date(fechaDesde + "T00:00:00");
+      const end = new Date(fechaHasta + "T23:59:59");
+
+      const rolLabel = (u: any) => u?.role === "interlocutor" ? "Interlocutor"
+        : u?.role === "encargado_casino" ? "Encargado casino"
+        : u?.role === "admin" ? "Admin" : "Comensal";
+      const isStaff = (u: any) => !!u && (u.role === "interlocutor" || u.role === "encargado_casino");
+
+      // Mismo criterio de rango que el reporte de comensales: fecha de SERVICIO.
+      const filtered = allPedidos.filter(p => {
+        if ((p as any).deletedAt) return false;
+        const m = minutaById.get(p.minutaId);
+        if (!m) return false;
+        const fechaServ = new Date(m.fecha + "T12:00:00");
+        if (fechaServ < start || fechaServ > end) return false;
+        if (scope.allowedIds && !scope.allowedIds.has(m.casinoId)) return false;
+        return isStaff(userById.get(p.userId));
+      });
+
+      const fechaDe = (p: any) => String(minutaById.get(p.minutaId)?.fecha || "");
+      const consumos = filtered.filter(p => p.tipo !== "visita").sort((a, b) => fechaDe(a).localeCompare(fechaDe(b)));
+      const visitas = filtered.filter(p => p.tipo === "visita").sort((a, b) => fechaDe(a).localeCompare(fechaDe(b)));
+
+      const fmtDT = (d: any) => {
+        if (!d) return "—";
+        const x = new Date(d);
+        return `${x.toLocaleDateString("es-CL")} ${String(x.getHours()).padStart(2, "0")}:${String(x.getMinutes()).padStart(2, "0")}`;
+      };
+      const paintRow = (row: any, idx: number) => {
+        const isEven = idx % 2 === 0;
+        row.eachCell((cell: any) => { cell.font = EX.fontNormal; cell.fill = (isEven ? EX.whiteFill : EX.grayFill) as any; cell.border = EX.borderThin; cell.alignment = EX.left; });
+      };
+      const paintHead = (ws: any, values: string[]) => {
+        const hr = ws.getRow(4);
+        hr.values = values;
+        hr.height = 26;
+        hr.eachCell((c: any) => { c.font = EX.fontHeader; c.fill = EX.headerBlueFill as any; c.alignment = EX.center; c.border = EX.borderGold; });
+      };
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "BuenaMezcla";
+
+      // ── Hoja 1: consumo propio del staff ──
+      const ws1 = wb.addWorksheet("Interlocutores", { properties: { tabColor: { argb: "FF0F3460" } } });
+      ws1.columns = [
+        { header: "Día Servicio", key: "fechaServ", width: 14 },
+        { header: "RUT", key: "rut", width: 14 },
+        { header: "Nombre", key: "nombre", width: 30 },
+        { header: "Rol", key: "rol", width: 18 },
+        { header: "Casino", key: "casino", width: 26 },
+        { header: "Tipo", key: "tipo", width: 14 },
+        { header: "Opción", key: "opcion", width: 34 },
+        { header: "Día Inscripción", key: "fechaInsc", width: 20 },
+        { header: "Pasó Tótem", key: "paso", width: 12 },
+        { header: "Hora Impresión", key: "impreso", width: 20 },
+      ];
+      buildHeader(ws1, "DETALLE DE INTERLOCUTORES / ENCARGADOS", "J");
+      paintHead(ws1, ["Día Servicio", "RUT", "Nombre", "Rol", "Casino", "Tipo", "Opción", "Día Inscripción", "Pasó Tótem", "Hora Impresión"]);
+      consumos.forEach((p, idx) => {
+        const m = minutaById.get(p.minutaId);
+        const u: any = userById.get(p.userId);
+        const c = m ? casinoById.get(m.casinoId) : null;
+        const opciones = m ? [m.opcion1, m.opcion2, m.opcion3, m.opcion4, m.opcion5] : [];
+        const opcionTexto = p.tipo === "no_asiste" ? "(no asiste)" : (opciones[p.opcionSeleccionada - 1] || `Opción ${p.opcionSeleccionada}`);
+        paintRow(ws1.addRow({
+          fechaServ: m?.fecha || "—",
+          rut: u?.rut || "—",
+          nombre: u ? `${u.nombre} ${u.apellido}` : "—",
+          rol: rolLabel(u),
+          casino: c?.nombre || "—",
+          tipo: p.tipo === "no_asiste" ? "No asiste" : "Selección",
+          opcion: opcionTexto,
+          fechaInsc: fmtDT(p.createdAt),
+          paso: (p as any).impresoEn ? "SÍ" : "NO",
+          impreso: fmtDT((p as any).impresoEn),
+        }), idx);
+      });
+      if (consumos.length === 0) ws1.addRow({ fechaServ: "Sin registros en el rango" });
+
+      // ── Hoja 2: visitas emitidas por cada interlocutor ──
+      const ws2 = wb.addWorksheet("Visitas emitidas", { properties: { tabColor: { argb: "FF1565C0" } } });
+      ws2.columns = [
+        { header: "Día Servicio", key: "fechaServ", width: 14 },
+        { header: "Invitado", key: "invitado", width: 32 },
+        { header: "Casino", key: "casino", width: 26 },
+        { header: "Emitida por (RUT)", key: "rut", width: 16 },
+        { header: "Emitida por (Nombre)", key: "nombre", width: 30 },
+        { header: "Rol", key: "rol", width: 18 },
+        { header: "Día/Hora Emisión", key: "fechaInsc", width: 20 },
+        { header: "Pasó Tótem", key: "paso", width: 12 },
+        { header: "Hora Impresión", key: "impreso", width: 20 },
+        { header: "Código QR", key: "qr", width: 34 },
+      ];
+      buildHeader(ws2, "VISITAS EMITIDAS POR INTERLOCUTORES", "J");
+      paintHead(ws2, ["Día Servicio", "Invitado", "Casino", "Emitida por (RUT)", "Emitida por (Nombre)", "Rol", "Día/Hora Emisión", "Pasó Tótem", "Hora Impresión", "Código QR"]);
+      visitas.forEach((p, idx) => {
+        const m = minutaById.get(p.minutaId);
+        const u: any = userById.get(p.userId);
+        const c = m ? casinoById.get(m.casinoId) : null;
+        paintRow(ws2.addRow({
+          fechaServ: m?.fecha || "—",
+          invitado: p.nombreVisita || "VISITA",
+          casino: c?.nombre || "—",
+          rut: u?.rut || "—",
+          nombre: u ? `${u.nombre} ${u.apellido}` : "—",
+          rol: rolLabel(u),
+          fechaInsc: fmtDT(p.createdAt),
+          paso: (p as any).impresoEn ? "SÍ" : "NO",
+          impreso: fmtDT((p as any).impresoEn),
+          qr: p.codigoQr || "—",
+        }), idx);
+      });
+      if (visitas.length === 0) ws2.addRow({ fechaServ: "Sin visitas en el rango" });
+
+      // ── Hoja 3: resumen por interlocutor ──
+      type ResumenStaff = { rut: string; nombre: string; rol: string; casinos: Set<string>; dias: number; retirados: number; visitas: number; visitasRetiradas: number };
+      const resumen = new Map<string, ResumenStaff>();
+      const ensureRes = (p: any): ResumenStaff | null => {
+        const u: any = userById.get(p.userId);
+        if (!u) return null;
+        let e = resumen.get(u.id);
+        if (!e) {
+          e = { rut: u.rut, nombre: `${u.nombre} ${u.apellido}`, rol: rolLabel(u), casinos: new Set<string>(), dias: 0, retirados: 0, visitas: 0, visitasRetiradas: 0 };
+          resumen.set(u.id, e);
+        }
+        const m = minutaById.get(p.minutaId);
+        const c = m ? casinoById.get(m.casinoId) : null;
+        if (c?.nombre) e.casinos.add(c.nombre);
+        return e;
+      };
+      consumos.forEach(p => {
+        const e = ensureRes(p);
+        if (!e || p.tipo === "no_asiste") return;
+        e.dias += 1;
+        if ((p as any).impresoEn) e.retirados += 1;
+      });
+      visitas.forEach(p => {
+        const e = ensureRes(p);
+        if (!e) return;
+        e.visitas += 1;
+        if ((p as any).impresoEn) e.visitasRetiradas += 1;
+      });
+
+      const ws3 = wb.addWorksheet("Resumen", { properties: { tabColor: { argb: "FFD4A843" } } });
+      ws3.columns = [
+        { header: "RUT", key: "rut", width: 14 },
+        { header: "Nombre", key: "nombre", width: 30 },
+        { header: "Rol", key: "rol", width: 18 },
+        { header: "Casinos", key: "casinos", width: 36 },
+        { header: "Días inscritos", key: "dias", width: 14 },
+        { header: "Vales retirados", key: "retirados", width: 16 },
+        { header: "Visitas emitidas", key: "visitas", width: 16 },
+        { header: "Visitas retiradas", key: "visitasRet", width: 17 },
+      ];
+      buildHeader(ws3, "RESUMEN POR INTERLOCUTOR", "H");
+      paintHead(ws3, ["RUT", "Nombre", "Rol", "Casinos", "Días inscritos", "Vales retirados", "Visitas emitidas", "Visitas retiradas"]);
+      Array.from(resumen.values())
+        .sort((a, b) => a.nombre.localeCompare(b.nombre))
+        .forEach((e, idx) => {
+          paintRow(ws3.addRow({
+            rut: e.rut,
+            nombre: e.nombre,
+            rol: e.rol,
+            casinos: Array.from(e.casinos).join(", ") || "—",
+            dias: e.dias,
+            retirados: e.retirados,
+            visitas: e.visitas,
+            visitasRet: e.visitasRetiradas,
+          }), idx);
+        });
+      if (resumen.size === 0) ws3.addRow({ rut: "Sin registros en el rango" });
+
+      const buf = await wb.xlsx.writeBuffer();
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=Interlocutores_${fechaDesde}_a_${fechaHasta}.xlsx`);
+      return res.send(Buffer.from(buf as ArrayBuffer));
+    } catch (error) {
+      console.error("Interlocutores detalle error:", error);
       return res.status(500).json({ message: "Error al generar reporte" });
     }
   });
