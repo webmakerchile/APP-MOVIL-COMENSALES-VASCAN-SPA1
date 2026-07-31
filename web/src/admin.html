@@ -2719,7 +2719,7 @@
               {result && (
                 <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-4 mb-4 fade-in">
                   <p className="text-green-400 font-semibold">Carga completada</p>
-                  <p className="text-green-400/70 text-sm mt-1">{result.created} creados, {result.skipped} omitidos, {result.errors} errores</p>
+                  <p className="text-green-400/70 text-sm mt-1">{result.created} creados{result.updated ? `, ${result.updated} actualizados` : ''}, {result.skipped} omitidos, {result.errors} errores</p>
                   {result.errorDetails?.length > 0 && (
                     <div className="mt-2 text-xs text-red-400/70 max-h-32 overflow-y-auto">
                       {result.errorDetails.map((e, i) => <div key={i}>{e.sheet ? `Hoja ${e.sheet}, ` : ''}Fila {e.row}: {e.error}</div>)}
