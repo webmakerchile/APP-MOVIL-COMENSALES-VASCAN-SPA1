@@ -2878,6 +2878,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let created = 0;
       let skipped = 0;
       let errors = 0;
+      let updated = 0;
       const errorDetails: { row: number; error: string }[] = [];
 
       for (let i = 0; i < rows.length; i++) {
@@ -2920,7 +2921,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           const existing = await storage.getUserByRut(rut);
-          if (existing) { skipped++; continue; }
+          if (existing) {
+            // El RUT ya existe: en vez de omitir la fila, actualizamos sus datos con
+            // lo que trae el Excel y reactivamos al comensal. Antes se saltaba, lo que
+            // dejaba nombres incompletos o invertidos y usuarios inactivos sin corregir.
+            const cambios: any = { activo: true, deletedAt: null };
+            if (nombre) cambios.nombre = nombre;
+            if (apellido) cambios.apellido = apellido;
+            if (telefonoRaw) cambios.telefono = telefonoRaw;
+            if (rol) cambios.role = rol;
+            if (casinoId) cambios.casinoId = casinoId;
+            await storage.updateUser(existing.id, cambios);
+            updated++;
+            continue;
+          }
 
           const digits = rut.replace(/[^0-9]/g, "");
           const defaultPassword = digits.slice(0, 4) || "1234";
@@ -2935,7 +2949,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       try { fs.unlinkSync(req.file.path); } catch {}
-      return res.json({ created, skipped, errors, errorDetails });
+      return res.json({ created, updated, skipped, errors, errorDetails });
     } catch (error) {
       console.error("Upload error:", error);
       return res.status(500).json({ message: "Error al procesar el archivo" });
