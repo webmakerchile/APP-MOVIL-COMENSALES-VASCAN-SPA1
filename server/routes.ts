@@ -2598,7 +2598,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const weekMinutas = weekDates.map(f => allMinutas.find(m => m.fecha === f) || null);
 
       const allUsers = await storage.getAllUsers();
-      const casinoUsers = allUsers.filter(u => u.casinoId === casinoId && u.role === "comensal" && u.activo);
+      const casinoUsers = allUsers.filter(u => u.casinoId === casinoId && ["comensal", "interlocutor", "encargado_casino"].includes(u.role) && u.activo);
 
       const allPedidos = await storage.getAllPedidos();
       const weekMinutaIds = weekMinutas.filter(Boolean).map(m => m!.id);
