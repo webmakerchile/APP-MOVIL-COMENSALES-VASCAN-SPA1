@@ -2670,7 +2670,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allUsers = await storage.getAllUsers();
       const casinoUsers = allUsers
-        .filter(u => u.casinoId === casinoId && u.role === "comensal" && u.activo)
+        .filter(u => u.casinoId === casinoId && ["comensal", "interlocutor", "encargado_casino"].includes(u.role) && u.activo)
         .sort((a, b) => `${a.apellido} ${a.nombre}`.localeCompare(`${b.apellido} ${b.nombre}`));
 
       const allPedidos = await storage.getAllPedidos();
@@ -2703,13 +2703,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ─── Hoja "Datos" (like Hoja2 in the reference) ───
       const wsDatos = wb.addWorksheet("Datos", { properties: { tabColor: { argb: "FFD4A843" } } });
 
-      const datosHeaders = ["ID", "RUT", "Nombre completo"];
+      const datosHeaders = ["ID", "RUT", "Nombre completo", "ROL"];
       weekDates.forEach((fecha, i) => datosHeaders.push(formatDateHeader(fecha, dayNames[i], weekMinutas[i])));
 
       wsDatos.columns = datosHeaders.map((h, i) => ({
         header: h,
         key: `col${i}`,
-        width: i === 0 ? 6 : i === 1 ? 16 : i === 2 ? 35 : 15,
+        width: i === 0 ? 6 : i === 1 ? 16 : i === 2 ? 35 : i === 3 ? 14 : 15,
       }));
 
       const hRow = wsDatos.getRow(1);
@@ -2727,14 +2727,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           col0: rowIdx,
           col1: user.rut,
           col2: `${user.apellido} ${user.nombre}`.toUpperCase(),
+          col3: user.role === "interlocutor" ? "INTERLOCUTOR" : user.role === "encargado_casino" ? "ENCARGADO" : "COMENSAL",
         };
 
         weekMinutas.forEach((minuta, dayI) => {
-          if (!minuta) { rowData[`col${dayI + 3}`] = ""; return; }
+          if (!minuta) { rowData[`col${dayI + 4}`] = ""; return; }
           const pedido = weekPedidos.find(p => p.minutaId === minuta.id && p.userId === user.id);
-          if (!pedido) { rowData[`col${dayI + 3}`] = "NO INSCRITO"; return; }
-          if (pedido.tipo === "no_asiste") { rowData[`col${dayI + 3}`] = "VACACIONES/ADMINISTRATIVO"; return; }
-          rowData[`col${dayI + 3}`] = pedido.opcionSeleccionada;
+          if (!pedido) { rowData[`col${dayI + 4}`] = "NO INSCRITO"; return; }
+          if (pedido.tipo === "no_asiste") { rowData[`col${dayI + 4}`] = "VACACIONES/ADMINISTRATIVO"; return; }
+          rowData[`col${dayI + 4}`] = pedido.opcionSeleccionada;
         });
 
         wsDatos.addRow(rowData);
